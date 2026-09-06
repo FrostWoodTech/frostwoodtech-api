@@ -33,6 +33,9 @@ public class FrostWoodTechDbContextDesignTimeFactory : IDesignTimeDbContextFacto
         dataSourceBuilder.MapEnum<PriceType>("price_type");
         dataSourceBuilder.MapEnum<UserRole>("user_role");
         dataSourceBuilder.MapEnum<UserStatus>("user_status");
+        dataSourceBuilder.MapEnum<ContactSubmissionStatus>("contact_submission_status");
+        dataSourceBuilder.MapEnum<ContactBudgetRange>("contact_budget_range");
+        dataSourceBuilder.MapEnum<Site>("site");
 
         var options = new DbContextOptionsBuilder<FrostWoodTechDbContext>()
             .UseNpgsql(dataSourceBuilder.Build())

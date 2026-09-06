@@ -4,6 +4,7 @@ using Microsoft.Azure.Functions.Worker;
 
 using FrostWoodTech.API.Common;
 using FrostWoodTech.API.DTOs.Public;
+using FrostWoodTech.API.Enums;
 using FrostWoodTech.API.Interfaces;
 
 namespace FrostWoodTech.API.Functions.Home;
@@ -86,14 +87,22 @@ public class GetPublicHome
             pageSize: SliceSize,
             cancellationToken);
 
-        var pricingPlans = await _pricingService.GetPublicComboPlansAsync(
-            site.Value,
-            featured: true,
-            page: 1,
-            pageSize: SliceSize,
-            cancellationToken);
+        // Pricing is agency-only — the personal site never shows a pricing slice.
+        var pricingPlans = site.Value == Site.Agency
+            ? await _pricingService.GetPublicComboPlansAsync(
+                featured: true,
+                page: 1,
+                pageSize: SliceSize,
+                cancellationToken)
+            : new PagedResult<PricingPlanResponse>
+            {
+                Items = [],
+                Page = 1,
+                PageSize = SliceSize,
+                Total = 0
+            };
 
-        var faqs = await _faqService.GetPublicFaqsAsync(site.Value, category: null, cancellationToken);
+        var faqs = await _faqService.GetPublicFaqsAsync(site.Value, cancellationToken);
 
         var reviews = await _reviewService.GetFeaturedForHomeAsync(SliceSize, cancellationToken);
 

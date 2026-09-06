@@ -197,6 +197,10 @@ public class ReviewService : IReviewService
             return ServiceResult<AdminReviewResponse>.Validation(validationError);
         }
 
+        // Sort order is never taken from the client — it's only ever changed via ReorderAsync,
+        // so a new review is simply appended to the end of the shared order.
+        var nextSortOrder = await _db.Reviews.MaxAsync(r => (int?)r.SortOrder, cancellationToken) + 1 ?? 0;
+
         var review = new Review
         {
             Id = Guid.NewGuid(),
@@ -208,7 +212,7 @@ public class ReviewService : IReviewService
             ReviewText = reviewText!,
             IsPublished = request.IsPublished,
             IsFeatured = request.IsFeatured,
-            SortOrder = request.SortOrder
+            SortOrder = nextSortOrder
         };
 
         _db.Reviews.Add(review);
@@ -240,6 +244,7 @@ public class ReviewService : IReviewService
             return ServiceResult<AdminReviewResponse>.Validation(validationError);
         }
 
+        // Sort order is untouched here — it only changes via ReorderAsync.
         review.Name = name!;
         review.Country = country!;
         review.CountryCode = countryCode!;
@@ -248,7 +253,6 @@ public class ReviewService : IReviewService
         review.ReviewText = reviewText!;
         review.IsPublished = request.IsPublished;
         review.IsFeatured = request.IsFeatured;
-        review.SortOrder = request.SortOrder;
 
         await _db.SaveChangesAsync(cancellationToken);
 

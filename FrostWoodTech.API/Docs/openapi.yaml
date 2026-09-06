@@ -188,7 +188,7 @@ paths:
         - $ref: "#/components/parameters/SiteRequired"
       responses:
         "200":
-          description: The service, with its features.
+          description: The service.
           headers:
             ETag: { $ref: "#/components/headers/ETag" }
             Cache-Control: { $ref: "#/components/headers/PublicCacheControl" }
@@ -204,10 +204,9 @@ paths:
       tags: [public]
       operationId: getPublicComboPricingPlans
       summary: List combo packs
-      description: Plans with no owning service (`service_id is null`) — a separate route so a missing query param can never silently change the filter.
+      description: Plans with no owning service (`service_id is null`) — a separate route so a missing query param can never silently change the filter. Agency-only, so no `site` param.
       security: []
       parameters:
-        - $ref: "#/components/parameters/SiteRequired"
         - $ref: "#/components/parameters/Featured"
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/PageSize"
@@ -215,27 +214,25 @@ paths:
         "200":
           $ref: "#/components/responses/PublicPricingPlanList"
         "304": { $ref: "#/components/responses/NotModified" }
-        "400": { $ref: "#/components/responses/SiteRequired" }
 
   /public/pricing/services/{serviceId}:
     get:
       tags: [public]
       operationId: getPublicServicePricingPlans
       summary: List one service's pricing tiers
+      description: Agency-only, so no `site` param.
       security: []
       parameters:
         - name: serviceId
           in: path
           required: true
           schema: { type: string, format: uuid }
-        - $ref: "#/components/parameters/SiteRequired"
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/PageSize"
       responses:
         "200":
           $ref: "#/components/responses/PublicPricingPlanList"
         "304": { $ref: "#/components/responses/NotModified" }
-        "400": { $ref: "#/components/responses/SiteRequired" }
 
   /public/faqs:
     get:
@@ -246,9 +243,6 @@ paths:
       security: []
       parameters:
         - $ref: "#/components/parameters/SiteRequired"
-        - name: category
-          in: query
-          schema: { type: string }
       responses:
         "200":
           description: The site's FAQs, in sort order.
@@ -262,6 +256,22 @@ paths:
                 items: { $ref: "#/components/schemas/FaqResponse" }
         "304": { $ref: "#/components/responses/NotModified" }
         "400": { $ref: "#/components/responses/SiteRequired" }
+
+  /public/certificates:
+    get:
+      tags: [public]
+      operationId: getPublicCertificates
+      summary: List published certificates
+      description: Personal-site only — certificates never appear on the agency site, so there is no `site` param.
+      security: []
+      parameters:
+        - $ref: "#/components/parameters/Featured"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          $ref: "#/components/responses/PublicCertificateList"
+        "304": { $ref: "#/components/responses/NotModified" }
 
   /public/tags:
     get:
@@ -285,6 +295,26 @@ paths:
                 type: array
                 items: { $ref: "#/components/schemas/TagResponse" }
         "400": { $ref: "#/components/responses/BadRequest" }
+
+  /public/currencies:
+    get:
+      tags: [public]
+      operationId: getPublicCurrencies
+      summary: List selectable display currencies
+      description: The currencies a visitor may switch to, with the rate to convert at. Active rows only, and no `?site=` — currencies carry no site visibility. Rates are typed by an admin and change only when they do, deliberately not tracking the live market.
+      security: []
+      responses:
+        "200":
+          description: The active currencies, ordered by code.
+          headers:
+            ETag: { $ref: "#/components/headers/ETag" }
+            Cache-Control: { $ref: "#/components/headers/PublicCacheControl" }
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CurrencyResponse" }
+        "304": { $ref: "#/components/responses/NotModified" }
 
   /public/home:
     get:
@@ -340,7 +370,7 @@ paths:
       tags: [public]
       operationId: submitReview
       summary: Submit a review
-      description: The one anonymous public write in the API — lands unpublished until an admin approves it. Rate limited per IP.
+      description: One of two anonymous public writes in the API (see also `POST /public/contact`) — lands unpublished until an admin approves it. Rate limited per IP.
       security: []
       requestBody:
         required: true
@@ -353,6 +383,31 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ReviewSubmissionResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "403":
+          description: Too many submissions from this address. See `code`.
+          content:
+            application/problem+json:
+              schema: { $ref: "#/components/schemas/Problem" }
+
+  /public/contact:
+    post:
+      tags: [public]
+      operationId: submitContactSubmission
+      summary: Submit a contact form enquiry
+      description: Anonymous public write. Never public content — there is no matching public read; it only ever surfaces in the admin inbox. Rate limited per IP; a filled `website` honeypot field is filed as spam but still answered normally.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateContactSubmissionRequest" }
+      responses:
+        "201":
+          description: Acknowledgement only.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ContactSubmissionResponse" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "403":
           description: Too many submissions from this address. See `code`.
@@ -523,16 +578,14 @@ paths:
       tags: [auth]
       operationId: refresh
       summary: Rotate a refresh token
-      description: The old token is revoked as the new pair is issued — refresh tokens are single-use.
+      description: >-
+        The old token is revoked as the new pair is issued — refresh tokens are single-use. The
+        refresh token travels as an httpOnly `refreshToken` cookie (set by login/google/refresh
+        itself), never in the request or response body — callers must send the request with
+        credentials included.
       security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/RefreshTokenRequest" }
       responses:
         "200": { $ref: "#/components/responses/Auth" }
-        "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
   /cms/admin/auth/logout:
@@ -540,15 +593,12 @@ paths:
       tags: [auth]
       operationId: logout
       summary: Revoke one refresh token
+      description: >-
+        Reads the `refreshToken` cookie to identify which token to revoke and clears it
+        regardless of outcome — send the request with credentials included.
       security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/RefreshTokenRequest" }
       responses:
         "204": { $ref: "#/components/responses/NoContent" }
-        "400": { $ref: "#/components/responses/BadRequest" }
 
   /cms/admin/auth/me:
     get:
@@ -677,6 +727,7 @@ paths:
         - $ref: "#/components/parameters/SiteRequired"
         - $ref: "#/components/parameters/IsPublished"
         - $ref: "#/components/parameters/Search"
+        - $ref: "#/components/parameters/IncludeHidden"
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/PageSize"
       responses:
@@ -868,6 +919,7 @@ paths:
         - $ref: "#/components/parameters/SiteRequired"
         - $ref: "#/components/parameters/IsPublished"
         - $ref: "#/components/parameters/Search"
+        - $ref: "#/components/parameters/IncludeHidden"
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/PageSize"
       responses:
@@ -982,6 +1034,7 @@ paths:
         - $ref: "#/components/parameters/SiteRequired"
         - $ref: "#/components/parameters/IsPublished"
         - $ref: "#/components/parameters/Search"
+        - $ref: "#/components/parameters/IncludeHidden"
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/PageSize"
       responses:
@@ -1086,87 +1139,14 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
-  /cms/admin/services/{id}/features:
-    post:
-      tags: [admin]
-      operationId: addServiceFeature
-      summary: Add a feature to a service
-      parameters: [{ $ref: "#/components/parameters/IdPath" }]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/AddServiceFeatureRequest" }
-      responses:
-        "201":
-          description: The created feature.
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/ServiceFeatureResponse" }
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "404": { $ref: "#/components/responses/NotFound" }
-
-  /cms/admin/services/{id}/features/{featureId}:
-    put:
-      tags: [admin]
-      operationId: updateServiceFeature
-      summary: Replace a service feature
-      parameters:
-        - $ref: "#/components/parameters/IdPath"
-        - $ref: "#/components/parameters/FeatureIdPath"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/AddServiceFeatureRequest" }
-      responses:
-        "200":
-          description: The updated feature.
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/ServiceFeatureResponse" }
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "404": { $ref: "#/components/responses/NotFound" }
-    delete:
-      tags: [admin]
-      operationId: deleteServiceFeature
-      summary: Remove a service feature
-      parameters:
-        - $ref: "#/components/parameters/IdPath"
-        - $ref: "#/components/parameters/FeatureIdPath"
-      responses:
-        "204": { $ref: "#/components/responses/NoContent" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "404": { $ref: "#/components/responses/NotFound" }
-
-  /cms/admin/services/{id}/features/reorder:
-    post:
-      tags: [admin]
-      operationId: reorderServiceFeatures
-      summary: Bulk sort order for one service's features
-      parameters: [{ $ref: "#/components/parameters/IdPath" }]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/ChildReorderRequest" }
-      responses:
-        "204": { $ref: "#/components/responses/NoContent" }
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "404": { $ref: "#/components/responses/NotFound" }
-
   # ---------------------------------------------------------------------- pricing plans
   /cms/admin/pricing-plans:
     get:
       tags: [admin]
       operationId: getAdminPricingPlans
       summary: List pricing plans, drafts included
-      description: "`serviceId` and `comboOnly` are explicit filters; with neither, the list is everything."
+      description: "`serviceId`, `comboOnly` and `tiersOnly` are explicit filters; with none, the list is everything. `serviceId` wins over `tiersOnly` if both are sent, and `comboOnly` wins over both. Agency-only, so no `site` param."
       parameters:
-        - $ref: "#/components/parameters/SiteRequired"
         - name: serviceId
           in: query
           description: Only this service's tiers.
@@ -1174,6 +1154,10 @@ paths:
         - name: comboOnly
           in: query
           description: Only plans with no owning service.
+          schema: { type: boolean, default: false }
+        - name: tiersOnly
+          in: query
+          description: Only plans belonging to any service — the "Service tiers" kind filter, as opposed to one specific service's tiers.
           schema: { type: boolean, default: false }
         - $ref: "#/components/parameters/IsPublished"
         - $ref: "#/components/parameters/Search"
@@ -1192,7 +1176,6 @@ paths:
                       items:
                         type: array
                         items: { $ref: "#/components/schemas/AdminPricingPlanResponse" }
-        "400": { $ref: "#/components/responses/SiteRequired" }
         "401": { $ref: "#/components/responses/Unauthorized" }
     post:
       tags: [admin]
@@ -1269,12 +1252,12 @@ paths:
     post:
       tags: [admin]
       operationId: reorderPricingPlans
-      summary: Bulk sort order for one site
+      summary: Bulk sort order, drag-and-drop
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/ReorderRequest" }
+            schema: { $ref: "#/components/schemas/PricingReorderRequest" }
       responses:
         "204": { $ref: "#/components/responses/NoContent" }
         "400": { $ref: "#/components/responses/BadRequest" }
@@ -1361,10 +1344,9 @@ paths:
       parameters:
         - $ref: "#/components/parameters/SiteRequired"
         - $ref: "#/components/parameters/IsPublished"
-        - name: category
-          in: query
-          schema: { type: string }
         - $ref: "#/components/parameters/Search"
+        - $ref: "#/components/parameters/ServiceIdFilter"
+        - $ref: "#/components/parameters/GlobalOnly"
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/PageSize"
       responses:
@@ -1439,12 +1421,105 @@ paths:
     post:
       tags: [admin]
       operationId: reorderFaqs
-      summary: Bulk sort order for one site
+      summary: Bulk sort order — FAQs share one order across both sites
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/ReorderRequest" }
+            schema: { $ref: "#/components/schemas/FaqReorderRequest" }
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  # ------------------------------------------------------------------------------- certificates
+  /cms/admin/certificates:
+    get:
+      tags: [admin]
+      operationId: getAdminCertificates
+      summary: List certificates, drafts included
+      parameters:
+        - $ref: "#/components/parameters/IsPublished"
+        - $ref: "#/components/parameters/Search"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: A page of certificates.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Paged"
+                  - type: object
+                    properties:
+                      items:
+                        type: array
+                        items: { $ref: "#/components/schemas/AdminCertificateResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [admin]
+      operationId: createCertificate
+      summary: Create a certificate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateCertificateRequest" }
+      responses:
+        "201":
+          description: The created certificate.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminCertificateResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /cms/admin/certificates/{id}:
+    get:
+      tags: [admin]
+      operationId: getAdminCertificateById
+      summary: One certificate, drafts included
+      parameters: [{ $ref: "#/components/parameters/IdPath" }]
+      responses:
+        "200": { $ref: "#/components/responses/AdminCertificate" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [admin]
+      operationId: updateCertificate
+      summary: Replace a certificate
+      parameters: [{ $ref: "#/components/parameters/IdPath" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateCertificateRequest" }
+      responses:
+        "200": { $ref: "#/components/responses/AdminCertificate" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [admin]
+      operationId: deleteCertificate
+      summary: Soft-delete a certificate
+      parameters: [{ $ref: "#/components/parameters/IdPath" }]
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /cms/admin/certificates/reorder:
+    post:
+      tags: [admin]
+      operationId: reorderCertificates
+      summary: Bulk sort order — certificates share one global order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CertificateReorderRequest" }
       responses:
         "204": { $ref: "#/components/responses/NoContent" }
         "400": { $ref: "#/components/responses/BadRequest" }
@@ -1553,6 +1628,77 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
+  # ------------------------------------------------------------------------------- contact submissions
+  /cms/admin/contact-submissions:
+    get:
+      tags: [admin]
+      operationId: getAdminContactSubmissions
+      summary: List contact form enquiries
+      parameters:
+        - $ref: "#/components/parameters/ContactStatusFilter"
+        - name: site
+          in: query
+          description: Which frontend the enquiry came from. Optional — omit to get both.
+          schema: { $ref: "#/components/schemas/Site" }
+        - name: serviceId
+          in: query
+          description: Only enquiries about this service.
+          schema: { type: string, format: uuid }
+        - $ref: "#/components/parameters/Search"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: A page of contact submissions, newest first.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Paged"
+                  - type: object
+                    properties:
+                      items:
+                        type: array
+                        items: { $ref: "#/components/schemas/AdminContactSubmissionResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /cms/admin/contact-submissions/{id}:
+    get:
+      tags: [admin]
+      operationId: getAdminContactSubmissionById
+      summary: One contact submission
+      parameters: [{ $ref: "#/components/parameters/IdPath" }]
+      responses:
+        "200": { $ref: "#/components/responses/AdminContactSubmission" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [admin]
+      operationId: updateContactSubmission
+      summary: Triage a submission
+      description: Status and internal notes only — an admin can never rewrite what the visitor submitted. Moving `status` to `replied` stamps `repliedAt`/`repliedBy` from the caller's own token.
+      parameters: [{ $ref: "#/components/parameters/IdPath" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UpdateContactSubmissionRequest" }
+      responses:
+        "200": { $ref: "#/components/responses/AdminContactSubmission" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [admin]
+      operationId: deleteContactSubmission
+      summary: Soft-delete a contact submission
+      parameters: [{ $ref: "#/components/parameters/IdPath" }]
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   # ------------------------------------------------------------------------------- tags
   /cms/admin/tags:
     get:
@@ -1584,7 +1730,7 @@ paths:
       tags: [admin]
       operationId: createTag
       summary: Create a tag
-      description: A technology tag requires `technologyCategory` and an icon; a category tag must have neither.
+      description: A technology tag requires `technologyCategory`; a category tag must have none.
       requestBody:
         required: true
         content:
@@ -1638,6 +1784,124 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
 
+  /cms/admin/tags/categories:
+    get:
+      tags: [admin]
+      operationId: getTechCategories
+      summary: List technology categories
+      description: The fixed `TechCategory` enum, value plus display label — lets the admin SPA build its category picker without hardcoding the enum.
+      responses:
+        "200":
+          description: Every `TechCategory` value, in declaration order.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TechCategoryOption" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  # ------------------------------------------------------------------------- currencies
+  /cms/admin/currencies:
+    get:
+      tags: [admin]
+      operationId: getAdminCurrencies
+      summary: List currencies, inactive included
+      parameters:
+        - name: isActive
+          in: query
+          description: Admin-only filter. Omit to get active and inactive alike.
+          schema: { type: boolean }
+        - $ref: "#/components/parameters/Search"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: A page of currencies, ordered by code.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/Paged"
+                  - type: object
+                    properties:
+                      items:
+                        type: array
+                        items: { $ref: "#/components/schemas/AdminCurrencyResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [admin]
+      operationId: createCurrency
+      summary: Add a currency
+      description: "`manualRateFromUsd` (\"price set by me\") is units per 1 USD and, when present, must be greater than zero. Omit it to fall back to the live rate from the last refresh — a currency with neither is hidden from the public list until one exists. USD itself must always carry exactly 1 and stay active — it is the base every rate is expressed against and the fallback every visitor sees."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateCurrencyRequest" }
+      responses:
+        "201":
+          description: The created currency.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminCurrencyResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /cms/admin/currencies/{id}:
+    get:
+      tags: [admin]
+      operationId: getAdminCurrencyById
+      summary: One currency
+      parameters: [{ $ref: "#/components/parameters/IdPath" }]
+      responses:
+        "200": { $ref: "#/components/responses/AdminCurrency" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      tags: [admin]
+      operationId: updateCurrency
+      summary: Replace a currency
+      description: A full replacement — setting or clearing the manual override goes through this. The live rate only ever changes via a refresh, not this endpoint. Renaming USD is refused with `cannot_rename_base_currency`.
+      parameters: [{ $ref: "#/components/parameters/IdPath" }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateCurrencyRequest" }
+      responses:
+        "200": { $ref: "#/components/responses/AdminCurrency" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [admin]
+      operationId: deleteCurrency
+      summary: Soft-delete a currency
+      description: Refused with `cannot_delete_base_currency` for USD, and with `currency_in_use` while any pricing plan still prices in it.
+      parameters: [{ $ref: "#/components/parameters/IdPath" }]
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /cms/admin/currencies/refresh-rates:
+    post:
+      tags: [admin]
+      operationId: refreshCurrencyRates
+      summary: Refresh every currency's live rate
+      description: One call to a free external FX provider updates every currency's `liveRateFromUsd`/`liveRateFetchedAt` at once. A code the provider doesn't recognise is left untouched. There is no scheduled refresh yet — this is the only way a live rate changes.
+      responses:
+        "200":
+          description: How many currencies were updated, and when.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RefreshCurrencyRatesResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
   # ------------------------------------------------------------------------------ media
   /cms/admin/media/presigned-upload:
     post:
@@ -1662,6 +1926,19 @@ paths:
               schema: { $ref: "#/components/schemas/PresignedUploadResponse" }
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /cms/admin/media/config:
+    get:
+      tags: [admin]
+      operationId: getMediaConfig
+      summary: The base URL a `media://` token resolves against
+      description: Lets the admin SPA turn a round-tripped `media://` token back into a loadable url itself, without a per-image resolve request. Not sensitive — the bucket is already publicly readable.
+      responses:
+        "200":
+          description: The delivery URL prefix.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MediaConfigResponse" }
 
 components:
   securitySchemes:
@@ -1709,10 +1986,34 @@ components:
       in: query
       description: Admin-only filter. Omit to get drafts and published rows alike.
       schema: { type: boolean }
+    IncludeHidden:
+      name: includeHidden
+      in: query
+      description: >-
+        Skips the show-on-`site` filter `site` would otherwise apply. Used by the
+        reorder/visibility screen, which needs every row in both columns —
+        including ones not yet shown on that site — since it's the screen that
+        turns showing on in the first place.
+      schema: { type: boolean, default: false }
+    ServiceIdFilter:
+      name: serviceId
+      in: query
+      description: "Only FAQs scoped to this service. Mutually exclusive in effect with `globalOnly` — this one wins if both are sent."
+      schema: { type: string, format: uuid }
+    GlobalOnly:
+      name: globalOnly
+      in: query
+      description: "Only FAQs with no service — the shared list both public sites render. Ignored when `serviceId` is also sent."
+      schema: { type: boolean, default: false }
     ReviewSort:
       name: sort
       in: query
       schema: { type: string, enum: [latest, rating, country], default: latest }
+    ContactStatusFilter:
+      name: status
+      in: query
+      description: Admin-only filter. Omit to get every status.
+      schema: { $ref: "#/components/schemas/ContactSubmissionStatus" }
     IsTechnology:
       name: isTechnology
       in: query
@@ -1782,7 +2083,9 @@ components:
           schema: { $ref: "#/components/schemas/Problem" }
 
     Auth:
-      description: An access token, a rotating refresh token, and the signed-in account.
+      description: >-
+        An access token and the signed-in account. The rotating refresh token rides along as an
+        httpOnly `Set-Cookie`, not in this body.
       content:
         application/json:
           schema: { $ref: "#/components/schemas/AuthResponse" }
@@ -1816,16 +2119,31 @@ components:
       content:
         application/json:
           schema: { $ref: "#/components/schemas/AdminFaqResponse" }
+    AdminCertificate:
+      description: The certificate, drafts and metadata included.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/AdminCertificateResponse" }
     AdminReview:
       description: The review, drafts and metadata included.
       content:
         application/json:
           schema: { $ref: "#/components/schemas/AdminReviewResponse" }
+    AdminContactSubmission:
+      description: The contact submission, triage state and submitter IP included.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/AdminContactSubmissionResponse" }
     AdminTag:
       description: The tag.
       content:
         application/json:
           schema: { $ref: "#/components/schemas/AdminTagResponse" }
+    AdminCurrency:
+      description: The currency, inactive rows included.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/AdminCurrencyResponse" }
 
     PublicProjectList:
       description: A page of published projects.
@@ -1887,6 +2205,21 @@ components:
                   items:
                     type: array
                     items: { $ref: "#/components/schemas/PricingPlanResponse" }
+    PublicCertificateList:
+      description: A page of published certificates.
+      headers:
+        ETag: { $ref: "#/components/headers/ETag" }
+        Cache-Control: { $ref: "#/components/headers/PublicCacheControl" }
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: "#/components/schemas/Paged"
+              - type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/CertificateResponse" }
 
   schemas:
     # ---------------------------------------------------------------------------- enums
@@ -1894,6 +2227,14 @@ components:
       type: string
       enum: [agency, personal]
       description: The two public frontends.
+    ContactSubmissionStatus:
+      type: string
+      enum: [new, read, replied, archived, spam]
+      description: "`spam` is set by the server (honeypot) — never chosen by the submitter."
+    ContactBudgetRange:
+      type: string
+      enum: [under_one_k, one_to_five_k, five_to_fifteen_k, over_fifteen_k, not_sure]
+      description: Optional, coarse budget band on the contact form. Qualifies a lead, not a quote.
     TechCategory:
       type: string
       enum:
@@ -1907,6 +2248,14 @@ components:
         - agentic_ai
         - design
         - other
+
+    TechCategoryOption:
+      type: object
+      properties:
+        value: { $ref: "#/components/schemas/TechCategory" }
+        label: { type: string }
+      required: [value, label]
+
     PriceType:
       type: string
       enum: [fixed, starting_from, hourly, monthly, custom]
@@ -1918,7 +2267,7 @@ components:
       enum: [email_verification_required, pending, approved, rejected, disabled]
     MediaTarget:
       type: string
-      enum: [projects, services, tags, articles]
+      enum: [projects, services, tags, articles, certificates]
 
     # -------------------------------------------------------------------------- envelope
     Problem:
@@ -1958,10 +2307,23 @@ components:
           oneOf:
             - $ref: "#/components/schemas/TechCategory"
             - type: "null"
-        iconUrl: { type: [string, "null"] }
-        colorHex: { type: [string, "null"], examples: ["#3178c6"] }
-        sortOrder: { type: integer }
-      required: [id, name, slug, isTechnology, sortOrder]
+      required: [id, name, slug, isTechnology]
+
+    CurrencyResponse:
+      type: object
+      description: One selectable display currency. `isActive` never crosses this boundary — the public list only ever contains active, priced rows.
+      properties:
+        code:
+          type: string
+          description: ISO 4217, upper-cased.
+          examples: ["LKR"]
+        name: { type: string, examples: ["Sri Lankan Rupee"] }
+        symbol: { type: string, examples: ["Rs"] }
+        rateFromUsd:
+          type: number
+          description: The effective rate — the admin's manual override when one is set, otherwise the last-fetched live rate. USD itself is always exactly 1.
+          examples: [325]
+      required: [code, name, symbol, rateFromUsd]
 
     ProjectImageResponse:
       type: object
@@ -2016,15 +2378,18 @@ components:
     ArticleResponse:
       type: object
       description: >
-        An article renders from its own contentMarkdown, and may also link out to Medium as a
-        cross-post. contentMarkdown has every media:// reference already resolved to a real URL.
+        An article renders from its own contentMarkdown. contentMarkdown has every media://
+        reference already resolved to a real URL.
       properties:
         id: { type: string, format: uuid }
         title: { type: string }
         excerpt: { type: string }
         slug: { type: [string, "null"] }
-        publishedDate: { type: string, format: date }
-        mediumUrl: { type: [string, "null"], format: uri }
+        publishedAt:
+          type: [string, "null"]
+          format: date-time
+          description: When the article first went live. Null only for a row published before this field existed.
+        updatedAt: { type: string, format: date-time }
         coverImageKey:
           type: [string, "null"]
           description: Neon Object Storage object key.
@@ -2038,17 +2403,20 @@ components:
         tags:
           type: array
           items: { $ref: "#/components/schemas/TagResponse" }
-      required: [id, title, excerpt, publishedDate, featured, sortOrder, tags]
+      required: [id, title, excerpt, updatedAt, featured, sortOrder, tags]
 
-    ServiceFeatureResponse:
+    ServiceProjectResponse:
       type: object
+      description: A case-study card on a service page. Card fields only — the full project is a round trip to `/public/projects/{slug}` away.
       properties:
         id: { type: string, format: uuid }
+        slug: { type: string }
         title: { type: string }
-        description: { type: [string, "null"] }
-        iconName: { type: [string, "null"] }
-        sortOrder: { type: integer }
-      required: [id, title, sortOrder]
+        shortDescription: { type: string }
+        year: { type: integer }
+        imageUrl: { type: [string, "null"] }
+        imageAltText: { type: [string, "null"] }
+      required: [id, slug, title, shortDescription, year]
 
     ServiceResponse:
       type: object
@@ -2056,18 +2424,50 @@ components:
         id: { type: string, format: uuid }
         slug: { type: string }
         name: { type: string }
-        shortDescription: { type: string }
-        description: { type: string }
-        iconName: { type: [string, "null"] }
-        iconObjectKey: { type: [string, "null"] }
-        heroImageId: { type: [string, "null"] }
+        shortDescription:
+          type: string
+          description: Markdown — the card blurb, and the fallback body when the page fields are empty.
+        eyebrow:
+          type: [string, "null"]
+          description: Small badge above the page headline, e.g. "Arizona · Website pages".
+        headline:
+          type: [string, "null"]
+          description: The page's H1. Null means fall back to `name`.
+        deck: { type: [string, "null"] }
+        whoThisIsFor: { type: [string, "null"], description: Markdown bullet list. }
+        outcomes: { type: [string, "null"], description: Markdown bullet list. }
+        capabilities: { type: [string, "null"], description: Markdown bullet list. }
+        inDepth: { type: [string, "null"], description: Markdown. }
+        primaryCtaLabel: { type: [string, "null"] }
+        primaryCtaUrl: { type: [string, "null"] }
+        secondaryCtaLabel: { type: [string, "null"] }
+        secondaryCtaUrl: { type: [string, "null"] }
+        iconUrl: { type: [string, "null"] }
+        iconWidth: { type: [integer, "null"] }
+        iconHeight: { type: [integer, "null"] }
+        iconAltText: { type: [string, "null"] }
+        heroImageUrl: { type: [string, "null"] }
+        heroImageWidth: { type: [integer, "null"] }
+        heroImageHeight: { type: [integer, "null"] }
+        heroImageAltText: { type: [string, "null"] }
+        depthImageUrl: { type: [string, "null"] }
+        depthImageWidth: { type: [integer, "null"] }
+        depthImageHeight: { type: [integer, "null"] }
+        depthImageAltText: { type: [string, "null"] }
+        seoTitle: { type: [string, "null"] }
+        seoDescription: { type: [string, "null"] }
+        projects:
+          type: [array, "null"]
+          description: Case studies for this service. Null on the list endpoint — only `GET /public/services/{slug}` populates it.
+          items: { $ref: "#/components/schemas/ServiceProjectResponse" }
+        faqs:
+          type: [array, "null"]
+          description: This service's own FAQs, in sort order. Null on the list endpoint, as above.
+          items: { $ref: "#/components/schemas/FaqResponse" }
         publishedAt: { type: [string, "null"], format: date-time }
         featured: { type: boolean }
         sortOrder: { type: integer }
-        features:
-          type: array
-          items: { $ref: "#/components/schemas/ServiceFeatureResponse" }
-      required: [id, slug, name, shortDescription, description, featured, sortOrder, features]
+      required: [id, slug, name, shortDescription, featured, sortOrder]
 
     PricingPlanFeatureResponse:
       type: object
@@ -2082,6 +2482,7 @@ components:
 
     PricingPlanResponse:
       type: object
+      description: Agency-only.
       properties:
         id: { type: string, format: uuid }
         serviceId:
@@ -2095,32 +2496,47 @@ components:
           description: Null is valid and means "Custom / Contact us" — it is not zero.
         currency: { type: string, examples: [USD] }
         priceType: { $ref: "#/components/schemas/PriceType" }
-        deliveryDays: { type: [integer, "null"] }
         deliveryText: { type: [string, "null"] }
         description: { type: string }
         isPopular: { type: boolean }
         ctaLabel: { type: [string, "null"] }
         ctaUrl: { type: [string, "null"], format: uri }
         featured: { type: boolean }
-        sortOrder: { type: integer }
-        tierOrder:
+        sortOrder:
           type: integer
-          description: Position within its service's ladder of tiers.
+          description: Drag-and-drop order — never a typed number on create/update.
         features:
           type: array
           items: { $ref: "#/components/schemas/PricingPlanFeatureResponse" }
-      required: [id, name, currency, priceType, description, isPopular, featured, sortOrder, tierOrder, features]
+      required: [id, name, currency, priceType, description, isPopular, featured, sortOrder, features]
 
     FaqResponse:
       type: object
+      description: FAQs have no "featured" concept and share one sort order across both sites.
       properties:
         id: { type: string, format: uuid }
         question: { type: string }
         answer: { type: string }
-        category: { type: [string, "null"] }
+        sortOrder: { type: integer }
+      required: [id, question, answer, sortOrder]
+
+    CertificateResponse:
+      type: object
+      description: Personal-site only — there is no `site` concept here, certificates never exist for the agency site.
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        issuedBy: { type: string }
+        issuedDate: { type: string, format: date }
+        marks: { type: [string, "null"], description: "Free text — a score, grade, or \"Distinction\" style result." }
+        url: { type: string }
+        mimeType: { type: string, description: "e.g. application/pdf, image/png." }
+        width: { type: [integer, "null"], description: Null when the file is a PDF. }
+        height: { type: [integer, "null"] }
+        altText: { type: string }
         featured: { type: boolean }
         sortOrder: { type: integer }
-      required: [id, question, answer, featured, sortOrder]
+      required: [id, name, issuedBy, issuedDate, url, mimeType, altText, featured, sortOrder]
 
     ReviewResponse:
       type: object
@@ -2214,11 +2630,32 @@ components:
               oneOf:
                 - $ref: "#/components/schemas/TechCategory"
                 - type: "null"
-            iconObjectKey: { type: [string, "null"] }
-            iconUrl: { type: [string, "null"] }
-            colorHex: { type: [string, "null"] }
-            sortOrder: { type: integer }
-          required: [id, name, slug, isTechnology, sortOrder]
+          required: [id, name, slug, isTechnology]
+
+    AdminCurrencyResponse:
+      allOf:
+        - $ref: "#/components/schemas/Timestamps"
+        - type: object
+          description: Exposes the override and the live rate separately, plus which one is actually in effect, so the admin can see why a currency shows what it shows.
+          properties:
+            id: { type: string, format: uuid }
+            code: { type: string, examples: ["LKR"] }
+            name: { type: string, examples: ["Sri Lankan Rupee"] }
+            symbol: { type: string, examples: ["Rs"] }
+            manualRateFromUsd:
+              oneOf: [{ type: number }, { type: "null" }]
+              description: "\"Price set by me.\" Null means the live rate is used instead."
+              examples: [325]
+            liveRateFromUsd:
+              oneOf: [{ type: number }, { type: "null" }]
+              description: "\"Actual price,\" as of the last refresh. Null until one has run."
+            liveRateFetchedAt:
+              oneOf: [{ type: string, format: date-time }, { type: "null" }]
+            effectiveRateFromUsd:
+              oneOf: [{ type: number }, { type: "null" }]
+              description: What a visitor actually converts at. Null means neither number exists yet.
+            isActive: { type: boolean }
+          required: [id, code, name, symbol, isActive]
 
     AdminProjectResponse:
       allOf:
@@ -2260,8 +2697,10 @@ components:
             title: { type: string }
             excerpt: { type: string }
             slug: { type: [string, "null"] }
-            publishedDate: { type: string, format: date }
-            mediumUrl: { type: [string, "null"], format: uri }
+            publishedAt:
+              type: [string, "null"]
+              format: date-time
+              description: Null until the article is first published.
             coverImageKey: { type: [string, "null"] }
             contentMarkdown:
               type: [string, "null"]
@@ -2270,7 +2709,18 @@ components:
             tags:
               type: array
               items: { $ref: "#/components/schemas/AdminTagResponse" }
-          required: [id, title, excerpt, publishedDate, isPublished, tags]
+          required: [id, title, excerpt, isPublished, tags]
+
+    ServiceProjectSummary:
+      type: object
+      description: A linked project as the admin service form needs it — enough for a chip and a published/draft badge, not the whole case study.
+      properties:
+        id: { type: string, format: uuid }
+        slug: { type: string }
+        title: { type: string }
+        year: { type: integer }
+        isPublished: { type: boolean }
+      required: [id, slug, title, year, isPublished]
 
     AdminServiceResponse:
       allOf:
@@ -2282,22 +2732,46 @@ components:
             slug: { type: string }
             name: { type: string }
             shortDescription: { type: string }
-            description: { type: string }
-            iconName: { type: [string, "null"] }
+            eyebrow: { type: [string, "null"] }
+            headline: { type: [string, "null"] }
+            deck: { type: [string, "null"] }
+            whoThisIsFor: { type: [string, "null"] }
+            outcomes: { type: [string, "null"] }
+            capabilities: { type: [string, "null"] }
+            inDepth: { type: [string, "null"] }
+            primaryCtaLabel: { type: [string, "null"] }
+            primaryCtaUrl: { type: [string, "null"] }
+            secondaryCtaLabel: { type: [string, "null"] }
+            secondaryCtaUrl: { type: [string, "null"] }
             iconObjectKey: { type: [string, "null"] }
-            heroImageId: { type: [string, "null"] }
+            iconUrl: { type: [string, "null"] }
+            iconWidth: { type: [integer, "null"] }
+            iconHeight: { type: [integer, "null"] }
+            iconAltText: { type: [string, "null"] }
+            heroImageObjectKey: { type: [string, "null"] }
+            heroImageUrl: { type: [string, "null"] }
+            heroImageWidth: { type: [integer, "null"] }
+            heroImageHeight: { type: [integer, "null"] }
+            heroImageAltText: { type: [string, "null"] }
+            depthImageObjectKey: { type: [string, "null"] }
+            depthImageUrl: { type: [string, "null"] }
+            depthImageWidth: { type: [integer, "null"] }
+            depthImageHeight: { type: [integer, "null"] }
+            depthImageAltText: { type: [string, "null"] }
+            projects:
+              type: array
+              items: { $ref: "#/components/schemas/ServiceProjectSummary" }
+            seoTitle: { type: [string, "null"] }
+            seoDescription: { type: [string, "null"] }
             isPublished: { type: boolean }
             publishedAt: { type: [string, "null"], format: date-time }
-            features:
-              type: array
-              items: { $ref: "#/components/schemas/ServiceFeatureResponse" }
-          required: [id, slug, name, shortDescription, description, isPublished, features]
+          required: [id, slug, name, shortDescription, projects, isPublished]
 
     AdminPricingPlanResponse:
       allOf:
-        - $ref: "#/components/schemas/SiteVisibility"
         - $ref: "#/components/schemas/Timestamps"
         - type: object
+          description: Agency-only — no per-site visibility block, unlike projects/articles/services.
           properties:
             id: { type: string, format: uuid }
             serviceId: { type: [string, "null"], format: uuid }
@@ -2306,32 +2780,68 @@ components:
             priceAmount: { type: [number, "null"] }
             currency: { type: string }
             priceType: { $ref: "#/components/schemas/PriceType" }
-            deliveryDays: { type: [integer, "null"] }
             deliveryText: { type: [string, "null"] }
             description: { type: string }
             isPopular: { type: boolean }
             ctaLabel: { type: [string, "null"] }
             ctaUrl: { type: [string, "null"], format: uri }
             isPublished: { type: boolean }
-            sortOrder: { type: integer }
+            featured: { type: boolean }
+            sortOrder:
+              type: integer
+              description: Drag-and-drop order — never a typed number on create/update.
             features:
               type: array
               items: { $ref: "#/components/schemas/PricingPlanFeatureResponse" }
-          required: [id, name, currency, priceType, description, isPopular, isPublished, sortOrder, features]
+          required: [id, name, currency, priceType, description, isPopular, isPublished, featured, sortOrder, features]
 
     AdminFaqResponse:
       allOf:
-        - $ref: "#/components/schemas/SiteVisibility"
         - $ref: "#/components/schemas/Timestamps"
         - type: object
+          description: FAQs keep their own visibility flags — no featured flag or per-site sort order, unlike the other site-visible entities.
           properties:
             id: { type: string, format: uuid }
+            serviceId:
+              type: [string, "null"]
+              format: uuid
+              description: Null means this is a general FAQ shared by both sites.
+            serviceName:
+              type: [string, "null"]
+              description: For display next to the scope filter. Null exactly when serviceId is null.
             question: { type: string }
             answer: { type: string }
-            category: { type: [string, "null"] }
-            sortOrder: { type: integer }
+            sortOrder:
+              type: integer
+              description: Ordered within its scope (global, or one service) — not across every FAQ.
             isPublished: { type: boolean }
-          required: [id, question, answer, sortOrder, isPublished]
+            showOnAgency: { type: boolean }
+            showOnPersonal: { type: boolean }
+          required: [id, question, answer, sortOrder, isPublished, showOnAgency, showOnPersonal]
+
+    AdminCertificateResponse:
+      allOf:
+        - $ref: "#/components/schemas/Timestamps"
+        - type: object
+          description: Personal-site only — no site-visibility block at all, unlike projects/articles/services.
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+            issuedBy: { type: string }
+            issuedDate: { type: string, format: date }
+            marks: { type: [string, "null"] }
+            objectKey: { type: string }
+            url: { type: string }
+            mimeType: { type: string }
+            width: { type: [integer, "null"] }
+            height: { type: [integer, "null"] }
+            altText: { type: string }
+            isPublished: { type: boolean }
+            featured: { type: boolean }
+            sortOrder:
+              type: integer
+              description: Drag-and-drop order — never a typed number on create/update.
+          required: [id, name, issuedBy, issuedDate, objectKey, url, mimeType, altText, isPublished, featured, sortOrder]
 
     AdminReviewResponse:
       type: object
@@ -2352,6 +2862,33 @@ components:
         updatedAt: { type: string, format: date-time }
       required:
         [id, name, country, countryCode, rating, reviewText, isPublished, isFeatured, sortOrder, createdAt, updatedAt]
+
+    AdminContactSubmissionResponse:
+      type: object
+      description: Everything the visitor sent, plus triage state and the submitter's IP for spam moderation. Never reused on the public surface.
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        email: { type: string, format: email }
+        phone: { type: [string, "null"] }
+        company: { type: [string, "null"] }
+        subject: { type: [string, "null"] }
+        message: { type: string }
+        serviceId: { type: [string, "null"], format: uuid }
+        serviceName: { type: [string, "null"] }
+        budgetRange:
+          oneOf:
+            - $ref: "#/components/schemas/ContactBudgetRange"
+            - type: "null"
+        site: { $ref: "#/components/schemas/Site" }
+        status: { $ref: "#/components/schemas/ContactSubmissionStatus" }
+        adminNotes: { type: [string, "null"] }
+        repliedAt: { type: [string, "null"], format: date-time }
+        repliedBy: { type: [string, "null"], format: uuid }
+        submitterIp: { type: [string, "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required: [id, name, email, message, site, status, createdAt, updatedAt]
 
     # ------------------------------------------------------------------- auth contracts
     RegisterRequest:
@@ -2419,12 +2956,6 @@ components:
           description: The ID token from Google Sign-In, verified against Google's keys server-side.
       required: [idToken]
 
-    RefreshTokenRequest:
-      type: object
-      properties:
-        refreshToken: { type: string }
-      required: [refreshToken]
-
     ChangePasswordRequest:
       type: object
       properties:
@@ -2441,15 +2972,14 @@ components:
 
     AuthResponse:
       type: object
+      description: >-
+        The refresh token never appears here — it's set as an httpOnly `refreshToken` cookie,
+        single-use, rotated (and revoking the one you sent) on every `/auth/refresh` call.
       properties:
         accessToken: { type: string }
         expiresAt: { type: string, format: date-time }
-        refreshToken:
-          type: string
-          description: Single-use. Refreshing rotates it and revokes the one you sent.
-        refreshTokenExpiresAt: { type: string, format: date-time }
         user: { $ref: "#/components/schemas/AdminUserResponse" }
-      required: [accessToken, expiresAt, refreshToken, refreshTokenExpiresAt, user]
+      required: [accessToken, expiresAt, user]
 
     # ---------------------------------------------------------------- admin write bodies
     SetPublishedRequest:
@@ -2477,6 +3007,33 @@ components:
           items: { $ref: "#/components/schemas/ReorderItem" }
       required: [items]
 
+    FaqReorderRequest:
+      type: object
+      description: "Bulk `sort_order` update for FAQs. No `site`: FAQs share one order across both sites."
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ReorderItem" }
+      required: [items]
+
+    CertificateReorderRequest:
+      type: object
+      description: "Bulk `sort_order` update for certificates. No `site`: certificates only ever exist for the personal site."
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ReorderItem" }
+      required: [items]
+
+    PricingReorderRequest:
+      type: object
+      description: "Bulk `sort_order` update for pricing plans. No `site`: pricing is agency-only."
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ReorderItem" }
+      required: [items]
+
     ReorderItem:
       type: object
       properties:
@@ -2485,56 +3042,62 @@ components:
       required: [id, sortOrder]
 
     CreateProjectRequest:
-      allOf:
-        - $ref: "#/components/schemas/SiteVisibility"
-        - type: object
-          description: "Also used for `PUT` (full replacement). Omit `slug` to generate one from the title — a published project's slug should stay put."
-          properties:
-            title: { type: string }
-            slug: { type: string }
-            year: { type: integer }
-            shortDescription: { type: string }
-            description: { type: string, description: Raw markdown. }
-            websiteUrl: { type: string, format: uri }
-            problem: { type: string }
-            solution: { type: string }
-            whatWeDelivered: { type: string }
-            proof: { type: string }
-            clientName: { type: string }
-            isPublished: { type: boolean, default: false }
-            seoTitle: { type: string }
-            seoDescription: { type: string }
-            tagIds:
-              type: array
-              items: { type: string, format: uuid }
-          required: [title, year, shortDescription, description]
+      type: object
+      description: >
+        Also used for `PUT` (full replacement). Omit `slug` to generate one from the title — a
+        published project's slug should stay put. Unlike SiteVisibility elsewhere, sort order is
+        not writable here — a new project is appended to the end of both sites' order, and it only
+        ever changes via POST /cms/admin/projects/reorder.
+      properties:
+        title: { type: string }
+        slug: { type: string }
+        year: { type: integer }
+        shortDescription: { type: string }
+        description: { type: string, description: Raw markdown. }
+        websiteUrl: { type: string, format: uri }
+        problem: { type: string }
+        solution: { type: string }
+        whatWeDelivered: { type: string }
+        proof: { type: string }
+        clientName: { type: string }
+        isPublished: { type: boolean, default: false }
+        seoTitle: { type: string }
+        seoDescription: { type: string }
+        showOnAgency: { type: boolean, default: false }
+        featuredOnAgency: { type: boolean, default: false }
+        showOnPersonal: { type: boolean, default: false }
+        featuredOnPersonal: { type: boolean, default: false }
+        tagIds:
+          type: array
+          items: { type: string, format: uuid }
+      required: [title, year, shortDescription, description]
 
     CreateArticleRequest:
-      allOf:
-        - $ref: "#/components/schemas/SiteVisibility"
-        - type: object
-          description: Also used for `PUT` — an update is a full replacement.
-          properties:
-            title: { type: string }
-            excerpt: { type: string }
-            slug: { type: string }
-            publishedDate: { type: string, format: date }
-            mediumUrl:
-              type: string
-              format: uri
-              description: Optional cross-post link. Must be an absolute URL when present.
-            coverImageKey: { type: string, description: Neon Object Storage object key. }
-            contentMarkdown:
-              type: string
-              description: >
-                Raw Markdown. Embed media with a media://articles/... reference (e.g.
-                media://articles/images/example.png) instead of a real URL — insert the
-                reference after uploading via POST /cms/admin/media/presigned-upload.
-            isPublished: { type: boolean, default: false }
-            tagIds:
-              type: array
-              items: { type: string, format: uuid }
-          required: [title, excerpt, publishedDate]
+      type: object
+      description: >
+        Also used for `PUT` — an update is a full replacement. Unlike SiteVisibility elsewhere,
+        sort order is not writable here — a new article is appended to the end of both sites'
+        order, and it only ever changes via POST /cms/admin/articles/reorder.
+      properties:
+        title: { type: string }
+        excerpt: { type: string }
+        slug: { type: string }
+        coverImageKey: { type: string, description: Neon Object Storage object key. }
+        contentMarkdown:
+          type: string
+          description: >
+            Raw Markdown. Embed media with a media://articles/... reference (e.g.
+            media://articles/images/example.png) instead of a real URL — insert the
+            reference after uploading via POST /cms/admin/media/presigned-upload.
+        isPublished: { type: boolean, default: false }
+        showOnAgency: { type: boolean, default: false }
+        featuredOnAgency: { type: boolean, default: false }
+        showOnPersonal: { type: boolean, default: false }
+        featuredOnPersonal: { type: boolean, default: false }
+        tagIds:
+          type: array
+          items: { type: string, format: uuid }
+      required: [title, excerpt]
 
     CreateServiceRequest:
       allOf:
@@ -2544,53 +3107,120 @@ components:
           properties:
             name: { type: string }
             slug: { type: string }
-            shortDescription: { type: string }
-            description: { type: string }
-            iconName: { type: string }
-            iconObjectKey: { type: string }
-            heroImageId: { type: string }
+            shortDescription:
+              type: string
+              description: Markdown — the card blurb.
+            eyebrow: { type: string, description: Small badge above the page headline. }
+            headline: { type: string, description: The page's H1. Falls back to the name when omitted. }
+            deck: { type: string }
+            whoThisIsFor: { type: string, description: Markdown bullet list. }
+            outcomes: { type: string, description: Markdown bullet list. }
+            capabilities: { type: string, description: Markdown bullet list. }
+            inDepth: { type: string, description: Markdown. }
+            primaryCtaLabel:
+              type: string
+              description: Set together with primaryCtaUrl, or not at all.
+            primaryCtaUrl: { type: string }
+            secondaryCtaLabel:
+              type: string
+              description: Set together with secondaryCtaUrl, or not at all.
+            secondaryCtaUrl: { type: string }
+            iconObjectKey:
+              type: string
+              description: Set together with the other icon* fields, or not at all.
+            iconUrl: { type: string }
+            iconWidth: { type: integer }
+            iconHeight: { type: integer }
+            iconAltText:
+              type: string
+              description: Required whenever an icon is set.
+            heroImageObjectKey:
+              type: string
+              description: Set together with the other heroImage* fields, or not at all.
+            heroImageUrl: { type: string }
+            heroImageWidth: { type: integer }
+            heroImageHeight: { type: integer }
+            heroImageAltText:
+              type: string
+              description: Required whenever a hero image is set.
+            depthImageObjectKey:
+              type: string
+              description: Set together with the other depthImage* fields, or not at all. The "in depth" section's image.
+            depthImageUrl: { type: string }
+            depthImageWidth: { type: integer }
+            depthImageHeight: { type: integer }
+            depthImageAltText:
+              type: string
+              description: Required whenever a depth image is set.
+            projectIds:
+              type: array
+              description: The complete set of case studies — replaced wholesale on save, so an omitted id unlinks it.
+              items: { type: string, format: uuid }
+            seoTitle: { type: string }
+            seoDescription: { type: string }
             isPublished: { type: boolean, default: false }
-          required: [name, shortDescription, description]
+          required: [name, shortDescription]
 
     CreatePricingPlanRequest:
-      allOf:
-        - $ref: "#/components/schemas/SiteVisibility"
-        - type: object
-          description: Also used for `PUT` — an update is a full replacement.
-          properties:
-            serviceId:
-              type: string
-              format: uuid
-              description: Omit or send null for a combo pack.
-            name: { type: string }
-            tagline: { type: string }
-            priceAmount:
-              type: number
-              description: Omit for "Custom / Contact us". Do not send 0 to mean that.
-            currency: { type: string, examples: [USD] }
-            priceType: { $ref: "#/components/schemas/PriceType" }
-            deliveryDays: { type: integer }
-            deliveryText: { type: string }
-            description: { type: string }
-            isPopular: { type: boolean, default: false }
-            ctaLabel: { type: string }
-            ctaUrl: { type: string, format: uri }
-            isPublished: { type: boolean, default: false }
-            sortOrder: { type: integer, default: 0 }
-          required: [name, description]
+      type: object
+      description: >-
+        Also used for `PUT` — an update is a full replacement. Agency-only, so there is no
+        site-visibility block. `sortOrder` is absent on purpose — it is never client-settable;
+        a new plan is appended to the end of its group's order and only ever changed via the
+        drag-and-drop `/reorder` endpoint.
+      properties:
+        serviceId:
+          type: string
+          format: uuid
+          description: Omit or send null for a combo pack.
+        name: { type: string }
+        tagline: { type: string }
+        priceAmount:
+          type: number
+          description: Omit for "Custom / Contact us". Do not send 0 to mean that.
+        currency: { type: string, examples: [USD] }
+        priceType: { $ref: "#/components/schemas/PriceType" }
+        deliveryText: { type: string }
+        description: { type: string }
+        isPopular: { type: boolean, default: false }
+        ctaLabel: { type: string }
+        ctaUrl: { type: string, format: uri }
+        isPublished: { type: boolean, default: false }
+        featured: { type: boolean, default: false }
+      required: [name, description]
 
     CreateFaqRequest:
-      allOf:
-        - $ref: "#/components/schemas/SiteVisibility"
-        - type: object
-          description: Also used for `PUT` — an update is a full replacement.
-          properties:
-            question: { type: string }
-            answer: { type: string }
-            category: { type: string }
-            sortOrder: { type: integer, default: 0 }
-            isPublished: { type: boolean, default: false }
-          required: [question, answer]
+      type: object
+      description: Also used for `PUT` — an update is a full replacement. No `sortOrder` here — a new FAQ is appended to the end of its scope's order server-side, and an existing one's position only changes via `POST /cms/admin/faqs/reorder`.
+      properties:
+        serviceId:
+          type: [string, "null"]
+          format: uuid
+          description: Omit or send null for a general FAQ shared by both sites; otherwise scopes it to that service's page.
+        question: { type: string }
+        answer: { type: string }
+        isPublished: { type: boolean, default: false }
+        showOnAgency: { type: boolean, default: false }
+        showOnPersonal: { type: boolean, default: false }
+      required: [question, answer]
+
+    CreateCertificateRequest:
+      type: object
+      description: Also used for `PUT` — an update is a full replacement. No `sortOrder` here — a new certificate is appended to the end of the (single, global) order server-side, and an existing one's position only changes via `POST /cms/admin/certificates/reorder`.
+      properties:
+        name: { type: string }
+        issuedBy: { type: string }
+        issuedDate: { type: string, format: date }
+        marks: { type: string, description: "Free text — a score, grade, or \"Distinction\" style result. Optional." }
+        objectKey: { type: string, description: Neon Object Storage object key. }
+        url: { type: string }
+        mimeType: { type: string, description: "e.g. application/pdf, image/png." }
+        width: { type: integer, description: Omit for a PDF, which has no dimensions. }
+        height: { type: integer }
+        altText: { type: string }
+        isPublished: { type: boolean, default: false }
+        featured: { type: boolean, default: false }
+      required: [name, issuedBy, issuedDate, objectKey, url, mimeType, altText]
 
     SubmitReviewRequest:
       type: object
@@ -2614,9 +3244,45 @@ components:
         id: { type: string, format: uuid }
       required: [id]
 
+    CreateContactSubmissionRequest:
+      type: object
+      description: What an anonymous visitor submits through the contact form. `website` is a honeypot — the real form renders it hidden and leaves it empty.
+      properties:
+        name: { type: string, maxLength: 100 }
+        email: { type: string, format: email, maxLength: 255 }
+        phone: { type: string, maxLength: 30 }
+        company: { type: string, maxLength: 150 }
+        subject: { type: string, maxLength: 200 }
+        message: { type: string, maxLength: 4000 }
+        serviceId:
+          type: [string, "null"]
+          format: uuid
+          description: The service the enquiry is about. Omit or null for a general enquiry.
+        budgetRange: { $ref: "#/components/schemas/ContactBudgetRange" }
+        site: { $ref: "#/components/schemas/Site" }
+        website:
+          type: string
+          description: Honeypot. Leave empty — a bot that fills it gets filed as spam, silently.
+      required: [name, email, message, site]
+
+    ContactSubmissionResponse:
+      type: object
+      description: Deliberately thin — an acknowledgement, not the row. Echoing the submission would put admin-only fields on the public surface.
+      properties:
+        id: { type: string, format: uuid }
+      required: [id]
+
+    UpdateContactSubmissionRequest:
+      type: object
+      description: Triage only — status and internal notes. Cannot rewrite what the visitor submitted.
+      properties:
+        status: { $ref: "#/components/schemas/ContactSubmissionStatus" }
+        adminNotes: { type: string, maxLength: 4000 }
+      required: [status]
+
     CreateReviewRequest:
       type: object
-      description: "Also used for `PUT` (full replacement). For an admin manually adding a testimonial collected elsewhere — not what the public submission endpoint uses."
+      description: "Also used for `PUT` (full replacement). For an admin manually adding a testimonial collected elsewhere — not what the public submission endpoint uses. No `sortOrder` here — a new review is appended to the end of the shared order server-side, and an existing one's position only changes via `POST /cms/admin/reviews/reorder`."
       properties:
         name: { type: string }
         country: { type: string }
@@ -2626,22 +3292,42 @@ components:
         reviewText: { type: string, maxLength: 2000 }
         isPublished: { type: boolean, default: false }
         isFeatured: { type: boolean, default: false }
-        sortOrder: { type: integer, default: 0 }
       required: [name, country, countryCode, rating, reviewText]
 
     CreateTagRequest:
       type: object
-      description: "Also used for `PUT`. A technology tag requires `technologyCategory` and an icon; a category tag must have neither."
+      description: "Also used for `PUT`. A technology tag requires `technologyCategory`; a category tag must have none."
       properties:
         name: { type: string }
         slug: { type: string }
         isTechnology: { type: boolean, default: false }
         technologyCategory: { $ref: "#/components/schemas/TechCategory" }
-        iconObjectKey: { type: string }
-        iconUrl: { type: string, format: uri }
-        colorHex: { type: string, examples: ["#3178c6"] }
-        sortOrder: { type: integer, default: 0 }
       required: [name]
+
+    CreateCurrencyRequest:
+      type: object
+      description: "Also used for `PUT` (full replacement, and only the override this way — the live rate only ever changes via a refresh). `manualRateFromUsd` (\"price set by me\") is units per 1 USD; omit it to use the live rate instead. USD must always carry exactly 1 and stay active."
+      properties:
+        code:
+          type: string
+          description: ISO 4217 — 3 letters, upper-cased by the API.
+          minLength: 3
+          maxLength: 3
+          examples: ["LKR"]
+        name: { type: string, maxLength: 100, examples: ["Sri Lankan Rupee"] }
+        symbol: { type: string, maxLength: 10, examples: ["Rs"] }
+        manualRateFromUsd:
+          oneOf: [{ type: number, exclusiveMinimum: 0 }, { type: "null" }]
+          examples: [325]
+        isActive: { type: boolean, default: false }
+      required: [code, name, symbol]
+
+    RefreshCurrencyRatesResponse:
+      type: object
+      properties:
+        updatedCount: { type: integer, examples: [12] }
+        fetchedAt: { type: string, format: date-time }
+      required: [updatedCount, fetchedAt]
 
     AddProjectImageRequest:
       type: object
@@ -2660,16 +3346,6 @@ components:
           description: Setting this clears the previous primary in the same transaction.
         sortOrder: { type: integer, default: 0 }
       required: [objectKey, url, altText, width, height]
-
-    AddServiceFeatureRequest:
-      type: object
-      description: Also used for `PUT`.
-      properties:
-        title: { type: string }
-        description: { type: string }
-        iconName: { type: string }
-        sortOrder: { type: integer, default: 0 }
-      required: [title]
 
     AddPricingPlanFeatureRequest:
       type: object
@@ -2704,3 +3380,12 @@ components:
           description: Where the object is readable once the PUT completes — the endpoint and bucket live only in server config, so the caller cannot build this itself.
         expiresAt: { type: string, format: date-time }
       required: [uploadUrl, objectKey, publicUrl, expiresAt]
+
+    MediaConfigResponse:
+      type: object
+      properties:
+        publicBaseUrl:
+          type: string
+          format: uri
+          description: Prefix a `media://` token's key with this (in place of `media://`) to get a loadable url.
+      required: [publicBaseUrl]

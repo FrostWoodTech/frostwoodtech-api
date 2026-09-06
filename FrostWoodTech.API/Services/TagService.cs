@@ -1,5 +1,4 @@
 using System.Linq.Expressions;
-using System.Text.RegularExpressions;
 
 using Microsoft.EntityFrameworkCore;
 
@@ -13,7 +12,7 @@ using FrostWoodTech.API.Interfaces;
 
 namespace FrostWoodTech.API.Services;
 
-public partial class TagService : ITagService
+public class TagService : ITagService
 {
     private readonly FrostWoodTechDbContext _db;
 
@@ -29,18 +28,14 @@ public partial class TagService : ITagService
     {
         // Not paged: tags are a small lookup set the frontend groups client-side.
         return await FilterTags(_db.Tags.AsNoTracking(), isTechnology, category)
-            .OrderBy(t => t.SortOrder)
-            .ThenBy(t => t.Name)
+            .OrderBy(t => t.Name)
             .Select(t => new TagResponse
             {
                 Id = t.Id,
                 Name = t.Name,
                 Slug = t.Slug,
                 IsTechnology = t.IsTechnology,
-                TechnologyCategory = t.TechnologyCategory,
-                IconUrl = t.IconUrl,
-                ColorHex = t.ColorHex,
-                SortOrder = t.SortOrder
+                TechnologyCategory = t.TechnologyCategory
             })
             .ToListAsync(cancellationToken);
     }
@@ -63,8 +58,7 @@ public partial class TagService : ITagService
         var total = await query.CountAsync(cancellationToken);
 
         var items = await query
-            .OrderBy(t => t.SortOrder)
-            .ThenBy(t => t.Name)
+            .OrderBy(t => t.Name)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .Select(AdminProjection)
@@ -96,13 +90,7 @@ public partial class TagService : ITagService
     {
         var name = request.Name?.Trim();
 
-        var validationError = Validate(
-            name,
-            request.IsTechnology,
-            request.TechnologyCategory,
-            request.IconObjectKey,
-            request.IconUrl,
-            request.ColorHex);
+        var validationError = Validate(name, request.IsTechnology, request.TechnologyCategory);
 
         if (validationError is not null)
         {
@@ -121,11 +109,7 @@ public partial class TagService : ITagService
             Name = name!,
             Slug = slug,
             IsTechnology = request.IsTechnology,
-            TechnologyCategory = request.TechnologyCategory,
-            IconObjectKey = Blank(request.IconObjectKey),
-            IconUrl = Blank(request.IconUrl),
-            ColorHex = Blank(request.ColorHex)?.ToLowerInvariant(),
-            SortOrder = request.SortOrder
+            TechnologyCategory = request.TechnologyCategory
         };
 
         _db.Tags.Add(tag);
@@ -147,13 +131,7 @@ public partial class TagService : ITagService
 
         var name = request.Name?.Trim();
 
-        var validationError = Validate(
-            name,
-            request.IsTechnology,
-            request.TechnologyCategory,
-            request.IconObjectKey,
-            request.IconUrl,
-            request.ColorHex);
+        var validationError = Validate(name, request.IsTechnology, request.TechnologyCategory);
 
         if (validationError is not null)
         {
@@ -170,10 +148,6 @@ public partial class TagService : ITagService
         tag.Slug = slug;
         tag.IsTechnology = request.IsTechnology;
         tag.TechnologyCategory = request.TechnologyCategory;
-        tag.IconObjectKey = Blank(request.IconObjectKey);
-        tag.IconUrl = Blank(request.IconUrl);
-        tag.ColorHex = Blank(request.ColorHex)?.ToLowerInvariant();
-        tag.SortOrder = request.SortOrder;
 
         await _db.SaveChangesAsync(cancellationToken);
 
@@ -226,13 +200,7 @@ public partial class TagService : ITagService
     }
 
     /// <summary>Null when the tag is valid, otherwise the message to hand back.</summary>
-    private static string? Validate(
-        string? name,
-        bool isTechnology,
-        TechCategory? technologyCategory,
-        string? iconObjectKey,
-        string? iconUrl,
-        string? colorHex)
+    private static string? Validate(string? name, bool isTechnology, TechCategory? technologyCategory)
     {
         if (string.IsNullOrWhiteSpace(name))
         {
@@ -245,28 +213,10 @@ public partial class TagService : ITagService
             {
                 return "technologyCategory is required when isTechnology is true.";
             }
-
-            if (string.IsNullOrWhiteSpace(iconObjectKey))
-            {
-                return "iconObjectKey is required when isTechnology is true.";
-            }
         }
-        else
+        else if (technologyCategory is not null)
         {
-            if (technologyCategory is not null)
-            {
-                return "technologyCategory must be null when isTechnology is false.";
-            }
-
-            if (!string.IsNullOrWhiteSpace(iconObjectKey) || !string.IsNullOrWhiteSpace(iconUrl))
-            {
-                return "Icon fields must be null when isTechnology is false.";
-            }
-        }
-
-        if (!string.IsNullOrWhiteSpace(colorHex) && !HexColour().IsMatch(colorHex))
-        {
-            return "colorHex must look like #rrggbb.";
+            return "technologyCategory must be null when isTechnology is false.";
         }
 
         return null;
@@ -284,8 +234,6 @@ public partial class TagService : ITagService
     private static ServiceResult<AdminTagResponse> SlugTaken(string slug) =>
         ServiceResult<AdminTagResponse>.Conflict("slug_taken", $"Slug '{slug}' is already in use.");
 
-    private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
-
     /// <summary>Projected inside the query so the SQL stays narrow.</summary>
     private static readonly Expression<Func<Tag, AdminTagResponse>> AdminProjection = tag => new AdminTagResponse
     {
@@ -294,17 +242,10 @@ public partial class TagService : ITagService
         Slug = tag.Slug,
         IsTechnology = tag.IsTechnology,
         TechnologyCategory = tag.TechnologyCategory,
-        IconObjectKey = tag.IconObjectKey,
-        IconUrl = tag.IconUrl,
-        ColorHex = tag.ColorHex,
-        SortOrder = tag.SortOrder,
         CreatedAt = tag.CreatedAt,
         UpdatedAt = tag.UpdatedAt
     };
 
     /// <summary>The same shape for an entity already in memory after a write.</summary>
     private static readonly Func<Tag, AdminTagResponse> ToAdminResponse = AdminProjection.Compile();
-
-    [GeneratedRegex("^#[0-9a-fA-F]{6}$")]
-    private static partial Regex HexColour();
 }

@@ -12,13 +12,8 @@ public class Article : SiteVisibleEntity
 
     public required string Excerpt { get; set; }
 
-    public DateOnly PublishedDate { get; set; }
-
-    /// <summary>
-    /// Optional cross-post link, absolute URL when present. No longer required now that an
-    /// article can carry its own <see cref="ContentMarkdown"/>.
-    /// </summary>
-    public string? MediumUrl { get; set; }
+    /// <summary>Stamped the first time the article is published; never cleared.</summary>
+    public DateTimeOffset? PublishedAt { get; set; }
 
     /// <summary>
     /// Raw Markdown body. Embedded media is referenced with storage-independent

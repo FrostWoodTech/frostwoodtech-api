@@ -32,6 +32,9 @@ public sealed class PostgresFixture : IAsyncLifetime
         builder.MapEnum<UserStatus>("user_status");
         builder.MapEnum<PasswordTokenPurpose>("password_token_purpose");
         builder.MapEnum<AuthAttemptAction>("auth_attempt_action");
+        builder.MapEnum<ContactSubmissionStatus>("contact_submission_status");
+        builder.MapEnum<ContactBudgetRange>("contact_budget_range");
+        builder.MapEnum<Site>("site");
         _dataSource = builder.Build();
 
         await using var db = CreateContext();
@@ -48,6 +51,9 @@ public sealed class PostgresFixture : IAsyncLifetime
                 npgsql.MapEnum<UserStatus>("user_status");
                 npgsql.MapEnum<PasswordTokenPurpose>("password_token_purpose");
                 npgsql.MapEnum<AuthAttemptAction>("auth_attempt_action");
+                npgsql.MapEnum<ContactSubmissionStatus>("contact_submission_status");
+                npgsql.MapEnum<ContactBudgetRange>("contact_budget_range");
+                npgsql.MapEnum<Site>("site");
             })
             .Options);
 

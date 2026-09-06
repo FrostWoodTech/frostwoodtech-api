@@ -8,33 +8,29 @@ using FrostWoodTech.API.Common;
 using FrostWoodTech.API.DTOs.Admin;
 using FrostWoodTech.API.Interfaces;
 
-namespace FrostWoodTech.API.Functions.Services;
+namespace FrostWoodTech.API.Functions.Certificates;
 
-public class ReorderServiceFeatures
+public class ReorderCertificates
 {
-    private readonly IServiceCatalogService _serviceCatalog;
+    private readonly ICertificateService _certificateService;
 
-    public ReorderServiceFeatures(IServiceCatalogService serviceCatalog)
+    public ReorderCertificates(ICertificateService certificateService)
     {
-        _serviceCatalog = serviceCatalog;
+        _certificateService = certificateService;
     }
 
-    /// <summary>Bulk sort_order update for one feature list. No site here — a service has a single feature order.</summary>
-    [Function("ReorderServiceFeatures")]
+    /// <summary>Bulk sort_order update, in a single save. Certificates share one global order.</summary>
+    [Function("ReorderCertificates")]
     public async Task<IActionResult> Run(
-        [HttpTrigger(
-            AuthorizationLevel.Anonymous,
-            "post",
-            Route = "cms/admin/services/{id:guid}/features/reorder")] HttpRequest req,
-        Guid id,
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "cms/admin/certificates/reorder")] HttpRequest req,
         CancellationToken cancellationToken)
     {
         HttpResponses.MarkNoStore(req);
 
-        FeatureReorderRequest? body;
+        CertificateReorderRequest? body;
         try
         {
-            body = await JsonSerializer.DeserializeAsync<FeatureReorderRequest>(
+            body = await JsonSerializer.DeserializeAsync<CertificateReorderRequest>(
                 req.Body,
                 JsonDefaults.Options,
                 cancellationToken);
@@ -49,7 +45,7 @@ public class ReorderServiceFeatures
             return ProblemResults.BadRequest("validation_failed", "A request body is required.");
         }
 
-        var result = await _serviceCatalog.ReorderFeaturesAsync(id, body, cancellationToken);
+        var result = await _certificateService.ReorderAsync(body, cancellationToken);
 
         return result.IsSuccess
             ? new NoContentResult()

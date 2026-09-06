@@ -19,6 +19,4 @@ public class CreateReviewRequest
     public bool IsPublished { get; set; }
 
     public bool IsFeatured { get; set; }
-
-    public int SortOrder { get; set; }
 }

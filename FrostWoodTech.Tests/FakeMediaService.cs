@@ -18,6 +18,8 @@ public sealed class FakeMediaService : IMediaService
 
     public string GetPublicUrl(string objectKey) => $"https://fake-storage.test/{objectKey}";
 
+    public string GetPublicBaseUrl() => "https://fake-storage.test";
+
     public Task<bool> DeleteFileAsync(string objectKey, CancellationToken cancellationToken)
     {
         Deleted.Add(objectKey);

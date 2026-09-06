@@ -40,6 +40,12 @@
   "Docs": {
     "Enabled": "<docs-enabled>"
   },
+  "Contact": {
+    "NotifyAddress": "<address for new contact-form submissions; falls back to SuperAdmin:Email>"
+  },
+  "ExchangeRate": {
+    "BaseUrl": "<optional; defaults to the free open.er-api.com endpoint, override only to point at a different FX provider>"
+  },
   "Cors": {
     "AllowedOrigins": "<comma-separated-cors-allowed-origins>"
   },

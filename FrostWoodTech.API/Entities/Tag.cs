@@ -18,16 +18,6 @@ public class Tag : AuditableEntity
     /// <summary>Required when <see cref="IsTechnology"/> is true, otherwise must be null.</summary>
     public TechCategory? TechnologyCategory { get; set; }
 
-    /// <summary>Required when <see cref="IsTechnology"/> is true, otherwise must be null.</summary>
-    public string? IconObjectKey { get; set; }
-
-    public string? IconUrl { get; set; }
-
-    /// <summary>Optional chip colour on the frontend, <c>#rrggbb</c>.</summary>
-    public string? ColorHex { get; set; }
-
-    public int SortOrder { get; set; }
-
     public ICollection<ProjectTag> ProjectTags { get; set; } = [];
 
     public ICollection<ArticleTag> ArticleTags { get; set; } = [];

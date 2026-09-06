@@ -44,4 +44,7 @@ public class Project : SiteVisibleEntity
     public ICollection<ProjectImage> Images { get; set; } = [];
 
     public ICollection<ProjectTag> ProjectTags { get; set; } = [];
+
+    /// <summary>Services that show this project as a case study.</summary>
+    public ICollection<ServiceProject> ServiceProjects { get; set; } = [];
 }

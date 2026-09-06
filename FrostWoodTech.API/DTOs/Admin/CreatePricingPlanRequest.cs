@@ -22,8 +22,6 @@ public class CreatePricingPlanRequest
 
     public PriceType PriceType { get; set; }
 
-    public int? DeliveryDays { get; set; }
-
     /// <summary>Free text for ranges such as "2–3 weeks".</summary>
     public string? DeliveryText { get; set; }
 
@@ -38,18 +36,6 @@ public class CreatePricingPlanRequest
 
     public bool IsPublished { get; set; }
 
-    /// <summary>Tier order within the service — Starter, Growth, Pro.</summary>
-    public int SortOrder { get; set; }
-
-    public bool ShowOnAgency { get; set; }
-
-    public bool FeaturedOnAgency { get; set; }
-
-    public int AgencySortOrder { get; set; }
-
-    public bool ShowOnPersonal { get; set; }
-
-    public bool FeaturedOnPersonal { get; set; }
-
-    public int PersonalSortOrder { get; set; }
+    /// <summary>Home page card.</summary>
+    public bool Featured { get; set; }
 }

@@ -16,10 +16,4 @@ public sealed class TagResponse
     public required bool IsTechnology { get; init; }
 
     public TechCategory? TechnologyCategory { get; init; }
-
-    public string? IconUrl { get; init; }
-
-    public string? ColorHex { get; init; }
-
-    public required int SortOrder { get; init; }
 }

@@ -12,12 +12,4 @@ public sealed class UpdateTagRequest
     public bool IsTechnology { get; set; }
 
     public TechCategory? TechnologyCategory { get; set; }
-
-    public string? IconObjectKey { get; set; }
-
-    public string? IconUrl { get; set; }
-
-    public string? ColorHex { get; set; }
-
-    public int SortOrder { get; set; }
 }

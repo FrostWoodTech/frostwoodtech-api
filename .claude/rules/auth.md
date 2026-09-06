@@ -68,6 +68,15 @@ auto-approve.
 Claims: `sub`, `email`, `role`, `jti`. Validate on every `/api/cms/admin/*` call in a **Functions
 middleware**, not per-function.
 
+The refresh token never reaches the response or request body — `Login`/`GoogleSignIn`/`Refresh`
+set it as an `HttpOnly; Secure; SameSite=Lax` cookie (`refreshToken`, scoped to
+`/api/cms/admin/auth`, see `HttpResponses.SetRefreshTokenCookie`), and `Refresh`/`Logout` read it
+back the same way. `AuthResponse`'s `RefreshToken`/`RefreshTokenExpiresAt` properties exist for
+the service layer and those Functions to read in C# only — they're `[JsonIgnore]`d, so nothing
+ever serializes the raw value. The frontend keeps the access token in memory only (never
+persisted) and relies on the cookie for silent reauthentication on load — see
+`frostwoodtech-web`'s `src/admin/services/httpClient.ts`.
+
 Refresh tokens **rotate**: each refresh revokes the presented token and issues a new one. A
 revoked token presented again is treated as theft — every live token for that user is revoked and
 the call fails with `refresh_token_reused`.
@@ -122,7 +131,10 @@ two are counted and limited **independently**: 10/email + 30/IP per 15 min for l
 3/email + 3/IP for reset requests (every request counts, not just failures — there's no such
 thing as a failed one from the caller's side).
 
-`POST /api/public/reviews` — the one anonymous public write — uses the same fixed-window idea,
-per IP only, but counts rows in the `reviews` table itself rather than a separate attempts
-table (every submission is already persisted, unlike a failed login). See
-`ReviewService.SubmitAsync`.
+`POST /api/public/reviews` and `POST /api/public/contact` — the two anonymous public writes —
+use the same fixed-window idea, per IP only, but count rows in their own table rather than a
+separate attempts table (every submission is already persisted, unlike a failed login). See
+`ReviewService.SubmitAsync` (3/24h) and `ContactService.SubmitAsync` (5/24h — a genuine prospect
+may legitimately follow up more than once). The contact endpoint also has a `website` honeypot
+field: a filled one is filed as `status = spam` and still answered normally, so a bot never learns
+it was caught, and honeypot submissions don't count against the rate limit.

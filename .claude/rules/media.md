@@ -18,6 +18,16 @@ Admin SPA → PUT direct to Neon Object Storage using uploadUrl
 Admin SPA → POST /api/cms/admin/projects/{id}/images { objectKey, url, width, height, altText }
 ```
 
+For an **article** image, the admin SPA stores `media://{objectKey}` — not the resolved URL —
+in `content_markdown`/`cover_image_key`. This keeps the raw markdown short and readable while
+editing, and keeps storage swappable without rewriting every article. The admin editor needs to
+render tokens it round-trips (preview pane, cover-picker gallery), so it fetches
+`GET /api/cms/admin/media/config` once per session (`{ publicBaseUrl }`, effectively static — no
+per-image resolve) and swaps a token's `media://` prefix for that base URL itself, client-side.
+See `.claude/rules/schema.md`'s `articles` section for how the **public** path resolves the same
+tokens server-side via `IArticleMediaResolver`. Every other upload target (`projects`, `services`,
+`tags`) stores the resolved `publicUrl` directly, as before — the token scheme is articles-only.
+
 The presigned-upload endpoint requires a valid admin JWT — an open bucket policy would let
 anyone fill the account.
 
@@ -39,13 +49,16 @@ frostwoodtech/projects/{slug}/
 frostwoodtech/services/
 frostwoodtech/tags/
 frostwoodtech/articles/{slug}/
+frostwoodtech/certificates/
 ```
 
 The client never sends a folder path — it sends `target` (`projects | services | tags |
-articles`) plus a `slug` when the target is `projects` or `articles`, and the API builds the
-folder (used as the S3 key prefix). The slug is re-run through `SlugGenerator`, so nothing
-outside the base folder is reachable even with a stolen admin token. The root comes from
-`NeonS3__BaseFolder`.
+articles | certificates`) plus a `slug` when the target is `projects` or `articles`, and the API
+builds the folder (used as the S3 key prefix). The slug is re-run through `SlugGenerator`, so
+nothing outside the base folder is reachable even with a stolen admin token. The root comes from
+`NeonS3__BaseFolder`. A certificate's file can be a PDF or an image — the DB stores its
+`mime_type` alongside the usual `object_key`/`url`, and `width`/`height` are nullable since a PDF
+has no dimensions.
 
 ## Deletes
 

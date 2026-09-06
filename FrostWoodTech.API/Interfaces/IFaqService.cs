@@ -13,14 +13,14 @@ public interface IFaqService
     /// </summary>
     Task<IReadOnlyList<FaqResponse>> GetPublicFaqsAsync(
         Site site,
-        string? category,
         CancellationToken cancellationToken);
 
     Task<PagedResult<AdminFaqResponse>> GetAdminFaqsAsync(
         Site? site,
         bool? isPublished,
-        string? category,
         string? search,
+        Guid? serviceId,
+        bool globalOnly,
         int page,
         int pageSize,
         CancellationToken cancellationToken);
@@ -39,6 +39,6 @@ public interface IFaqService
     /// <summary>Soft delete.</summary>
     Task<ServiceResult<bool>> DeleteAsync(Guid id, CancellationToken cancellationToken);
 
-    /// <summary>Bulk sort_order update for one site.</summary>
-    Task<ServiceResult<bool>> ReorderAsync(ReorderRequest request, CancellationToken cancellationToken);
+    /// <summary>Bulk sort_order update — FAQs share one order across both sites.</summary>
+    Task<ServiceResult<bool>> ReorderAsync(FaqReorderRequest request, CancellationToken cancellationToken);
 }

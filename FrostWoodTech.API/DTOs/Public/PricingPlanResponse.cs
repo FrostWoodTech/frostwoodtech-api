@@ -4,7 +4,7 @@ namespace FrostWoodTech.API.DTOs.Public;
 
 /// <summary>
 /// One pricing card. A null <see cref="ServiceId"/> means a combo pack rather than a tier of a
-/// single service.
+/// single service. Agency-only.
 /// </summary>
 public sealed class PricingPlanResponse
 {
@@ -24,8 +24,6 @@ public sealed class PricingPlanResponse
 
     public required PriceType PriceType { get; init; }
 
-    public int? DeliveryDays { get; init; }
-
     /// <summary>Free text for ranges such as "2–3 weeks".</summary>
     public string? DeliveryText { get; init; }
 
@@ -38,14 +36,11 @@ public sealed class PricingPlanResponse
 
     public string? CtaUrl { get; init; }
 
-    /// <summary>This site's featured flag, resolved server-side.</summary>
+    /// <summary>Home page card.</summary>
     public required bool Featured { get; init; }
 
-    /// <summary>This site's sort order.</summary>
+    /// <summary>Display order, set only via drag-and-drop.</summary>
     public required int SortOrder { get; init; }
-
-    /// <summary>The plan's own tier order within its service — Starter, Growth, Pro.</summary>
-    public required int TierOrder { get; init; }
 
     public required IReadOnlyList<PricingPlanFeatureResponse> Features { get; init; }
 }

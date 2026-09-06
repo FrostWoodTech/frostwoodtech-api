@@ -29,7 +29,7 @@ public class FrostWoodTechDbContext : DbContext
 
     public DbSet<ServiceOffering> Services => Set<ServiceOffering>();
 
-    public DbSet<ServiceFeature> ServiceFeatures => Set<ServiceFeature>();
+    public DbSet<ServiceProject> ServiceProjects => Set<ServiceProject>();
 
     public DbSet<PricingPlan> PricingPlans => Set<PricingPlan>();
 
@@ -37,7 +37,13 @@ public class FrostWoodTechDbContext : DbContext
 
     public DbSet<Faq> Faqs => Set<Faq>();
 
+    public DbSet<Certificate> Certificates => Set<Certificate>();
+
     public DbSet<Review> Reviews => Set<Review>();
+
+    public DbSet<ContactSubmission> ContactSubmissions => Set<ContactSubmission>();
+
+    public DbSet<Currency> Currencies => Set<Currency>();
 
     public DbSet<User> Users => Set<User>();
 
@@ -63,6 +69,11 @@ public class FrostWoodTechDbContext : DbContext
         modelBuilder.HasPostgresEnum<UserStatus>(name: "user_status");
         modelBuilder.HasPostgresEnum<PasswordTokenPurpose>(name: "password_token_purpose");
         modelBuilder.HasPostgresEnum<AuthAttemptAction>(name: "auth_attempt_action");
+        modelBuilder.HasPostgresEnum<ContactSubmissionStatus>(name: "contact_submission_status");
+        modelBuilder.HasPostgresEnum<ContactBudgetRange>(name: "contact_budget_range");
+        // Site is a query-param enum everywhere else; contact_submissions is the first row that
+        // actually persists which frontend it came from.
+        modelBuilder.HasPostgresEnum<Site>(name: "site");
 
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(FrostWoodTechDbContext).Assembly);
 

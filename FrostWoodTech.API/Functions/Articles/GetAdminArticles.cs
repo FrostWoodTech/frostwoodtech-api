@@ -31,12 +31,14 @@ public class GetAdminArticles
 
         var isPublished = QueryParameters.ReadBool(req, "isPublished");
         var search = QueryParameters.ReadString(req, "search");
+        var includeHidden = QueryParameters.ReadBool(req, "includeHidden") ?? false;
         var (page, pageSize) = QueryParameters.ReadPaging(req);
 
         var result = await _articleService.GetAdminArticlesAsync(
             site,
             isPublished,
             search,
+            includeHidden,
             page,
             pageSize,
             cancellationToken);

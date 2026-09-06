@@ -16,7 +16,7 @@ snake_case in Postgres, PascalCase entities in C#. Every content table also gets
 
 ## Site visibility block
 
-Applies to `projects`, `articles`, `services`, `pricing_plans`, `faqs`:
+Applies to `projects`, `articles`, `services`:
 
 ```
 show_on_agency          bool
@@ -27,6 +27,8 @@ show_on_personal        bool
 featured_on_personal    bool
 personal_sort_order     int
 ```
+
+`faqs` and `pricing_plans` are exceptions — see below.
 
 `featured_on_X` may only be true when `show_on_X` is true — enforce in the service layer.
 
@@ -55,6 +57,11 @@ seo_description     text null
 + timestamps / soft delete
 ```
 
+`agency_sort_order` / `personal_sort_order` are never client-settable on create/update — a new
+project is appended to the end of both orders, and each only changes via
+`POST /api/cms/admin/projects/reorder` (`site` in the body picks which column). Same rule as
+`articles`.
+
 `project_images`
 
 ```
@@ -75,15 +82,14 @@ Single primary enforced by a partial unique index:
 
 ## articles
 
-No dedicated page. All articles render on one list page. An article can carry its own Markdown
-body (`content_markdown`) and/or link out to Medium as a cross-post — `medium_url` is optional.
+No dedicated page. All articles render on one list page. An article carries its own Markdown
+body (`content_markdown`).
 
 ```
 id                uuid pk
 title             text
 excerpt           text                 -- the "few lines"
-published_date    date
-medium_url        text null            -- external cross-post link, optional, absolute URL
+published_at      timestamptz null     -- stamped once, the first time is_published goes true; never cleared
 content_markdown  text null            -- article body, raw markdown with media:// references
 cover_image_key   text null            -- Neon Object Storage object key
 slug              text unique          -- internal linking, optional
@@ -92,20 +98,33 @@ is_published      bool
 + timestamps / soft delete
 ```
 
-### Embedded media in `content_markdown`
+`agency_sort_order` / `personal_sort_order` are never client-settable on create/update — a new
+article is appended to the end of both orders, and each only changes via
+`POST /api/cms/admin/articles/reorder` (`site` in the body picks which column). The admin list
+itself sorts by `updated_at` descending, not either sort order — drafts have no meaningful site
+order.
 
-Images, PDFs, and other attachments referenced inside the markdown body are never stored as real
-URLs — they use a storage-independent `media://articles/images/example.png` /
-`media://articles/documents/guide.pdf` token, matching the object key an
-`/admin/media/presigned-upload` (`target: articles`) call produced. Nothing outside the markdown
-tracks these references — there is deliberately no `article_attachments` table, since the
-markdown text is already the source of truth for what's embedded.
+### Embedded media in `content_markdown` and `cover_image_key`
 
-`IArticleMediaResolver` (`ArticleMediaResolver`) rewrites every `media://...` token to a real
-`IMediaService.GetPublicUrl` URL, and only runs on the **public** read path — admin responses hand
-back the raw markdown so the editor round-trips the original tokens. This is what keeps stored
-article content portable: swapping storage providers means changing `GetPublicUrl`, never
-rewriting article rows.
+Images referenced inside the markdown body — and the cover image itself — are never stored as
+real URLs. Both hold a storage-independent `media://{objectKey}` token instead, where `objectKey`
+is exactly what an `/admin/media/presigned-upload` (`target: articles`) call produced (e.g.
+`media://frostwoodtech/articles/{slug}/{guid}`). Nothing outside `content_markdown` tracks
+embedded images — there is deliberately no `article_attachments` table, since the markdown text
+is already the source of truth for what's embedded.
+
+`IArticleMediaResolver` (`ArticleMediaResolver`) rewrites every `media://...` token — in both
+fields — to a real `IMediaService.GetPublicUrl` URL, and only runs on the **public** read path;
+admin responses hand back the raw token so the editor round-trips it unresolved. This is what
+keeps stored article content portable: swapping storage providers means changing `GetPublicUrl`,
+never rewriting every article row. A `cover_image_key`/`content_markdown` saved before this token
+scheme existed already holds a real URL with no `media://` prefix — the resolver leaves it
+untouched, so old articles keep rendering without a migration.
+
+The admin SPA needs to render tokens it round-trips too (the editor's live preview, the
+cover-picker gallery) — it fetches `GET /admin/media/config` (`{ publicBaseUrl }`, fetched once
+per session) and resolves a token client-side by swapping `media://` for that base URL itself,
+instead of a per-image resolve call.
 
 `article_tags` — join `(article_id, tag_id)`.
 
@@ -119,10 +138,6 @@ name                text
 slug                text unique
 is_technology       bool
 technology_category tech_category null   -- required when is_technology = true
-icon_cloudinary_id  text null            -- required when is_technology = true
-icon_url            text null
-color_hex           text null            -- optional chip colour on the frontend
-sort_order          int
 ```
 
 `tech_category` enum:
@@ -132,34 +147,74 @@ frontend | backend | language | database | tool_or_platform |
 cloud_devops | ai_ml_dl | agentic_ai | design | other
 ```
 
-Validation: `is_technology = false` ⇒ `technology_category` and icon must be null.
+Validation: `is_technology = false` ⇒ `technology_category` must be null.
 Technology tags and category tags are distinguished by `is_technology`, not by a separate
 column — group them at read time.
 
 ## services
 
+No feature bullet list as a child table — every section of the page is either a scalar or a
+markdown field. `short_description` is the card blurb; `headline`/`deck`/`in_depth` and the three
+markdown bullet-list fields (`who_this_is_for`, `outcomes`, `capabilities`) are the page's own
+sections. Icon, hero and depth image are each an uploaded asset (Neon Object Storage, same
+presigned-upload flow as project images), not a Lucide icon key.
+
 ```
-id                  uuid pk
-slug                text unique
-name                text
-short_description   text                 -- card text
-description         text                 -- markdown, service page body
-icon_name           text null            -- e.g. Lucide icon key
-icon_cloudinary_id  text null            -- or an uploaded SVG/PNG
-hero_image_id       text null
-is_published        bool
-published_at        timestamptz null
-+ site visibility block   -- agency-only in practice, keep the shape uniform
+id                       uuid pk
+slug                     text unique
+name                     text                 -- short label; falls back for headline when that's null
+short_description        text                 -- markdown, card blurb
+eyebrow                  text null            -- small badge above the headline, e.g. "Arizona · Website pages"
+headline                 text null            -- page H1
+deck                     text null            -- hero sub-paragraph
+who_this_is_for          text null            -- markdown bullet list
+outcomes                 text null            -- markdown bullet list, "what you walk away with"
+capabilities             text null            -- markdown bullet list, "what you get"
+in_depth                 text null            -- markdown, long-form prose block
+primary_cta_label        text null            -- set together with primary_cta_url, or not at all
+primary_cta_url          text null
+secondary_cta_label      text null            -- same all-or-nothing rule
+secondary_cta_url        text null
+icon_object_key          text null            -- Neon object key; set together with the rest, or not at all
+icon_url                 text null
+icon_width               int null
+icon_height              int null
+icon_alt_text            text null            -- required whenever icon_object_key is set
+hero_image_object_key    text null            -- same all-or-nothing rule as the icon fields
+hero_image_url           text null
+hero_image_width         int null
+hero_image_height        int null
+hero_image_alt_text      text null            -- required whenever hero_image_object_key is set
+depth_image_object_key   text null            -- same all-or-nothing rule; the "in depth" section's image
+depth_image_url          text null
+depth_image_width        int null
+depth_image_height       int null
+depth_image_alt_text     text null            -- required whenever depth_image_object_key is set
+seo_title                text null
+seo_description          text null
+is_published             bool
+published_at             timestamptz null
++ site visibility block
 + timestamps / soft delete
 ```
 
-`service_features` — `id, service_id fk, title, description null, icon_name null, sort_order`
+`service_projects` — join `(service_id, project_id)`, PK on both columns, same shape as
+`project_tags`. The case studies shown on a service's page. No `sort_order` on the join — related
+projects order by that project's own site sort order, then `year` descending, same as every other
+project list.
 
 ## pricing_plans
 
 Per-service tiers and general combo packs share **one table**. `service_id = null` means combo
 pack. They render as the same card, need the same feature list, the same home-page flag, and
 the same admin form — splitting them duplicates all of it.
+
+Agency-only — pricing never appears on the personal site, so this is deliberately not the shared
+site visibility block: one `featured` flag and one `sort_order`, not a pair per site. `sort_order`
+is never client-settable on create/update — a new plan is appended to the end of its own group's
+order (combo packs together, a service's tiers together), and only changes via
+`POST /api/cms/admin/pricing-plans/reorder` (drag-and-drop, no `site` in the body — same reasoning
+as `faqs`).
 
 ```
 id                uuid pk
@@ -169,15 +224,14 @@ tagline           text null
 price_amount      numeric(12,2) null      -- NULL = "Custom / Contact us"
 currency          char(3)                 -- 'LKR', 'USD'
 price_type        price_type              -- fixed | starting_from | hourly | monthly | custom
-delivery_days     int null
-delivery_text     text null               -- for "2–3 weeks"
+delivery_text     text null               -- free text, e.g. "2–3 weeks"
 description       text
 is_popular        bool                    -- the highlighted middle card
 cta_label         text null
 cta_url           text null
 is_published      bool
-sort_order        int
-+ site visibility block
+featured          bool                    -- home page card
+sort_order        int                     -- drag-and-drop only, never typed
 ```
 
 `pricing_plan_features` — `id, pricing_plan_id fk, text, is_included bool, sort_order`
@@ -188,14 +242,52 @@ Query `where service_id = @id` for a service page, `where service_id is null` fo
 If a combo pack ever needs to span several services, add `pricing_plan_services
 (pricing_plan_id, service_id)` and keep `service_id` as the primary owner.
 
+## certificates
+
+Personal-site only — certificates never appear on the agency site, so there is no site-visibility
+block at all, not even a single-site pair. One `featured` flag and one `sort_order`, same shape
+as `pricing_plans` but without a `service_id` scope — there's only ever one global order.
+`sort_order` is never client-settable on create/update, and only changes via
+`POST /api/cms/admin/certificates/reorder` (drag-and-drop, no `site` in the body).
+
+```
+id            uuid pk
+name          text
+issued_by     text
+issued_date   date
+marks         text null       -- free text: "95%", "Distinction", "8.5/10"
+object_key    text            -- Neon Object Storage key
+url           text
+mime_type     text            -- e.g. "application/pdf", "image/png"
+width         int null        -- null for a PDF, which has no dimensions
+height        int null
+alt_text      text            -- required, even for a PDF (describes what the certificate is)
+is_published  bool
+featured      bool
+sort_order    int             -- drag-and-drop only, never typed
++ timestamps / soft delete
+```
+
+The uploaded file can be a PDF or an image — unlike every other uploaded-asset field group in
+this schema, `width`/`height` are nullable rather than always-required, since a PDF has none.
+
 ## faqs
 
+Deliberately not the shared site visibility block — no "featured" concept, and one `sort_order`
+shared by both sites rather than one per site.
+
 ```
-id, question, answer (markdown), category text null, sort_order,
-is_published, + site visibility block, timestamps
+id, question, answer (markdown), service_id uuid null fk services, sort_order,
+is_published, show_on_agency bool, show_on_personal bool, timestamps
 ```
 
-`category` groups FAQs on the page ("Pricing", "Process", "Technical").
+No free-text category — one was tried and dropped. Scoping is a real FK instead: `service_id`
+null means the general FAQ list both public sites render; a non-null value scopes the FAQ to that
+service's own page only, same "null means general" convention `pricing_plans.service_id` already
+uses. `sort_order` is ordered within whichever scope the FAQ belongs to, not across every FAQ.
+Reordering via `POST /api/cms/admin/faqs/reorder` renumbers exactly the ids it's handed — no
+`site` in the body, and no `serviceId` either, since it never needs to know the scope to renumber
+it.
 
 ## reviews
 
@@ -221,6 +313,95 @@ submitter_ip    text null        -- admin-only, spam moderation + the submission
 Submitted anonymously through the one public **write** endpoint in the API
 (`POST /api/public/reviews`) — everything else under `/api/public/*` is read-only. Rate limited
 per IP; see `.claude/rules/auth.md`.
+
+## currencies
+
+Display currencies. Each carries **two independent rates** rather than one:
+
+```
+id                     uuid pk
+code                   char(3)         -- ISO 4217, unique, upper-cased: 'USD', 'LKR'
+name                   text            -- max 100
+symbol                 text            -- max 10, display only: 'Rs', '$'
+manual_rate_from_usd   numeric(18,6) null   -- "price set by me" — admin-typed, sticky
+live_rate_from_usd     numeric(18,6) null   -- "actual price" — from the last refresh
+live_rate_fetched_at   timestamptz null     -- when that refresh happened
+is_active              bool            -- whether visitors can pick it
++ timestamps / soft delete
+```
+
+**Effective rate** — what a visitor actually converts at — is
+`manual_rate_from_usd ?? live_rate_from_usd`, computed on read (`Currency.EffectiveRateFromUsd`),
+never stored. The manual override wins whenever both exist. A currency with neither is excluded
+from `GET /public/currencies` rather than shown at a fabricated rate — still fully visible and
+editable in the admin, which is how you notice "no rate yet, needs a refresh."
+
+The live side never updates itself on a schedule — only `POST /cms/admin/currencies/refresh-rates`
+(the admin's "Refresh live rates" button) touches it, via `IExchangeRateProvider`
+(`OpenExchangeRateProvider`, hitting the free, keyless `open.er-api.com`) — one HTTP call updates
+every currency's live rate at once, since the provider returns the full table for one request
+regardless. A weekly/monthly Timer-triggered Function calling the same
+`CurrencyService.RefreshLiveRatesAsync` is a natural future addition; none exists yet.
+
+USD is the base every rate is expressed against, seeded on startup by `BaseCurrencySeeder` so it
+always exists. The service layer pins it: USD's `manual_rate_from_usd` must always be present and
+exactly 1 (its live rate is irrelevant, since the override always wins), it may not be deactivated,
+renamed (`cannot_rename_base_currency`) or deleted (`cannot_delete_base_currency`). Any other
+currency is refused deletion while a pricing plan still prices in it (`currency_in_use`), the same
+shape as `tag_in_use`.
+
+The list is admin-editable rather than a fixed enum — whatever is added, refreshed or given an
+override, and marked active, becomes selectable on the public sites; every other visitor falls
+back to USD.
+
+`pricing_plans.currency` is unchanged and still means "the currency this amount is authored in".
+Conversion is general rather than USD-only, so existing non-USD rows keep working with nothing to
+back-fill:
+
+```
+displayed = amount / rate(plan.currency) * rate(displayCurrency)
+```
+
+## contact_submissions
+
+A visitor's "contact us" enquiry. Not site-scoped in the visibility-block sense — like `reviews`
+and `certificates` it is exempt — but `site` records which frontend the form was on. Unlike
+`reviews`, this is never public content: there is no `is_published` and no public read endpoint
+at all, only the admin inbox.
+
+```
+id              uuid pk
+name            text             -- max 100
+email           citext           -- max 255
+phone           text null        -- max 30, free text as entered
+company         text null        -- max 150
+subject         text null        -- max 200
+message         text             -- max 4000
+service_id      uuid null fk services   -- "what are you interested in"; null = general enquiry
+budget_range    contact_budget_range null
+site            site             -- which frontend the form was on
+status          contact_submission_status   -- defaults to 'new'
+admin_notes     text null        -- admin-only, never leaves /cms/admin
+replied_at      timestamptz null
+replied_by      uuid null fk users
+submitter_ip    text null        -- admin-only, spam moderation + the submission rate limit
++ timestamps / soft delete
+```
+
+`service_id` uses the same "null means general" convention as `faqs.service_id` and
+`pricing_plans.service_id`. Both the `service_id` and `replied_by` foreign keys `SET NULL` on
+delete — losing a service or an admin account must never destroy the enquiry that referenced it.
+
+`contact_submission_status` enum: `new | read | replied | archived | spam`. `spam` is set by the
+server (a filled honeypot field on the public submission), never chosen by the visitor.
+
+`contact_budget_range` enum: `under_one_k | one_to_five_k | five_to_fifteen_k | over_fifteen_k |
+not_sure` — spelled out because the snake_case enum translator mangles leading digits.
+
+Submitted anonymously through `POST /api/public/contact`, one of the two public **write**
+endpoints in the API (see also `reviews`). Rate limited per IP, more generously than reviews (5 in
+24h, not 3) since a genuine prospect may legitimately follow up more than once; see
+`.claude/rules/auth.md`.
 
 ## users
 

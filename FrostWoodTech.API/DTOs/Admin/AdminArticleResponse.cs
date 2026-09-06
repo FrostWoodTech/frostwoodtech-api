@@ -11,9 +11,8 @@ public sealed class AdminArticleResponse
 
     public string? Slug { get; init; }
 
-    public required DateOnly PublishedDate { get; init; }
-
-    public string? MediumUrl { get; init; }
+    /// <summary>Null until the article is first published.</summary>
+    public DateTimeOffset? PublishedAt { get; init; }
 
     public string? CoverImageKey { get; init; }
 

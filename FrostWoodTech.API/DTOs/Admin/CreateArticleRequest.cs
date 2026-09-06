@@ -9,11 +9,6 @@ public class CreateArticleRequest
     /// <summary>Optional — generated from the title when omitted.</summary>
     public string? Slug { get; set; }
 
-    public DateOnly PublishedDate { get; set; }
-
-    /// <summary>Optional cross-post link. Must be an absolute URL when present.</summary>
-    public string? MediumUrl { get; set; }
-
     public string? CoverImageKey { get; set; }
 
     /// <summary>Raw Markdown, with embedded media as <c>media://articles/...</c> references.</summary>
@@ -25,13 +20,9 @@ public class CreateArticleRequest
 
     public bool FeaturedOnAgency { get; set; }
 
-    public int AgencySortOrder { get; set; }
-
     public bool ShowOnPersonal { get; set; }
 
     public bool FeaturedOnPersonal { get; set; }
-
-    public int PersonalSortOrder { get; set; }
 
     /// <summary>The full set of tags for the article — omitted or empty means none.</summary>
     public List<Guid>? TagIds { get; set; }

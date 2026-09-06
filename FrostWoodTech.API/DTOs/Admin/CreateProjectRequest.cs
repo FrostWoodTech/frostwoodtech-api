@@ -38,13 +38,9 @@ public class CreateProjectRequest
 
     public bool FeaturedOnAgency { get; set; }
 
-    public int AgencySortOrder { get; set; }
-
     public bool ShowOnPersonal { get; set; }
 
     public bool FeaturedOnPersonal { get; set; }
-
-    public int PersonalSortOrder { get; set; }
 
     /// <summary>The full set of tags for the project — omitted or empty means none.</summary>
     public List<Guid>? TagIds { get; set; }

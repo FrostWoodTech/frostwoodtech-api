@@ -22,41 +22,37 @@ public class PricingService : IPricingService
     }
 
     public Task<PagedResult<PricingPlanResponse>> GetPublicComboPlansAsync(
-        Site site,
         bool? featured,
         int page,
         int pageSize,
         CancellationToken cancellationToken)
     {
         // A combo pack is a plan that belongs to no single service.
-        var query = PublishedForSite(site).Where(p => p.ServiceId == null);
+        var query = PublishedPlans().Where(p => p.ServiceId == null);
 
         if (featured is not null)
         {
-            query = site == Site.Agency
-                ? query.Where(p => p.FeaturedOnAgency == featured)
-                : query.Where(p => p.FeaturedOnPersonal == featured);
+            query = query.Where(p => p.Featured == featured);
         }
 
-        return PublicPageAsync(query, site, page, pageSize, cancellationToken);
+        return PublicPageAsync(query, page, pageSize, cancellationToken);
     }
 
     public Task<PagedResult<PricingPlanResponse>> GetPublicPlansForServiceAsync(
-        Site site,
         Guid serviceId,
         int page,
         int pageSize,
         CancellationToken cancellationToken)
     {
-        var query = PublishedForSite(site).Where(p => p.ServiceId == serviceId);
+        var query = PublishedPlans().Where(p => p.ServiceId == serviceId);
 
-        return PublicPageAsync(query, site, page, pageSize, cancellationToken);
+        return PublicPageAsync(query, page, pageSize, cancellationToken);
     }
 
     public async Task<PagedResult<AdminPricingPlanResponse>> GetAdminPlansAsync(
-        Site? site,
         Guid? serviceId,
         bool comboOnly,
+        bool tiersOnly,
         bool? isPublished,
         string? search,
         int page,
@@ -65,12 +61,8 @@ public class PricingService : IPricingService
     {
         var query = _db.PricingPlans.AsNoTracking();
 
-        if (site is not null)
-        {
-            query = ForSite(query, site.Value);
-        }
-
         // Admin defaults to everything; these narrow it as explicit filters, not an absent parameter.
+        // comboOnly wins over both if somehow sent together with tiersOnly/serviceId.
         if (comboOnly)
         {
             query = query.Where(p => p.ServiceId == null);
@@ -78,6 +70,11 @@ public class PricingService : IPricingService
         else if (serviceId is not null)
         {
             query = query.Where(p => p.ServiceId == serviceId);
+        }
+        else if (tiersOnly)
+        {
+            // Every service's tiers, regardless of which one — distinct from picking one serviceId.
+            query = query.Where(p => p.ServiceId != null);
         }
 
         if (isPublished is not null)
@@ -92,7 +89,7 @@ public class PricingService : IPricingService
 
         var total = await query.CountAsync(cancellationToken);
 
-        // Drafts have no meaningful site order, so the admin list is alphabetical instead.
+        // Drafts have no meaningful order, so the admin list is alphabetical instead.
         var items = await query
             .OrderBy(p => p.Name)
             .Skip((page - 1) * pageSize)
@@ -142,6 +139,13 @@ public class PricingService : IPricingService
             return ServiceResult<AdminPricingPlanResponse>.Validation(serviceError);
         }
 
+        // Sort order is never taken from the client — it's only ever changed via ReorderAsync,
+        // so a new plan is appended to the end of its own group's order (combo packs together,
+        // a service's tiers together), not the whole table's.
+        var nextSortOrder = await _db.PricingPlans
+            .Where(p => p.ServiceId == request.ServiceId)
+            .MaxAsync(p => (int?)p.SortOrder, cancellationToken) + 1 ?? 0;
+
         var plan = new PricingPlan
         {
             Id = Guid.NewGuid(),
@@ -151,20 +155,14 @@ public class PricingService : IPricingService
             PriceAmount = request.PriceAmount,
             Currency = currency!,
             PriceType = request.PriceType,
-            DeliveryDays = request.DeliveryDays,
             DeliveryText = Blank(request.DeliveryText),
             Description = description!,
             IsPopular = request.IsPopular,
             CtaLabel = Blank(request.CtaLabel),
             CtaUrl = Blank(request.CtaUrl),
             IsPublished = request.IsPublished,
-            SortOrder = request.SortOrder,
-            ShowOnAgency = request.ShowOnAgency,
-            FeaturedOnAgency = request.FeaturedOnAgency,
-            AgencySortOrder = request.AgencySortOrder,
-            ShowOnPersonal = request.ShowOnPersonal,
-            FeaturedOnPersonal = request.FeaturedOnPersonal,
-            PersonalSortOrder = request.PersonalSortOrder
+            Featured = request.Featured,
+            SortOrder = nextSortOrder
         };
 
         _db.PricingPlans.Add(plan);
@@ -207,20 +205,13 @@ public class PricingService : IPricingService
         plan.PriceAmount = request.PriceAmount;
         plan.Currency = currency!;
         plan.PriceType = request.PriceType;
-        plan.DeliveryDays = request.DeliveryDays;
         plan.DeliveryText = Blank(request.DeliveryText);
         plan.Description = description!;
         plan.IsPopular = request.IsPopular;
         plan.CtaLabel = Blank(request.CtaLabel);
         plan.CtaUrl = Blank(request.CtaUrl);
         plan.IsPublished = request.IsPublished;
-        plan.SortOrder = request.SortOrder;
-        plan.ShowOnAgency = request.ShowOnAgency;
-        plan.FeaturedOnAgency = request.FeaturedOnAgency;
-        plan.AgencySortOrder = request.AgencySortOrder;
-        plan.ShowOnPersonal = request.ShowOnPersonal;
-        plan.FeaturedOnPersonal = request.FeaturedOnPersonal;
-        plan.PersonalSortOrder = request.PersonalSortOrder;
+        plan.Featured = request.Featured;
 
         await _db.SaveChangesAsync(cancellationToken);
 
@@ -261,13 +252,10 @@ public class PricingService : IPricingService
         return ServiceResult<bool>.Success(true);
     }
 
-    public async Task<ServiceResult<bool>> ReorderAsync(ReorderRequest request, CancellationToken cancellationToken)
+    public async Task<ServiceResult<bool>> ReorderAsync(
+        PricingReorderRequest request,
+        CancellationToken cancellationToken)
     {
-        if (request.Site is null)
-        {
-            return ServiceResult<bool>.Validation("site is required — sort order is kept per site.");
-        }
-
         var items = request.Items;
         if (items is null || items.Count == 0)
         {
@@ -294,16 +282,7 @@ public class PricingService : IPricingService
 
         foreach (var item in items)
         {
-            var plan = plans[item.Id];
-
-            if (request.Site == Site.Agency)
-            {
-                plan.AgencySortOrder = item.SortOrder;
-            }
-            else
-            {
-                plan.PersonalSortOrder = item.SortOrder;
-            }
+            plans[item.Id].SortOrder = item.SortOrder;
         }
 
         await _db.SaveChangesAsync(cancellationToken);
@@ -452,24 +431,25 @@ public class PricingService : IPricingService
 
     /// <summary>
     /// The only entry point the public routes use: is_deleted is handled by the DbContext's
-    /// global filter, and is_published plus the site flag are applied here and are not optional.
+    /// global filter, and is_published is applied here and is not optional.
     /// </summary>
-    private IQueryable<PricingPlan> PublishedForSite(Site site) =>
-        ForSite(_db.PricingPlans.AsNoTracking().Where(p => p.IsPublished), site);
+    private IQueryable<PricingPlan> PublishedPlans() =>
+        _db.PricingPlans.AsNoTracking().Where(p => p.IsPublished);
 
     private static async Task<PagedResult<PricingPlanResponse>> PublicPageAsync(
         IQueryable<PricingPlan> query,
-        Site site,
         int page,
         int pageSize,
         CancellationToken cancellationToken)
     {
         var total = await query.CountAsync(cancellationToken);
 
-        var items = await OrderForSite(query, site)
+        var items = await query
+            .OrderBy(p => p.SortOrder)
+            .ThenBy(p => p.Name)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Select(PublicProjection(site))
+            .Select(PublicProjection)
             .ToListAsync(cancellationToken);
 
         return new PagedResult<PricingPlanResponse>
@@ -480,20 +460,6 @@ public class PricingService : IPricingService
             Total = total
         };
     }
-
-    private static IQueryable<PricingPlan> ForSite(IQueryable<PricingPlan> query, Site site) =>
-        site == Site.Agency
-            ? query.Where(p => p.ShowOnAgency)
-            : query.Where(p => p.ShowOnPersonal);
-
-    /// <summary>
-    /// The site's own order wins, then the plan's tier order within its service (Starter, Growth,
-    /// Pro), then the name. There is no published_at on a pricing plan to fall back on.
-    /// </summary>
-    private static IOrderedQueryable<PricingPlan> OrderForSite(IQueryable<PricingPlan> query, Site site) =>
-        site == Site.Agency
-            ? query.OrderBy(p => p.AgencySortOrder).ThenBy(p => p.SortOrder).ThenBy(p => p.Name)
-            : query.OrderBy(p => p.PersonalSortOrder).ThenBy(p => p.SortOrder).ThenBy(p => p.Name);
 
     /// <summary>Null when the plan is valid, otherwise the message to hand back.</summary>
     private static string? Validate(
@@ -532,21 +498,6 @@ public class PricingService : IPricingService
         if (request.PriceType == PriceType.Custom && request.PriceAmount is not null)
         {
             return "A custom price cannot carry a priceAmount — leave it null for 'Contact us'.";
-        }
-
-        if (request.DeliveryDays <= 0)
-        {
-            return "deliveryDays must be greater than zero.";
-        }
-
-        if (request.FeaturedOnAgency && !request.ShowOnAgency)
-        {
-            return "featuredOnAgency requires showOnAgency.";
-        }
-
-        if (request.FeaturedOnPersonal && !request.ShowOnPersonal)
-        {
-            return "featuredOnPersonal requires showOnPersonal.";
         }
 
         return null;
@@ -592,75 +543,36 @@ public class PricingService : IPricingService
 
     /// <summary>
     /// Projected inside the query, features and all, so a pricing page is one round trip rather
-    /// than one query per card. The site picks which visibility pair is exposed.
+    /// than one query per card.
     /// </summary>
-    private static Expression<Func<PricingPlan, PricingPlanResponse>> PublicProjection(Site site)
+    private static readonly Expression<Func<PricingPlan, PricingPlanResponse>> PublicProjection = p => new PricingPlanResponse
     {
-        if (site == Site.Agency)
-        {
-            return p => new PricingPlanResponse
+        Id = p.Id,
+        ServiceId = p.ServiceId,
+        Name = p.Name,
+        Tagline = p.Tagline,
+        PriceAmount = p.PriceAmount,
+        Currency = p.Currency,
+        PriceType = p.PriceType,
+        DeliveryText = p.DeliveryText,
+        Description = p.Description,
+        IsPopular = p.IsPopular,
+        CtaLabel = p.CtaLabel,
+        CtaUrl = p.CtaUrl,
+        Featured = p.Featured,
+        SortOrder = p.SortOrder,
+        Features = p.Features
+            .OrderBy(f => f.SortOrder)
+            .ThenBy(f => f.Text)
+            .Select(f => new PricingPlanFeatureResponse
             {
-                Id = p.Id,
-                ServiceId = p.ServiceId,
-                Name = p.Name,
-                Tagline = p.Tagline,
-                PriceAmount = p.PriceAmount,
-                Currency = p.Currency,
-                PriceType = p.PriceType,
-                DeliveryDays = p.DeliveryDays,
-                DeliveryText = p.DeliveryText,
-                Description = p.Description,
-                IsPopular = p.IsPopular,
-                CtaLabel = p.CtaLabel,
-                CtaUrl = p.CtaUrl,
-                Featured = p.FeaturedOnAgency,
-                SortOrder = p.AgencySortOrder,
-                TierOrder = p.SortOrder,
-                Features = p.Features
-                    .OrderBy(f => f.SortOrder)
-                    .ThenBy(f => f.Text)
-                    .Select(f => new PricingPlanFeatureResponse
-                    {
-                        Id = f.Id,
-                        Text = f.Text,
-                        IsIncluded = f.IsIncluded,
-                        SortOrder = f.SortOrder
-                    })
-                    .ToList()
-            };
-        }
-
-        return p => new PricingPlanResponse
-        {
-            Id = p.Id,
-            ServiceId = p.ServiceId,
-            Name = p.Name,
-            Tagline = p.Tagline,
-            PriceAmount = p.PriceAmount,
-            Currency = p.Currency,
-            PriceType = p.PriceType,
-            DeliveryDays = p.DeliveryDays,
-            DeliveryText = p.DeliveryText,
-            Description = p.Description,
-            IsPopular = p.IsPopular,
-            CtaLabel = p.CtaLabel,
-            CtaUrl = p.CtaUrl,
-            Featured = p.FeaturedOnPersonal,
-            SortOrder = p.PersonalSortOrder,
-            TierOrder = p.SortOrder,
-            Features = p.Features
-                .OrderBy(f => f.SortOrder)
-                .ThenBy(f => f.Text)
-                .Select(f => new PricingPlanFeatureResponse
-                {
-                    Id = f.Id,
-                    Text = f.Text,
-                    IsIncluded = f.IsIncluded,
-                    SortOrder = f.SortOrder
-                })
-                .ToList()
-        };
-    }
+                Id = f.Id,
+                Text = f.Text,
+                IsIncluded = f.IsIncluded,
+                SortOrder = f.SortOrder
+            })
+            .ToList()
+    };
 
     private static readonly Expression<Func<PricingPlan, AdminPricingPlanResponse>> AdminProjection = p => new AdminPricingPlanResponse
     {
@@ -671,20 +583,14 @@ public class PricingService : IPricingService
         PriceAmount = p.PriceAmount,
         Currency = p.Currency,
         PriceType = p.PriceType,
-        DeliveryDays = p.DeliveryDays,
         DeliveryText = p.DeliveryText,
         Description = p.Description,
         IsPopular = p.IsPopular,
         CtaLabel = p.CtaLabel,
         CtaUrl = p.CtaUrl,
         IsPublished = p.IsPublished,
+        Featured = p.Featured,
         SortOrder = p.SortOrder,
-        ShowOnAgency = p.ShowOnAgency,
-        FeaturedOnAgency = p.FeaturedOnAgency,
-        AgencySortOrder = p.AgencySortOrder,
-        ShowOnPersonal = p.ShowOnPersonal,
-        FeaturedOnPersonal = p.FeaturedOnPersonal,
-        PersonalSortOrder = p.PersonalSortOrder,
         Features = p.Features
             .OrderBy(f => f.SortOrder)
             .ThenBy(f => f.Text)

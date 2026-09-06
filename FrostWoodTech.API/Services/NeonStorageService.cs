@@ -44,7 +44,7 @@ public class NeonStorageService : IMediaService
         if (request.Target is not { } target)
         {
             return ServiceResult<PresignedUploadResponse>.Validation(
-                "target is required: projects, services, tags or articles.");
+                "target is required: projects, services, tags, articles or certificates.");
         }
 
         var folderResult = BuildFolder(target, request.Slug);
@@ -76,8 +76,11 @@ public class NeonStorageService : IMediaService
         });
     }
 
+    public string GetPublicBaseUrl() =>
+        $"{_options.Endpoint.TrimEnd('/')}/{_options.BucketName}";
+
     public string GetPublicUrl(string objectKey) =>
-        $"{_options.Endpoint.TrimEnd('/')}/{_options.BucketName}/{objectKey.TrimStart('/')}";
+        $"{GetPublicBaseUrl()}/{objectKey.TrimStart('/')}";
 
     public async Task<bool> DeleteFileAsync(string objectKey, CancellationToken cancellationToken)
     {

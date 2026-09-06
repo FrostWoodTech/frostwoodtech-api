@@ -1,7 +1,6 @@
 using FrostWoodTech.API.Common;
 using FrostWoodTech.API.DTOs.Admin;
 using FrostWoodTech.API.DTOs.Public;
-using FrostWoodTech.API.Enums;
 
 namespace FrostWoodTech.API.Interfaces;
 
@@ -13,7 +12,6 @@ public interface IPricingService
 {
     /// <summary>Combo packs: the plans with no owning service.</summary>
     Task<PagedResult<PricingPlanResponse>> GetPublicComboPlansAsync(
-        Site site,
         bool? featured,
         int page,
         int pageSize,
@@ -21,16 +19,15 @@ public interface IPricingService
 
     /// <summary>The tiers of one service.</summary>
     Task<PagedResult<PricingPlanResponse>> GetPublicPlansForServiceAsync(
-        Site site,
         Guid serviceId,
         int page,
         int pageSize,
         CancellationToken cancellationToken);
 
     Task<PagedResult<AdminPricingPlanResponse>> GetAdminPlansAsync(
-        Site? site,
         Guid? serviceId,
         bool comboOnly,
+        bool tiersOnly,
         bool? isPublished,
         string? search,
         int page,
@@ -55,7 +52,7 @@ public interface IPricingService
 
     Task<ServiceResult<bool>> DeleteAsync(Guid id, CancellationToken cancellationToken);
 
-    Task<ServiceResult<bool>> ReorderAsync(ReorderRequest request, CancellationToken cancellationToken);
+    Task<ServiceResult<bool>> ReorderAsync(PricingReorderRequest request, CancellationToken cancellationToken);
 
     Task<ServiceResult<PricingPlanFeatureResponse>> AddFeatureAsync(
         Guid planId,

@@ -23,22 +23,17 @@ public class GetAdminPricingPlans
     {
         HttpResponses.MarkNoStore(req);
 
-        // Site is optional here — the admin SPA lists drafts across both sites.
-        if (!QueryParameters.TryReadSite(req, out var site))
-        {
-            return ProblemResults.BadRequest("validation_failed", "Unknown site.");
-        }
-
         var serviceId = QueryParameters.ReadGuid(req, "serviceId");
         var comboOnly = QueryParameters.ReadBool(req, "comboOnly") ?? false;
+        var tiersOnly = QueryParameters.ReadBool(req, "tiersOnly") ?? false;
         var isPublished = QueryParameters.ReadBool(req, "isPublished");
         var search = QueryParameters.ReadString(req, "search");
         var (page, pageSize) = QueryParameters.ReadPaging(req);
 
         var result = await _pricing.GetAdminPlansAsync(
-            site,
             serviceId,
             comboOnly,
+            tiersOnly,
             isPublished,
             search,
             page,

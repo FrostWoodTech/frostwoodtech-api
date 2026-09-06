@@ -81,25 +81,39 @@ public class ArticleService : IArticleService
     }
 
     /// <summary>
-    /// Public responses only — the admin surface hands back raw Markdown so the editor round-trips
-    /// the original <c>media://</c> tokens instead of baked-in URLs.
+    /// Public responses only — the admin surface hands back raw Markdown/cover so the editor
+    /// round-trips the original <c>media://</c> tokens instead of baked-in URLs. A legacy value
+    /// that's already a real URL has no <c>media://</c> prefix to match, so it passes through
+    /// untouched — this covers articles saved before the token scheme existed.
     /// </summary>
-    private ArticleResponse ResolveMedia(ArticleResponse article) =>
-        article.ContentMarkdown is null
-            ? article
-            : article with { ContentMarkdown = _mediaResolver.ResolveMediaReferences(article.ContentMarkdown) };
+    private ArticleResponse ResolveMedia(ArticleResponse article) => article with
+    {
+        ContentMarkdown = article.ContentMarkdown is null
+            ? null
+            : _mediaResolver.ResolveMediaReferences(article.ContentMarkdown),
+        CoverImageKey = article.CoverImageKey is null
+            ? null
+            : _mediaResolver.ResolveMediaReferences(article.CoverImageKey),
+    };
 
     public async Task<PagedResult<AdminArticleResponse>> GetAdminArticlesAsync(
         Site? site,
         bool? isPublished,
         string? search,
+        bool includeHidden,
         int page,
         int pageSize,
         CancellationToken cancellationToken)
     {
         var query = _db.Articles.AsNoTracking();
 
-        if (site is not null)
+        // The reorder/visibility screen needs every published article in both
+        // columns — including ones not yet shown anywhere — so it can be the
+        // place that turns showing on in the first place. `includeHidden` is
+        // how that screen opts out of the show-on-site filter while still
+        // passing `site` (kept for the response's per-site sort order and to
+        // keep the two columns' query-cache entries distinct on the client).
+        if (site is not null && !includeHidden)
         {
             query = ForSite(query, site.Value);
         }
@@ -116,9 +130,9 @@ public class ArticleService : IArticleService
 
         var total = await query.CountAsync(cancellationToken);
 
-        // Drafts have no meaningful site order, so the admin list is newest-first instead.
+        // Drafts have no meaningful site order, so the admin list is most-recently-edited first instead.
         var items = await query
-            .OrderByDescending(a => a.PublishedDate)
+            .OrderByDescending(a => a.UpdatedAt)
             .ThenBy(a => a.Title)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
@@ -151,9 +165,8 @@ public class ArticleService : IArticleService
     {
         var title = Blank(request.Title);
         var excerpt = Blank(request.Excerpt);
-        var mediumUrl = Blank(request.MediumUrl);
 
-        var validationError = Validate(title, excerpt, mediumUrl, request);
+        var validationError = Validate(title, excerpt, request);
         if (validationError is not null)
         {
             return ServiceResult<AdminArticleResponse>.Validation(validationError);
@@ -173,25 +186,28 @@ public class ArticleService : IArticleService
             return SlugTaken(slug);
         }
 
+        // Sort order is never taken from the client — it only changes via ReorderAsync, so a new
+        // article is simply appended to the end of each site's shared order.
+        var nextAgencySortOrder = await _db.Articles.MaxAsync(a => (int?)a.AgencySortOrder, cancellationToken) + 1 ?? 0;
+        var nextPersonalSortOrder = await _db.Articles.MaxAsync(a => (int?)a.PersonalSortOrder, cancellationToken) + 1 ?? 0;
+
         var article = new Article
         {
             Id = Guid.NewGuid(),
             Title = title!,
             Excerpt = excerpt!,
             Slug = slug,
-            PublishedDate = request.PublishedDate,
-            MediumUrl = mediumUrl,
             ContentMarkdown = Blank(request.ContentMarkdown),
             CoverImageKey = Blank(request.CoverImageKey),
-            IsPublished = request.IsPublished,
             ShowOnAgency = request.ShowOnAgency,
             FeaturedOnAgency = request.FeaturedOnAgency,
-            AgencySortOrder = request.AgencySortOrder,
+            AgencySortOrder = nextAgencySortOrder,
             ShowOnPersonal = request.ShowOnPersonal,
             FeaturedOnPersonal = request.FeaturedOnPersonal,
-            PersonalSortOrder = request.PersonalSortOrder,
+            PersonalSortOrder = nextPersonalSortOrder,
             ArticleTags = [.. tagIds.Select(tagId => new ArticleTag { TagId = tagId })]
         };
+        ApplyPublished(article, request.IsPublished);
 
         _db.Articles.Add(article);
         await _db.SaveChangesAsync(cancellationToken);
@@ -216,9 +232,8 @@ public class ArticleService : IArticleService
 
         var title = Blank(request.Title);
         var excerpt = Blank(request.Excerpt);
-        var mediumUrl = Blank(request.MediumUrl);
 
-        var validationError = Validate(title, excerpt, mediumUrl, request);
+        var validationError = Validate(title, excerpt, request);
         if (validationError is not null)
         {
             return ServiceResult<AdminArticleResponse>.Validation(validationError);
@@ -241,17 +256,13 @@ public class ArticleService : IArticleService
         article.Title = title!;
         article.Excerpt = excerpt!;
         article.Slug = slug;
-        article.PublishedDate = request.PublishedDate;
-        article.MediumUrl = mediumUrl;
         article.ContentMarkdown = Blank(request.ContentMarkdown);
         article.CoverImageKey = Blank(request.CoverImageKey);
-        article.IsPublished = request.IsPublished;
         article.ShowOnAgency = request.ShowOnAgency;
         article.FeaturedOnAgency = request.FeaturedOnAgency;
-        article.AgencySortOrder = request.AgencySortOrder;
         article.ShowOnPersonal = request.ShowOnPersonal;
         article.FeaturedOnPersonal = request.FeaturedOnPersonal;
-        article.PersonalSortOrder = request.PersonalSortOrder;
+        ApplyPublished(article, request.IsPublished);
 
         SyncTags(article, tagIds);
 
@@ -271,7 +282,17 @@ public class ArticleService : IArticleService
             return NotFound(id);
         }
 
-        article.IsPublished = request.IsPublished;
+        // A first publish makes the article visible on both sites by default — the
+        // reorder/visibility screen is where an editor dials that back down
+        // afterwards. Re-publishing, and the full edit form (which has its own
+        // explicit show checkboxes), never overrides an existing choice.
+        if (request.IsPublished && !article.IsPublished)
+        {
+            article.ShowOnAgency = true;
+            article.ShowOnPersonal = true;
+        }
+
+        ApplyPublished(article, request.IsPublished);
 
         await _db.SaveChangesAsync(cancellationToken);
 
@@ -348,11 +369,11 @@ public class ArticleService : IArticleService
 
     private static IOrderedQueryable<Article> OrderForSite(IQueryable<Article> query, Site site) =>
         site == Site.Agency
-            ? query.OrderBy(a => a.AgencySortOrder).ThenByDescending(a => a.PublishedDate)
-            : query.OrderBy(a => a.PersonalSortOrder).ThenByDescending(a => a.PublishedDate);
+            ? query.OrderBy(a => a.AgencySortOrder).ThenByDescending(a => a.PublishedAt)
+            : query.OrderBy(a => a.PersonalSortOrder).ThenByDescending(a => a.PublishedAt);
 
     /// <summary>Null when the article is valid, otherwise the message to hand back.</summary>
-    private static string? Validate(string? title, string? excerpt, string? mediumUrl, CreateArticleRequest request)
+    private static string? Validate(string? title, string? excerpt, CreateArticleRequest request)
     {
         if (title is null)
         {
@@ -362,13 +383,6 @@ public class ArticleService : IArticleService
         if (excerpt is null)
         {
             return "Excerpt is required.";
-        }
-
-        if (mediumUrl is not null
-            && (!Uri.TryCreate(mediumUrl, UriKind.Absolute, out var uri)
-                || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)))
-        {
-            return "mediumUrl must be an absolute http(s) URL.";
         }
 
         if (request.FeaturedOnAgency && !request.ShowOnAgency)
@@ -432,6 +446,20 @@ public class ArticleService : IArticleService
     private static ServiceResult<AdminArticleResponse> SlugTaken(string slug) =>
         ServiceResult<AdminArticleResponse>.Conflict("slug_taken", $"Slug '{slug}' is already in use.");
 
+    /// <summary>
+    /// Going live stamps published_at the first time only; unpublishing never clears it, so an
+    /// article that comes back keeps its original date.
+    /// </summary>
+    private static void ApplyPublished(Article article, bool isPublished)
+    {
+        if (isPublished && article.PublishedAt is null)
+        {
+            article.PublishedAt = DateTimeOffset.UtcNow;
+        }
+
+        article.IsPublished = isPublished;
+    }
+
     private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     /// <summary>
@@ -448,26 +476,22 @@ public class ArticleService : IArticleService
                 Title = a.Title,
                 Excerpt = a.Excerpt,
                 Slug = a.Slug,
-                PublishedDate = a.PublishedDate,
-                MediumUrl = a.MediumUrl,
+                PublishedAt = a.PublishedAt,
+                UpdatedAt = a.UpdatedAt,
                 CoverImageKey = a.CoverImageKey,
                 ContentMarkdown = a.ContentMarkdown,
                 Featured = a.FeaturedOnAgency,
                 SortOrder = a.AgencySortOrder,
                 Tags = a.ArticleTags
                     .Where(at => !at.Tag.IsDeleted)
-                    .OrderBy(at => at.Tag.SortOrder)
-                    .ThenBy(at => at.Tag.Name)
+                    .OrderBy(at => at.Tag.Name)
                     .Select(at => new TagResponse
                     {
                         Id = at.Tag.Id,
                         Name = at.Tag.Name,
                         Slug = at.Tag.Slug,
                         IsTechnology = at.Tag.IsTechnology,
-                        TechnologyCategory = at.Tag.TechnologyCategory,
-                        IconUrl = at.Tag.IconUrl,
-                        ColorHex = at.Tag.ColorHex,
-                        SortOrder = at.Tag.SortOrder
+                        TechnologyCategory = at.Tag.TechnologyCategory
                     })
                     .ToList()
             };
@@ -479,26 +503,22 @@ public class ArticleService : IArticleService
             Title = a.Title,
             Excerpt = a.Excerpt,
             Slug = a.Slug,
-            PublishedDate = a.PublishedDate,
-            MediumUrl = a.MediumUrl,
+            PublishedAt = a.PublishedAt,
+            UpdatedAt = a.UpdatedAt,
             CoverImageKey = a.CoverImageKey,
             ContentMarkdown = a.ContentMarkdown,
             Featured = a.FeaturedOnPersonal,
             SortOrder = a.PersonalSortOrder,
             Tags = a.ArticleTags
                 .Where(at => !at.Tag.IsDeleted)
-                .OrderBy(at => at.Tag.SortOrder)
-                .ThenBy(at => at.Tag.Name)
+                .OrderBy(at => at.Tag.Name)
                 .Select(at => new TagResponse
                 {
                     Id = at.Tag.Id,
                     Name = at.Tag.Name,
                     Slug = at.Tag.Slug,
                     IsTechnology = at.Tag.IsTechnology,
-                    TechnologyCategory = at.Tag.TechnologyCategory,
-                    IconUrl = at.Tag.IconUrl,
-                    ColorHex = at.Tag.ColorHex,
-                    SortOrder = at.Tag.SortOrder
+                    TechnologyCategory = at.Tag.TechnologyCategory
                 })
                 .ToList()
         };
@@ -510,8 +530,7 @@ public class ArticleService : IArticleService
         Title = a.Title,
         Excerpt = a.Excerpt,
         Slug = a.Slug,
-        PublishedDate = a.PublishedDate,
-        MediumUrl = a.MediumUrl,
+        PublishedAt = a.PublishedAt,
         CoverImageKey = a.CoverImageKey,
         ContentMarkdown = a.ContentMarkdown,
         IsPublished = a.IsPublished,
@@ -523,8 +542,7 @@ public class ArticleService : IArticleService
         PersonalSortOrder = a.PersonalSortOrder,
         Tags = a.ArticleTags
             .Where(at => !at.Tag.IsDeleted)
-            .OrderBy(at => at.Tag.SortOrder)
-            .ThenBy(at => at.Tag.Name)
+            .OrderBy(at => at.Tag.Name)
             .Select(at => new AdminTagResponse
             {
                 Id = at.Tag.Id,
@@ -532,10 +550,6 @@ public class ArticleService : IArticleService
                 Slug = at.Tag.Slug,
                 IsTechnology = at.Tag.IsTechnology,
                 TechnologyCategory = at.Tag.TechnologyCategory,
-                IconObjectKey = at.Tag.IconObjectKey,
-                IconUrl = at.Tag.IconUrl,
-                ColorHex = at.Tag.ColorHex,
-                SortOrder = at.Tag.SortOrder,
                 CreatedAt = at.Tag.CreatedAt,
                 UpdatedAt = at.Tag.UpdatedAt
             })

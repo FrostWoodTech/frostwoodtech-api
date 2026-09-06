@@ -22,15 +22,17 @@ DTO → return. No EF Core queries in a Function.
 
 ## Validation rules the service layer must enforce
 
-- `featured_on_agency` requires `show_on_agency`; same for personal.
-- `is_technology = false` ⇒ `technology_category` and icon fields must be null.
-- `is_technology = true` ⇒ `technology_category` and an icon are required.
+- `featured_on_agency` requires `show_on_agency`; same for personal. FAQs, pricing plans and
+  certificates are exceptions — FAQs have no featured flag and share one `sort_order` across both
+  sites; pricing plans are agency-only and certificates are personal-only, so both carry a plain
+  `featured` flag with no `show_on_X` to require.
+- `is_technology = false` ⇒ `technology_category` must be null.
+- `is_technology = true` ⇒ `technology_category` is required.
 - Exactly one `project_images.is_primary` per project. Setting a new primary clears the old one
   in the same transaction.
 - `alt_text` is required on every image.
 - Slug uniqueness, checked on create and on update. Warn (don't block) when a published entity's
   slug changes.
-- `medium_url` is required on articles and must be an absolute URL.
 - `price_amount = null` is valid and means "Custom / Contact us" — don't default it to 0.
 - A tag may not be deleted while a project or article still references it — `tag_in_use`.
 - Public read paths always apply `is_published`, `is_deleted`, and the site flag. Never expose a

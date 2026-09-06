@@ -28,6 +28,7 @@ public interface IArticleService
         Site? site,
         bool? isPublished,
         string? search,
+        bool includeHidden,
         int page,
         int pageSize,
         CancellationToken cancellationToken);
@@ -44,8 +45,8 @@ public interface IArticleService
         CancellationToken cancellationToken);
 
     /// <summary>
-    /// Flips the draft flag on its own. Unlike projects and services there is no published_at to
-    /// stamp — an article's PublishedDate is the author's own date, not the go-live moment.
+    /// Flips the draft flag, stamping published_at the first time only — same set-once pattern
+    /// as projects and services.
     /// </summary>
     Task<ServiceResult<AdminArticleResponse>> SetPublishedAsync(
         Guid id,

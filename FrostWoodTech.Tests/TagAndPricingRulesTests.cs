@@ -32,8 +32,6 @@ public class TagAndPricingRulesTests
             {
                 Title = $"Tagged {Guid.NewGuid():N}",
                 Excerpt = "An excerpt.",
-                MediumUrl = "https://medium.com/@someone/a-post",
-                PublishedDate = new DateOnly(2026, 1, 1),
                 IsPublished = true,
                 ShowOnAgency = true,
                 TagIds = [tag.Value!.Id]
@@ -49,7 +47,7 @@ public class TagAndPricingRulesTests
     }
 
     [Fact]
-    public async Task A_technology_tag_requires_a_category_and_an_icon()
+    public async Task A_technology_tag_requires_a_category()
     {
         await using var db = _fixture.CreateContext();
         var tags = new TagService(db);
@@ -81,8 +79,7 @@ public class TagAndPricingRulesTests
                 Currency = "USD",
                 PriceType = PriceType.Custom,
                 Description = "Let's talk.",
-                IsPublished = true,
-                ShowOnAgency = true
+                IsPublished = true
             },
             CancellationToken.None);
 
@@ -110,15 +107,14 @@ public class TagAndPricingRulesTests
                 Currency = "USD",
                 PriceType = PriceType.Fixed,
                 Description = "A combo pack.",
-                IsPublished = true,
-                ShowOnAgency = true
+                IsPublished = true
             },
             CancellationToken.None);
 
         Assert.True(combo.IsSuccess);
 
         var combos = await pricing.GetPublicComboPlansAsync(
-            Site.Agency, null, 1, 50, CancellationToken.None);
+            null, 1, 50, CancellationToken.None);
 
         Assert.Contains(combos.Items, p => p.Id == combo.Value!.Id);
     }

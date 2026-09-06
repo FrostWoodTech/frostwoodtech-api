@@ -47,6 +47,38 @@ public static class HttpResponses
         request.HttpContext.Response.Headers[HeaderNames.CacheControl] = "no-store";
     }
 
+    /// <summary>
+    /// Scoped to the auth routes only — no reason for every admin request to carry it. No
+    /// explicit <c>Domain</c>: the cookie is only ever read back by this API's own origin, and
+    /// <c>Lax</c> still rides along on same-site cross-subdomain calls (SPA and API sharing a
+    /// registrable domain in production; same-host-different-port locally).
+    /// </summary>
+    private const string RefreshCookieName = "refreshToken";
+    private const string RefreshCookiePath = "/api/cms/admin/auth";
+
+    public static void SetRefreshTokenCookie(HttpRequest request, string refreshToken, DateTimeOffset expiresAt)
+    {
+        request.HttpContext.Response.Cookies.Append(RefreshCookieName, refreshToken, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = true,
+            SameSite = Microsoft.AspNetCore.Http.SameSiteMode.Lax,
+            Path = RefreshCookiePath,
+            Expires = expiresAt,
+        });
+    }
+
+    public static void ClearRefreshTokenCookie(HttpRequest request)
+    {
+        request.HttpContext.Response.Cookies.Delete(RefreshCookieName, new CookieOptions
+        {
+            Path = RefreshCookiePath,
+        });
+    }
+
+    public static string? ReadRefreshTokenCookie(HttpRequest request) =>
+        request.Cookies[RefreshCookieName];
+
     private static string ComputeETag(string json)
     {
         var hash = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(json));

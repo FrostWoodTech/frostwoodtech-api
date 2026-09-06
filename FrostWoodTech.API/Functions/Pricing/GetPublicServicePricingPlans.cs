@@ -26,20 +26,9 @@ public class GetPublicServicePricingPlans
         Guid serviceId,
         CancellationToken cancellationToken)
     {
-        if (!QueryParameters.TryReadSite(req, out var site))
-        {
-            return ProblemResults.BadRequest("validation_failed", "Unknown site.");
-        }
-
-        if (site is null)
-        {
-            return ProblemResults.SiteRequired();
-        }
-
         var (page, pageSize) = QueryParameters.ReadPaging(req);
 
         var result = await _pricing.GetPublicPlansForServiceAsync(
-            site.Value,
             serviceId,
             page,
             pageSize,

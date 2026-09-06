@@ -8,32 +8,28 @@ using FrostWoodTech.API.Common;
 using FrostWoodTech.API.DTOs.Admin;
 using FrostWoodTech.API.Interfaces;
 
-namespace FrostWoodTech.API.Functions.Services;
+namespace FrostWoodTech.API.Functions.Certificates;
 
-public class AddServiceFeature
+public class CreateCertificate
 {
-    private readonly IServiceCatalogService _serviceCatalog;
+    private readonly ICertificateService _certificateService;
 
-    public AddServiceFeature(IServiceCatalogService serviceCatalog)
+    public CreateCertificate(ICertificateService certificateService)
     {
-        _serviceCatalog = serviceCatalog;
+        _certificateService = certificateService;
     }
 
-    [Function("AddServiceFeature")]
+    [Function("CreateCertificate")]
     public async Task<IActionResult> Run(
-        [HttpTrigger(
-            AuthorizationLevel.Anonymous,
-            "post",
-            Route = "cms/admin/services/{id:guid}/features")] HttpRequest req,
-        Guid id,
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "cms/admin/certificates")] HttpRequest req,
         CancellationToken cancellationToken)
     {
         HttpResponses.MarkNoStore(req);
 
-        AddServiceFeatureRequest? body;
+        CreateCertificateRequest? body;
         try
         {
-            body = await JsonSerializer.DeserializeAsync<AddServiceFeatureRequest>(
+            body = await JsonSerializer.DeserializeAsync<CreateCertificateRequest>(
                 req.Body,
                 JsonDefaults.Options,
                 cancellationToken);
@@ -48,7 +44,7 @@ public class AddServiceFeature
             return ProblemResults.BadRequest("validation_failed", "A request body is required.");
         }
 
-        var result = await _serviceCatalog.AddFeatureAsync(id, body, cancellationToken);
+        var result = await _certificateService.CreateAsync(body, cancellationToken);
         if (!result.IsSuccess)
         {
             return ProblemResults.FromError(result.Error!);

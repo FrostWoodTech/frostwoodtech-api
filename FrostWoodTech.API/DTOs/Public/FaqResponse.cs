@@ -1,9 +1,9 @@
 namespace FrostWoodTech.API.DTOs.Public;
 
 /// <summary>
-/// What the two public frontends see. The site's own visibility flags are already resolved into
-/// <see cref="Featured"/> and <see cref="SortOrder"/> — the other site's flags, the draft state
-/// and the audit metadata never cross this boundary.
+/// What the two public frontends see. The draft state, the other site's visibility flag, and the
+/// audit metadata never cross this boundary. FAQs have no "featured" concept and share one sort
+/// order across both sites.
 /// </summary>
 public sealed class FaqResponse
 {
@@ -14,12 +14,5 @@ public sealed class FaqResponse
     /// <summary>Markdown — sanitised on render in React, not on write.</summary>
     public required string Answer { get; init; }
 
-    /// <summary>Groups FAQs on the page — "Pricing", "Process", "Technical".</summary>
-    public string? Category { get; init; }
-
-    /// <summary>Featured on the requested site.</summary>
-    public required bool Featured { get; init; }
-
-    /// <summary>Sort order for the requested site.</summary>
     public required int SortOrder { get; init; }
 }

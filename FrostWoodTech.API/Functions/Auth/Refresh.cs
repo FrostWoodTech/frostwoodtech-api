@@ -1,5 +1,3 @@
-using System.Text.Json;
-
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
@@ -21,7 +19,8 @@ public class Refresh
 
     /// <summary>
     /// Anonymous by design — this has to work precisely because the access token has expired. See
-    /// the allow-list in <c>JwtAuthenticationMiddleware</c>.
+    /// the allow-list in <c>JwtAuthenticationMiddleware</c>. The refresh token itself travels as
+    /// an httpOnly cookie, not a body field — there is nothing for JS to read or forward.
     /// </summary>
     [Function("Refresh")]
     public async Task<IActionResult> Run(
@@ -30,24 +29,14 @@ public class Refresh
     {
         HttpResponses.MarkNoStore(req);
 
-        RefreshTokenRequest? body;
-        try
-        {
-            body = await JsonSerializer.DeserializeAsync<RefreshTokenRequest>(
-                req.Body, JsonDefaults.Options, cancellationToken);
-        }
-        catch (JsonException ex)
-        {
-            return ProblemResults.BadRequest("validation_failed", ex.Message);
-        }
-
-        if (body is null)
-            return ProblemResults.BadRequest("validation_failed", "A request body is required.");
+        var body = new RefreshTokenRequest { RefreshToken = HttpResponses.ReadRefreshTokenCookie(req) };
 
         var result = await _users.RefreshAsync(body, cancellationToken);
 
-        return result.IsSuccess
-            ? new OkObjectResult(result.Value)
-            : ProblemResults.FromError(result.Error!);
+        if (!result.IsSuccess)
+            return ProblemResults.FromError(result.Error!);
+
+        HttpResponses.SetRefreshTokenCookie(req, result.Value!.RefreshToken, result.Value.RefreshTokenExpiresAt);
+        return new OkObjectResult(result.Value);
     }
 }

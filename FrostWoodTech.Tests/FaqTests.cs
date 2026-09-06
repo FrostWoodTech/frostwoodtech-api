@@ -1,4 +1,5 @@
 using FrostWoodTech.API.DTOs.Admin;
+using FrostWoodTech.API.Entities;
 using FrostWoodTech.API.Enums;
 using FrostWoodTech.API.Services;
 
@@ -26,10 +27,10 @@ public class FaqTests
         var created = await service.CreateAsync(request, CancellationToken.None);
         Assert.True(created.IsSuccess);
 
-        var publicBefore = await service.GetPublicFaqsAsync(Site.Agency, null, CancellationToken.None);
+        var publicBefore = await service.GetPublicFaqsAsync(Site.Agency, CancellationToken.None);
         Assert.DoesNotContain(publicBefore, f => f.Id == created.Value!.Id);
 
-        var admin = await service.GetAdminFaqsAsync(null, null, null, null, 1, 50, CancellationToken.None);
+        var admin = await service.GetAdminFaqsAsync(null, null, null, null, false, 1, 50, CancellationToken.None);
         Assert.Contains(admin.Items, f => f.Id == created.Value!.Id);
 
         var published = await service.UpdateAsync(
@@ -38,7 +39,6 @@ public class FaqTests
             {
                 Question = request.Question,
                 Answer = request.Answer,
-                Category = request.Category,
                 IsPublished = true,
                 ShowOnAgency = true
             },
@@ -46,45 +46,82 @@ public class FaqTests
 
         Assert.True(published.IsSuccess);
 
-        var publicAfter = await service.GetPublicFaqsAsync(Site.Agency, null, CancellationToken.None);
+        var publicAfter = await service.GetPublicFaqsAsync(Site.Agency, CancellationToken.None);
         Assert.Contains(publicAfter, f => f.Id == created.Value.Id);
     }
 
     [Fact]
-    public async Task Faqs_can_be_filtered_by_category()
+    public async Task Reordering_faqs_changes_their_public_order()
     {
         await using var db = _fixture.CreateContext();
         var service = new FaqService(db);
 
-        var category = $"Pricing {Guid.NewGuid():N}";
+        var createdFirst = await service.CreateAsync(NewFaq(), CancellationToken.None);
+        var createdSecond = await service.CreateAsync(NewFaq(), CancellationToken.None);
+        Assert.True(createdFirst.IsSuccess);
+        Assert.True(createdSecond.IsSuccess);
 
-        var request = NewFaq();
-        request.Category = category;
+        // Swap so the second-created FAQ now sorts before the first.
+        var reordered = await service.ReorderAsync(
+            new FaqReorderRequest
+            {
+                Items =
+                [
+                    new ReorderItem { Id = createdSecond.Value!.Id, SortOrder = 0 },
+                    new ReorderItem { Id = createdFirst.Value!.Id, SortOrder = 1 }
+                ]
+            },
+            CancellationToken.None);
 
-        var created = await service.CreateAsync(request, CancellationToken.None);
-        Assert.True(created.IsSuccess);
+        Assert.True(reordered.IsSuccess);
 
-        var matching = await service.GetPublicFaqsAsync(Site.Agency, category, CancellationToken.None);
-        var other = await service.GetPublicFaqsAsync(Site.Agency, "Process", CancellationToken.None);
+        var faqs = await service.GetPublicFaqsAsync(Site.Agency, CancellationToken.None);
+        var firstIndex = faqs.ToList().FindIndex(f => f.Id == createdFirst.Value!.Id);
+        var secondIndex = faqs.ToList().FindIndex(f => f.Id == createdSecond.Value!.Id);
 
-        Assert.Contains(matching, f => f.Id == created.Value!.Id);
-        Assert.DoesNotContain(other, f => f.Id == created.Value!.Id);
+        Assert.True(secondIndex < firstIndex);
     }
 
     [Fact]
-    public async Task Featuring_on_a_site_the_faq_is_not_shown_on_is_rejected()
+    public async Task A_service_scoped_faq_never_appears_in_the_global_public_list()
     {
         await using var db = _fixture.CreateContext();
         var service = new FaqService(db);
 
-        var request = NewFaq();
-        request.ShowOnPersonal = false;
-        request.FeaturedOnPersonal = true;
+        var serviceOffering = new ServiceOffering
+        {
+            Id = Guid.NewGuid(),
+            Slug = $"service-{Guid.NewGuid():N}",
+            Name = "A service",
+            ShortDescription = "Short description.",
+            ShowOnAgency = true
+        };
+        db.Services.Add(serviceOffering);
+        await db.SaveChangesAsync(CancellationToken.None);
 
-        var result = await service.CreateAsync(request, CancellationToken.None);
+        var globalFaq = await service.CreateAsync(NewFaq(), CancellationToken.None);
+        Assert.True(globalFaq.IsSuccess);
 
-        Assert.False(result.IsSuccess);
-        Assert.Equal("validation_failed", result.Error!.Code);
+        var scopedRequest = NewFaq();
+        scopedRequest.ServiceId = serviceOffering.Id;
+        var scopedFaq = await service.CreateAsync(scopedRequest, CancellationToken.None);
+        Assert.True(scopedFaq.IsSuccess);
+        Assert.Equal(serviceOffering.Id, scopedFaq.Value!.ServiceId);
+        Assert.Equal(serviceOffering.Name, scopedFaq.Value.ServiceName);
+
+        var publicFaqs = await service.GetPublicFaqsAsync(Site.Agency, CancellationToken.None);
+        Assert.Contains(publicFaqs, f => f.Id == globalFaq.Value!.Id);
+        Assert.DoesNotContain(publicFaqs, f => f.Id == scopedFaq.Value.Id);
+
+        var adminGlobalOnly = await service.GetAdminFaqsAsync(
+            null, null, null, null, globalOnly: true, 1, 50, CancellationToken.None);
+        Assert.Contains(adminGlobalOnly.Items, f => f.Id == globalFaq.Value!.Id);
+        Assert.DoesNotContain(adminGlobalOnly.Items, f => f.Id == scopedFaq.Value.Id);
+
+        var adminForService = await service.GetAdminFaqsAsync(
+            null, null, null, serviceOffering.Id, globalOnly: false, 1, 50, CancellationToken.None);
+        Assert.Contains(adminForService.Items, f => f.Id == scopedFaq.Value.Id);
+        Assert.DoesNotContain(adminForService.Items, f => f.Id == globalFaq.Value!.Id);
     }
 
     private static CreateFaqRequest NewFaq() => new()

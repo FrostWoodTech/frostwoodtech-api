@@ -60,7 +60,7 @@ public class SiteVisibilityTests
 
         // ...but the admin surface must still show it, or drafts would be unreachable.
         var admin = await service.GetAdminArticlesAsync(
-            null, null, null, 1, 50, CancellationToken.None);
+            null, null, null, false, 1, 50, CancellationToken.None);
 
         Assert.Contains(admin.Items, a => a.Id == created.Value!.Id);
     }
@@ -84,7 +84,7 @@ public class SiteVisibilityTests
             Site.Agency, null, null, 1, 50, CancellationToken.None);
 
         var admin = await service.GetAdminArticlesAsync(
-            null, null, null, 1, 50, CancellationToken.None);
+            null, null, null, false, 1, 50, CancellationToken.None);
 
         Assert.DoesNotContain(agency.Items, a => a.Id == created.Value.Id);
         Assert.DoesNotContain(admin.Items, a => a.Id == created.Value.Id);
@@ -113,8 +113,6 @@ public class SiteVisibilityTests
         // Unique per run so repeated runs against the same container do not collide on the slug.
         Title = $"{title} {Guid.NewGuid():N}",
         Excerpt = "An excerpt.",
-        MediumUrl = "https://medium.com/@someone/a-post",
-        PublishedDate = new DateOnly(2026, 1, 1),
         IsPublished = true,
         ShowOnAgency = showOnAgency,
         ShowOnPersonal = showOnPersonal

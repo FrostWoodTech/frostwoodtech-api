@@ -9,5 +9,6 @@ public enum MediaTarget
     Projects,
     Services,
     Tags,
-    Articles
+    Articles,
+    Certificates
 }

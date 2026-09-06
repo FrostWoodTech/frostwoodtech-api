@@ -42,8 +42,10 @@ public class Login
 
         var result = await _users.LoginAsync(body, ClientAddress.Read(req), cancellationToken);
 
-        return result.IsSuccess
-            ? new OkObjectResult(result.Value)
-            : ProblemResults.FromError(result.Error!);
+        if (!result.IsSuccess)
+            return ProblemResults.FromError(result.Error!);
+
+        HttpResponses.SetRefreshTokenCookie(req, result.Value!.RefreshToken, result.Value.RefreshTokenExpiresAt);
+        return new OkObjectResult(result.Value);
     }
 }

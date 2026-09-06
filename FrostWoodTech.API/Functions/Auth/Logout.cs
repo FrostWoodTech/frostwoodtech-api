@@ -1,5 +1,3 @@
-using System.Text.Json;
-
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Azure.Functions.Worker;
@@ -21,7 +19,7 @@ public class Logout
 
     /// <summary>
     /// Anonymous by design: signing out has to work even once the access token is dead, and the
-    /// refresh token in the body is itself the proof of ownership.
+    /// refresh cookie is itself the proof of ownership.
     /// </summary>
     [Function("Logout")]
     public async Task<IActionResult> Run(
@@ -30,21 +28,11 @@ public class Logout
     {
         HttpResponses.MarkNoStore(req);
 
-        RefreshTokenRequest? body;
-        try
-        {
-            body = await JsonSerializer.DeserializeAsync<RefreshTokenRequest>(
-                req.Body, JsonDefaults.Options, cancellationToken);
-        }
-        catch (JsonException ex)
-        {
-            return ProblemResults.BadRequest("validation_failed", ex.Message);
-        }
-
-        if (body is null)
-            return ProblemResults.BadRequest("validation_failed", "A request body is required.");
+        var body = new RefreshTokenRequest { RefreshToken = HttpResponses.ReadRefreshTokenCookie(req) };
 
         var result = await _users.LogoutAsync(body, cancellationToken);
+
+        HttpResponses.ClearRefreshTokenCookie(req);
 
         return result.IsSuccess
             ? new NoContentResult()

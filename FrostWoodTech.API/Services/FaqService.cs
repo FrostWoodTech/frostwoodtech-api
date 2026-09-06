@@ -23,28 +23,26 @@ public class FaqService : IFaqService
 
     public async Task<IReadOnlyList<FaqResponse>> GetPublicFaqsAsync(
         Site site,
-        string? category,
         CancellationToken cancellationToken)
     {
-        // is_deleted comes from the global query filter; is_published and the site flag are not optional.
-        var query = ForSite(_db.Faqs.AsNoTracking().Where(f => f.IsPublished), site);
+        // is_deleted comes from the global query filter; is_published, the site flag, and being
+        // unscoped (service_id is null) are not optional — a service's own FAQs render only on
+        // that service's page, via ServiceCatalogService, not in this shared list.
+        var query = ForSite(_db.Faqs.AsNoTracking().Where(f => f.IsPublished && f.ServiceId == null), site);
 
-        if (category is not null)
-        {
-            query = query.Where(f => f.Category == category);
-        }
-
-        // Not paged: an FAQ page renders the whole list, grouped by category client-side.
-        return await OrderForSite(query, site)
-            .Select(PublicProjection(site))
+        // Not paged: an FAQ page renders the whole list, in CMS sort order.
+        return await query
+            .OrderBy(f => f.SortOrder)
+            .Select(PublicProjection)
             .ToListAsync(cancellationToken);
     }
 
     public async Task<PagedResult<AdminFaqResponse>> GetAdminFaqsAsync(
         Site? site,
         bool? isPublished,
-        string? category,
         string? search,
+        Guid? serviceId,
+        bool globalOnly,
         int page,
         int pageSize,
         CancellationToken cancellationToken)
@@ -56,14 +54,21 @@ public class FaqService : IFaqService
             query = ForSite(query, site.Value);
         }
 
+        // Same pairing the admin pricing list uses for its analogous `serviceId`/`comboOnly`
+        // split — a scope filter and "explicitly global" are different questions, so both exist
+        // rather than overloading a missing serviceId to mean "global".
+        if (serviceId is not null)
+        {
+            query = query.Where(f => f.ServiceId == serviceId);
+        }
+        else if (globalOnly)
+        {
+            query = query.Where(f => f.ServiceId == null);
+        }
+
         if (isPublished is not null)
         {
             query = query.Where(f => f.IsPublished == isPublished);
-        }
-
-        if (category is not null)
-        {
-            query = query.Where(f => f.Category == category);
         }
 
         if (search is not null)
@@ -75,11 +80,8 @@ public class FaqService : IFaqService
 
         var total = await query.CountAsync(cancellationToken);
 
-        // Drafts have no meaningful site order, so the admin list groups by category instead.
         var items = await query
-            .OrderBy(f => f.Category)
-            .ThenBy(f => f.SortOrder)
-            .ThenBy(f => f.Question)
+            .OrderBy(f => f.SortOrder)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .Select(AdminProjection)
@@ -118,26 +120,35 @@ public class FaqService : IFaqService
             return ServiceResult<AdminFaqResponse>.Validation(validationError);
         }
 
+        if (request.ServiceId is not null && !await _db.Services.AnyAsync(s => s.Id == request.ServiceId, cancellationToken))
+        {
+            return ServiceResult<AdminFaqResponse>.Validation($"Unknown service id: {request.ServiceId}.");
+        }
+
+        // Sort order is never taken from the client — it's only ever changed via ReorderAsync,
+        // so a new FAQ is appended to the end of its own scope's order, not the whole table's.
+        var nextSortOrder = await _db.Faqs
+            .Where(f => f.ServiceId == request.ServiceId)
+            .MaxAsync(f => (int?)f.SortOrder, cancellationToken) + 1 ?? 0;
+
         var faq = new Faq
         {
             Id = Guid.NewGuid(),
+            ServiceId = request.ServiceId,
             Question = question!,
             Answer = answer!,
-            Category = Blank(request.Category),
-            SortOrder = request.SortOrder,
+            SortOrder = nextSortOrder,
             IsPublished = request.IsPublished,
             ShowOnAgency = request.ShowOnAgency,
-            FeaturedOnAgency = request.FeaturedOnAgency,
-            AgencySortOrder = request.AgencySortOrder,
-            ShowOnPersonal = request.ShowOnPersonal,
-            FeaturedOnPersonal = request.FeaturedOnPersonal,
-            PersonalSortOrder = request.PersonalSortOrder
+            ShowOnPersonal = request.ShowOnPersonal
         };
 
         _db.Faqs.Add(faq);
         await _db.SaveChangesAsync(cancellationToken);
 
-        return ServiceResult<AdminFaqResponse>.Success(ToAdminResponse(faq));
+        // Re-read rather than project the in-memory entity: Service is a link added by id, so its
+        // navigation is not loaded yet and ToAdminResponse would report a null ServiceName.
+        return await GetByIdAsync(faq.Id, cancellationToken);
     }
 
     public async Task<ServiceResult<AdminFaqResponse>> UpdateAsync(
@@ -160,21 +171,25 @@ public class FaqService : IFaqService
             return ServiceResult<AdminFaqResponse>.Validation(validationError);
         }
 
+        if (request.ServiceId is not null && !await _db.Services.AnyAsync(s => s.Id == request.ServiceId, cancellationToken))
+        {
+            return ServiceResult<AdminFaqResponse>.Validation($"Unknown service id: {request.ServiceId}.");
+        }
+
+        // Sort order is untouched here — it only changes via ReorderAsync. Re-scoping an FAQ
+        // (moving it between global and a service, or between services) keeps its current
+        // sort_order rather than renumbering — the reorder screen for its new scope fixes that up.
+        faq.ServiceId = request.ServiceId;
         faq.Question = question!;
         faq.Answer = answer!;
-        faq.Category = Blank(request.Category);
-        faq.SortOrder = request.SortOrder;
         faq.IsPublished = request.IsPublished;
         faq.ShowOnAgency = request.ShowOnAgency;
-        faq.FeaturedOnAgency = request.FeaturedOnAgency;
-        faq.AgencySortOrder = request.AgencySortOrder;
         faq.ShowOnPersonal = request.ShowOnPersonal;
-        faq.FeaturedOnPersonal = request.FeaturedOnPersonal;
-        faq.PersonalSortOrder = request.PersonalSortOrder;
 
         await _db.SaveChangesAsync(cancellationToken);
 
-        return ServiceResult<AdminFaqResponse>.Success(ToAdminResponse(faq));
+        // Same reason as CreateAsync: ServiceId may have just changed and Service isn't loaded.
+        return await GetByIdAsync(faq.Id, cancellationToken);
     }
 
     public async Task<ServiceResult<bool>> DeleteAsync(Guid id, CancellationToken cancellationToken)
@@ -191,13 +206,10 @@ public class FaqService : IFaqService
         return ServiceResult<bool>.Success(true);
     }
 
-    public async Task<ServiceResult<bool>> ReorderAsync(ReorderRequest request, CancellationToken cancellationToken)
+    public async Task<ServiceResult<bool>> ReorderAsync(
+        FaqReorderRequest request,
+        CancellationToken cancellationToken)
     {
-        if (request.Site is null)
-        {
-            return ServiceResult<bool>.Validation("site is required — sort order is kept per site.");
-        }
-
         var items = request.Items;
         if (items is null || items.Count == 0)
         {
@@ -222,16 +234,7 @@ public class FaqService : IFaqService
 
         foreach (var item in items)
         {
-            var faq = faqs[item.Id];
-
-            if (request.Site == Site.Agency)
-            {
-                faq.AgencySortOrder = item.SortOrder;
-            }
-            else
-            {
-                faq.PersonalSortOrder = item.SortOrder;
-            }
+            faqs[item.Id].SortOrder = item.SortOrder;
         }
 
         await _db.SaveChangesAsync(cancellationToken);
@@ -243,15 +246,6 @@ public class FaqService : IFaqService
         site == Site.Agency
             ? query.Where(f => f.ShowOnAgency)
             : query.Where(f => f.ShowOnPersonal);
-
-    /// <summary>
-    /// Category first so the page can render its groups in a stable order, then that site's
-    /// sort order, then the entity's own fallback order.
-    /// </summary>
-    private static IOrderedQueryable<Faq> OrderForSite(IQueryable<Faq> query, Site site) =>
-        site == Site.Agency
-            ? query.OrderBy(f => f.Category).ThenBy(f => f.AgencySortOrder).ThenBy(f => f.SortOrder)
-            : query.OrderBy(f => f.Category).ThenBy(f => f.PersonalSortOrder).ThenBy(f => f.SortOrder);
 
     /// <summary>Null when the FAQ is valid, otherwise the message to hand back.</summary>
     private static string? Validate(string? question, string? answer, CreateFaqRequest request)
@@ -266,16 +260,6 @@ public class FaqService : IFaqService
             return "Answer is required.";
         }
 
-        if (request.FeaturedOnAgency && !request.ShowOnAgency)
-        {
-            return "featuredOnAgency requires showOnAgency.";
-        }
-
-        if (request.FeaturedOnPersonal && !request.ShowOnPersonal)
-        {
-            return "featuredOnPersonal requires showOnPersonal.";
-        }
-
         return null;
     }
 
@@ -285,50 +269,26 @@ public class FaqService : IFaqService
     private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     /// <summary>Projected inside the query so the SQL stays narrow.</summary>
-    private static Expression<Func<Faq, FaqResponse>> PublicProjection(Site site)
-    {
-        if (site == Site.Agency)
-        {
-            return f => new FaqResponse
-            {
-                Id = f.Id,
-                Question = f.Question,
-                Answer = f.Answer,
-                Category = f.Category,
-                Featured = f.FeaturedOnAgency,
-                SortOrder = f.AgencySortOrder
-            };
-        }
-
-        return f => new FaqResponse
-        {
-            Id = f.Id,
-            Question = f.Question,
-            Answer = f.Answer,
-            Category = f.Category,
-            Featured = f.FeaturedOnPersonal,
-            SortOrder = f.PersonalSortOrder
-        };
-    }
-
-    private static readonly Expression<Func<Faq, AdminFaqResponse>> AdminProjection = f => new AdminFaqResponse
+    private static readonly Expression<Func<Faq, FaqResponse>> PublicProjection = f => new FaqResponse
     {
         Id = f.Id,
         Question = f.Question,
         Answer = f.Answer,
-        Category = f.Category,
+        SortOrder = f.SortOrder
+    };
+
+    private static readonly Expression<Func<Faq, AdminFaqResponse>> AdminProjection = f => new AdminFaqResponse
+    {
+        Id = f.Id,
+        ServiceId = f.ServiceId,
+        ServiceName = f.Service == null ? null : f.Service.Name,
+        Question = f.Question,
+        Answer = f.Answer,
         SortOrder = f.SortOrder,
         IsPublished = f.IsPublished,
         ShowOnAgency = f.ShowOnAgency,
-        FeaturedOnAgency = f.FeaturedOnAgency,
-        AgencySortOrder = f.AgencySortOrder,
         ShowOnPersonal = f.ShowOnPersonal,
-        FeaturedOnPersonal = f.FeaturedOnPersonal,
-        PersonalSortOrder = f.PersonalSortOrder,
         CreatedAt = f.CreatedAt,
         UpdatedAt = f.UpdatedAt
     };
-
-    /// <summary>The same shape for an entity already in memory after a write.</summary>
-    private static readonly Func<Faq, AdminFaqResponse> ToAdminResponse = AdminProjection.Compile();
 }

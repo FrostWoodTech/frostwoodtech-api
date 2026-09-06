@@ -5,10 +5,7 @@ using FrostWoodTech.API.Enums;
 
 namespace FrostWoodTech.API.Interfaces;
 
-/// <summary>
-/// The <c>services</c> aggregate — a service offering and its feature bullets. Named
-/// <c>ServiceCatalog</c> so it does not read as "the service service".
-/// </summary>
+/// <summary>The <c>services</c> aggregate.</summary>
 public interface IServiceCatalogService
 {
     /// <summary>
@@ -31,6 +28,7 @@ public interface IServiceCatalogService
         Site? site,
         bool? isPublished,
         string? search,
+        bool includeHidden,
         int page,
         int pageSize,
         CancellationToken cancellationToken);
@@ -57,27 +55,4 @@ public interface IServiceCatalogService
 
     /// <summary>Bulk sort_order update for one site.</summary>
     Task<ServiceResult<bool>> ReorderAsync(ReorderRequest request, CancellationToken cancellationToken);
-
-    Task<ServiceResult<ServiceFeatureResponse>> AddFeatureAsync(
-        Guid serviceId,
-        AddServiceFeatureRequest request,
-        CancellationToken cancellationToken);
-
-    Task<ServiceResult<ServiceFeatureResponse>> UpdateFeatureAsync(
-        Guid serviceId,
-        Guid featureId,
-        UpdateServiceFeatureRequest request,
-        CancellationToken cancellationToken);
-
-    /// <summary>Hard delete — feature rows carry no soft-delete flag.</summary>
-    Task<ServiceResult<bool>> DeleteFeatureAsync(
-        Guid serviceId,
-        Guid featureId,
-        CancellationToken cancellationToken);
-
-    /// <summary>Bulk sort_order update for one service's feature list.</summary>
-    Task<ServiceResult<bool>> ReorderFeaturesAsync(
-        Guid serviceId,
-        FeatureReorderRequest request,
-        CancellationToken cancellationToken);
 }

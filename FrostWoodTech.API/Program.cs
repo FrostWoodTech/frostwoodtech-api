@@ -6,6 +6,7 @@ using FrostWoodTech.API.Data;
 using FrostWoodTech.API.Docs;
 using FrostWoodTech.API.Email;
 using FrostWoodTech.API.Enums;
+using FrostWoodTech.API.ExchangeRates;
 using FrostWoodTech.API.Interfaces;
 using FrostWoodTech.API.Media;
 using FrostWoodTech.API.Middleware;
@@ -45,6 +46,9 @@ dataSourceBuilder.MapEnum<UserRole>("user_role");
 dataSourceBuilder.MapEnum<UserStatus>("user_status");
 dataSourceBuilder.MapEnum<PasswordTokenPurpose>("password_token_purpose");
 dataSourceBuilder.MapEnum<AuthAttemptAction>("auth_attempt_action");
+dataSourceBuilder.MapEnum<ContactSubmissionStatus>("contact_submission_status");
+dataSourceBuilder.MapEnum<ContactBudgetRange>("contact_budget_range");
+dataSourceBuilder.MapEnum<Site>("site");
 var dataSource = dataSourceBuilder.Build();
 
 builder.Services.AddSingleton(dataSource);
@@ -60,6 +64,9 @@ builder.Services.AddDbContextPool<FrostWoodTechDbContext>(options =>
         npgsql.MapEnum<UserStatus>("user_status");
         npgsql.MapEnum<PasswordTokenPurpose>("password_token_purpose");
         npgsql.MapEnum<AuthAttemptAction>("auth_attempt_action");
+        npgsql.MapEnum<ContactSubmissionStatus>("contact_submission_status");
+        npgsql.MapEnum<ContactBudgetRange>("contact_budget_range");
+        npgsql.MapEnum<Site>("site");
         npgsql.EnableRetryOnFailure(maxRetryCount: 3, maxRetryDelay: TimeSpan.FromSeconds(5), errorCodesToAdd: null);
         npgsql.CommandTimeout(30);
     }));
@@ -82,7 +89,10 @@ builder.Services.AddScoped<IProjectService, ProjectService>();
 builder.Services.AddScoped<IServiceCatalogService, ServiceCatalogService>();
 builder.Services.AddScoped<IPricingService, PricingService>();
 builder.Services.AddScoped<IFaqService, FaqService>();
+builder.Services.AddScoped<ICertificateService, CertificateService>();
 builder.Services.AddScoped<IReviewService, ReviewService>();
+builder.Services.AddScoped<IContactService, ContactService>();
+builder.Services.AddScoped<ICurrencyService, CurrencyService>();
 
 builder.Services.Configure<NeonStorageOptions>(builder.Configuration.GetSection("NeonS3"));
 // Thread-safe and meant to be long-lived, so built once rather than per request.
@@ -118,6 +128,7 @@ builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.Configure<CorsOptions>(builder.Configuration.GetSection("Cors"));
 
 builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection("Email"));
+builder.Services.Configure<ContactOptions>(builder.Configuration.GetSection("Contact"));
 
 // Anything but "brevo" falls back to logging, so a keyless deployment says so in the log
 // instead of failing every send at the provider.
@@ -132,6 +143,13 @@ else
 {
     builder.Services.AddScoped<IEmailService, LoggingEmailService>();
 }
+
+builder.Services.Configure<ExchangeRateOptions>(builder.Configuration.GetSection("ExchangeRate"));
+builder.Services.AddHttpClient<IExchangeRateProvider, OpenExchangeRateProvider>((sp, client) =>
+{
+    var options = sp.GetRequiredService<IOptions<ExchangeRateOptions>>().Value;
+    client.BaseAddress = new Uri(options.BaseUrl);
+});
 
 // /api/docs and /api/openapi.yaml, both 404 unless Docs__Enabled is set.
 builder.Services.Configure<DocsOptions>(builder.Configuration.GetSection("Docs"));
@@ -167,6 +185,17 @@ await using (var scope = host.Services.CreateAsyncScope())
     {
         // A transient Neon failure must not stop the host from serving the public sites.
         logger.LogError(ex, "Super admin seeding failed. The host is starting anyway.");
+    }
+
+    try
+    {
+        await BaseCurrencySeeder.EnsureSeededAsync(
+            scope.ServiceProvider.GetRequiredService<FrostWoodTechDbContext>(),
+            logger);
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Base currency seeding failed. The host is starting anyway.");
     }
 }
 

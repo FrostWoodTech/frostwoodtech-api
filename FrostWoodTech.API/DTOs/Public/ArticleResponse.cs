@@ -15,9 +15,11 @@ public sealed record ArticleResponse
 
     public string? Slug { get; init; }
 
-    public required DateOnly PublishedDate { get; init; }
+    /// <summary>When the article first went live. Null only for a row published before this field existed.</summary>
+    public DateTimeOffset? PublishedAt { get; init; }
 
-    public string? MediumUrl { get; init; }
+    /// <summary>Last edit — what the frontend falls back to when <see cref="PublishedAt"/> is null.</summary>
+    public required DateTimeOffset UpdatedAt { get; init; }
 
     /// <summary>Neon object key — the frontend builds the delivery URL.</summary>
     public string? CoverImageKey { get; init; }

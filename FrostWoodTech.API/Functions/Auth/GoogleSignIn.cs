@@ -50,8 +50,10 @@ public class GoogleSignIn
 
         var result = await _userService.GoogleSignInAsync(body, cancellationToken);
 
-        return result.IsSuccess
-            ? new OkObjectResult(result.Value)
-            : ProblemResults.FromError(result.Error!);
+        if (!result.IsSuccess)
+            return ProblemResults.FromError(result.Error!);
+
+        HttpResponses.SetRefreshTokenCookie(req, result.Value!.RefreshToken, result.Value.RefreshTokenExpiresAt);
+        return new OkObjectResult(result.Value);
     }
 }

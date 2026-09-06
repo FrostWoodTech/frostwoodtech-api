@@ -95,13 +95,20 @@ public class ProjectService : IProjectService
         Site? site,
         bool? isPublished,
         string? search,
+        bool includeHidden,
         int page,
         int pageSize,
         CancellationToken cancellationToken)
     {
         var query = _db.Projects.AsNoTracking();
 
-        if (site is not null)
+        // The reorder/visibility screen needs every published project in both
+        // columns — including ones not yet shown anywhere — so it can be the
+        // place that turns showing on in the first place. `includeHidden` is
+        // how that screen opts out of the show-on-site filter while still
+        // passing `site` (kept for the response's per-site sort order and to
+        // keep the two columns' query-cache entries distinct on the client).
+        if (site is not null && !includeHidden)
         {
             query = ForSite(query, site.Value);
         }
@@ -176,6 +183,11 @@ public class ProjectService : IProjectService
             return SlugTaken(slug);
         }
 
+        // Sort order is never taken from the client — it only changes via ReorderAsync, so a new
+        // project is simply appended to the end of each site's shared order.
+        var nextAgencySortOrder = await _db.Projects.MaxAsync(p => (int?)p.AgencySortOrder, cancellationToken) + 1 ?? 0;
+        var nextPersonalSortOrder = await _db.Projects.MaxAsync(p => (int?)p.PersonalSortOrder, cancellationToken) + 1 ?? 0;
+
         var project = new Project
         {
             Id = Guid.NewGuid(),
@@ -194,10 +206,10 @@ public class ProjectService : IProjectService
             SeoDescription = Blank(request.SeoDescription),
             ShowOnAgency = request.ShowOnAgency,
             FeaturedOnAgency = request.FeaturedOnAgency,
-            AgencySortOrder = request.AgencySortOrder,
+            AgencySortOrder = nextAgencySortOrder,
             ShowOnPersonal = request.ShowOnPersonal,
             FeaturedOnPersonal = request.FeaturedOnPersonal,
-            PersonalSortOrder = request.PersonalSortOrder,
+            PersonalSortOrder = nextPersonalSortOrder,
             ProjectTags = [.. tagIds.Select(tagId => new ProjectTag { TagId = tagId })]
         };
 
@@ -264,10 +276,8 @@ public class ProjectService : IProjectService
         project.SeoDescription = Blank(request.SeoDescription);
         project.ShowOnAgency = request.ShowOnAgency;
         project.FeaturedOnAgency = request.FeaturedOnAgency;
-        project.AgencySortOrder = request.AgencySortOrder;
         project.ShowOnPersonal = request.ShowOnPersonal;
         project.FeaturedOnPersonal = request.FeaturedOnPersonal;
-        project.PersonalSortOrder = request.PersonalSortOrder;
 
         ApplyPublished(project, request.IsPublished);
         SyncTags(project, tagIds);
@@ -286,6 +296,16 @@ public class ProjectService : IProjectService
         if (project is null)
         {
             return NotFound(id);
+        }
+
+        // A first publish makes the project visible on both sites by default — the
+        // reorder/visibility screen is where an editor dials that back down
+        // afterwards. Re-publishing, and the full edit form (which has its own
+        // explicit show checkboxes), never overrides an existing choice.
+        if (request.IsPublished && !project.IsPublished)
+        {
+            project.ShowOnAgency = true;
+            project.ShowOnPersonal = true;
         }
 
         ApplyPublished(project, request.IsPublished);
@@ -812,18 +832,14 @@ public class ProjectService : IProjectService
                 SortOrder = p.AgencySortOrder,
                 Tags = p.ProjectTags
                     .Where(pt => !pt.Tag.IsDeleted)
-                    .OrderBy(pt => pt.Tag.SortOrder)
-                    .ThenBy(pt => pt.Tag.Name)
+                    .OrderBy(pt => pt.Tag.Name)
                     .Select(pt => new TagResponse
                     {
                         Id = pt.Tag.Id,
                         Name = pt.Tag.Name,
                         Slug = pt.Tag.Slug,
                         IsTechnology = pt.Tag.IsTechnology,
-                        TechnologyCategory = pt.Tag.TechnologyCategory,
-                        IconUrl = pt.Tag.IconUrl,
-                        ColorHex = pt.Tag.ColorHex,
-                        SortOrder = pt.Tag.SortOrder
+                        TechnologyCategory = pt.Tag.TechnologyCategory
                     })
                     .ToList(),
                 Images = p.Images
@@ -865,18 +881,14 @@ public class ProjectService : IProjectService
             SortOrder = p.PersonalSortOrder,
             Tags = p.ProjectTags
                 .Where(pt => !pt.Tag.IsDeleted)
-                .OrderBy(pt => pt.Tag.SortOrder)
-                .ThenBy(pt => pt.Tag.Name)
+                .OrderBy(pt => pt.Tag.Name)
                 .Select(pt => new TagResponse
                 {
                     Id = pt.Tag.Id,
                     Name = pt.Tag.Name,
                     Slug = pt.Tag.Slug,
                     IsTechnology = pt.Tag.IsTechnology,
-                    TechnologyCategory = pt.Tag.TechnologyCategory,
-                    IconUrl = pt.Tag.IconUrl,
-                    ColorHex = pt.Tag.ColorHex,
-                    SortOrder = pt.Tag.SortOrder
+                    TechnologyCategory = pt.Tag.TechnologyCategory
                 })
                 .ToList(),
             Images = p.Images
@@ -923,8 +935,7 @@ public class ProjectService : IProjectService
         PersonalSortOrder = p.PersonalSortOrder,
         Tags = p.ProjectTags
             .Where(pt => !pt.Tag.IsDeleted)
-            .OrderBy(pt => pt.Tag.SortOrder)
-            .ThenBy(pt => pt.Tag.Name)
+            .OrderBy(pt => pt.Tag.Name)
             .Select(pt => new AdminTagResponse
             {
                 Id = pt.Tag.Id,
@@ -932,10 +943,6 @@ public class ProjectService : IProjectService
                 Slug = pt.Tag.Slug,
                 IsTechnology = pt.Tag.IsTechnology,
                 TechnologyCategory = pt.Tag.TechnologyCategory,
-                IconObjectKey = pt.Tag.IconObjectKey,
-                IconUrl = pt.Tag.IconUrl,
-                ColorHex = pt.Tag.ColorHex,
-                SortOrder = pt.Tag.SortOrder,
                 CreatedAt = pt.Tag.CreatedAt,
                 UpdatedAt = pt.Tag.UpdatedAt
             })
