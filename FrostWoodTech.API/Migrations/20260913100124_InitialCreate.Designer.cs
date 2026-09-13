@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace FrostWoodTech.API.Migrations
 {
     [DbContext(typeof(FrostWoodTechDbContext))]
-    [Migration("20260903132511_Initial")]
-    partial class Initial
+    [Migration("20260913100124_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -24,8 +24,11 @@ namespace FrostWoodTech.API.Migrations
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "auth_attempt_action", new[] { "login", "password_reset" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "contact_budget_range", new[] { "under_one_k", "one_to_five_k", "five_to_fifteen_k", "over_fifteen_k", "not_sure" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "contact_submission_status", new[] { "new", "read", "replied", "archived", "spam" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "password_token_purpose", new[] { "setup", "reset" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "price_type", new[] { "fixed", "starting_from", "hourly", "monthly", "custom" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "site", new[] { "agency", "personal" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "tech_category", new[] { "frontend", "backend", "language", "database", "tool_or_platform", "cloud_devops", "ai_ml_dl", "agentic_ai", "design", "other" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "user_role", new[] { "super_admin", "admin" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "user_status", new[] { "email_verification_required", "pending", "approved", "rejected", "disabled" });
@@ -78,17 +81,13 @@ namespace FrostWoodTech.API.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("is_published");
 
-                    b.Property<string>("MediumUrl")
-                        .HasColumnType("text")
-                        .HasColumnName("medium_url");
-
                     b.Property<int>("PersonalSortOrder")
                         .HasColumnType("integer")
                         .HasColumnName("personal_sort_order");
 
-                    b.Property<DateOnly>("PublishedDate")
-                        .HasColumnType("date")
-                        .HasColumnName("published_date");
+                    b.Property<DateTimeOffset?>("PublishedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("published_at");
 
                     b.Property<bool>("ShowOnAgency")
                         .HasColumnType("boolean")
@@ -136,6 +135,254 @@ namespace FrostWoodTech.API.Migrations
                     b.ToTable("article_tags", (string)null);
                 });
 
+            modelBuilder.Entity("FrostWoodTech.API.Entities.Certificate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AltText")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("alt_text");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<bool>("Featured")
+                        .HasColumnType("boolean")
+                        .HasColumnName("featured");
+
+                    b.Property<int?>("Height")
+                        .HasColumnType("integer")
+                        .HasColumnName("height");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_deleted");
+
+                    b.Property<bool>("IsPublished")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_published");
+
+                    b.Property<string>("IssuedBy")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("issued_by");
+
+                    b.Property<DateOnly>("IssuedDate")
+                        .HasColumnType("date")
+                        .HasColumnName("issued_date");
+
+                    b.Property<string>("Marks")
+                        .HasColumnType("text")
+                        .HasColumnName("marks");
+
+                    b.Property<string>("MimeType")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("mime_type");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<string>("ObjectKey")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("object_key");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("url");
+
+                    b.Property<int?>("Width")
+                        .HasColumnType("integer")
+                        .HasColumnName("width");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("certificates", (string)null);
+                });
+
+            modelBuilder.Entity("FrostWoodTech.API.Entities.ContactSubmission", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AdminNotes")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)")
+                        .HasColumnName("admin_notes");
+
+                    b.Property<int?>("BudgetRange")
+                        .HasColumnType("contact_budget_range")
+                        .HasColumnName("budget_range");
+
+                    b.Property<string>("Company")
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("company");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("email");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_deleted");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)")
+                        .HasColumnName("message");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Phone")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("phone");
+
+                    b.Property<DateTimeOffset?>("RepliedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("replied_at");
+
+                    b.Property<Guid?>("RepliedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("replied_by");
+
+                    b.Property<Guid?>("ServiceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("service_id");
+
+                    b.Property<int>("Site")
+                        .HasColumnType("site")
+                        .HasColumnName("site");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("contact_submission_status")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Subject")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("subject");
+
+                    b.Property<string>("SubmitterIp")
+                        .HasColumnType("text")
+                        .HasColumnName("submitter_ip");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RepliedBy");
+
+                    b.HasIndex("ServiceId");
+
+                    b.HasIndex("Status", "CreatedAt")
+                        .HasDatabaseName("ix_contact_submissions_status_created_at");
+
+                    b.HasIndex("SubmitterIp", "CreatedAt")
+                        .HasDatabaseName("ix_contact_submissions_submitter_ip_created_at");
+
+                    b.ToTable("contact_submissions", (string)null);
+                });
+
+            modelBuilder.Entity("FrostWoodTech.API.Entities.Currency", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasColumnType("char(3)")
+                        .HasColumnName("code");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_deleted");
+
+                    b.Property<DateTimeOffset?>("LiveRateFetchedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("live_rate_fetched_at");
+
+                    b.Property<decimal?>("LiveRateFromUsd")
+                        .HasColumnType("numeric(18,6)")
+                        .HasColumnName("live_rate_from_usd");
+
+                    b.Property<decimal?>("ManualRateFromUsd")
+                        .HasColumnType("numeric(18,6)")
+                        .HasColumnName("manual_rate_from_usd");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Symbol")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("symbol");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
+
+                    b.ToTable("currencies", (string)null);
+                });
+
             modelBuilder.Entity("FrostWoodTech.API.Entities.EmailVerificationToken", b =>
                 {
                     b.Property<Guid>("Id")
@@ -181,30 +428,14 @@ namespace FrostWoodTech.API.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<int>("AgencySortOrder")
-                        .HasColumnType("integer")
-                        .HasColumnName("agency_sort_order");
-
                     b.Property<string>("Answer")
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("answer");
 
-                    b.Property<string>("Category")
-                        .HasColumnType("text")
-                        .HasColumnName("category");
-
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
-
-                    b.Property<bool>("FeaturedOnAgency")
-                        .HasColumnType("boolean")
-                        .HasColumnName("featured_on_agency");
-
-                    b.Property<bool>("FeaturedOnPersonal")
-                        .HasColumnType("boolean")
-                        .HasColumnName("featured_on_personal");
 
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
@@ -216,14 +447,14 @@ namespace FrostWoodTech.API.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("is_published");
 
-                    b.Property<int>("PersonalSortOrder")
-                        .HasColumnType("integer")
-                        .HasColumnName("personal_sort_order");
-
                     b.Property<string>("Question")
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("question");
+
+                    b.Property<Guid?>("ServiceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("service_id");
 
                     b.Property<bool>("ShowOnAgency")
                         .HasColumnType("boolean")
@@ -242,6 +473,8 @@ namespace FrostWoodTech.API.Migrations
                         .HasColumnName("updated_at");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ServiceId");
 
                     b.ToTable("faqs", (string)null);
                 });
@@ -328,10 +561,6 @@ namespace FrostWoodTech.API.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<int>("AgencySortOrder")
-                        .HasColumnType("integer")
-                        .HasColumnName("agency_sort_order");
-
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -349,10 +578,6 @@ namespace FrostWoodTech.API.Migrations
                         .HasColumnType("char(3)")
                         .HasColumnName("currency");
 
-                    b.Property<int?>("DeliveryDays")
-                        .HasColumnType("integer")
-                        .HasColumnName("delivery_days");
-
                     b.Property<string>("DeliveryText")
                         .HasColumnType("text")
                         .HasColumnName("delivery_text");
@@ -362,13 +587,9 @@ namespace FrostWoodTech.API.Migrations
                         .HasColumnType("text")
                         .HasColumnName("description");
 
-                    b.Property<bool>("FeaturedOnAgency")
+                    b.Property<bool>("Featured")
                         .HasColumnType("boolean")
-                        .HasColumnName("featured_on_agency");
-
-                    b.Property<bool>("FeaturedOnPersonal")
-                        .HasColumnType("boolean")
-                        .HasColumnName("featured_on_personal");
+                        .HasColumnName("featured");
 
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
@@ -389,10 +610,6 @@ namespace FrostWoodTech.API.Migrations
                         .HasColumnType("text")
                         .HasColumnName("name");
 
-                    b.Property<int>("PersonalSortOrder")
-                        .HasColumnType("integer")
-                        .HasColumnName("personal_sort_order");
-
                     b.Property<decimal?>("PriceAmount")
                         .HasColumnType("numeric(12,2)")
                         .HasColumnName("price_amount");
@@ -404,14 +621,6 @@ namespace FrostWoodTech.API.Migrations
                     b.Property<Guid?>("ServiceId")
                         .HasColumnType("uuid")
                         .HasColumnName("service_id");
-
-                    b.Property<bool>("ShowOnAgency")
-                        .HasColumnType("boolean")
-                        .HasColumnName("show_on_agency");
-
-                    b.Property<bool>("ShowOnPersonal")
-                        .HasColumnType("boolean")
-                        .HasColumnName("show_on_personal");
 
                     b.Property<int>("SortOrder")
                         .HasColumnType("integer")
@@ -461,6 +670,154 @@ namespace FrostWoodTech.API.Migrations
                     b.HasIndex("PricingPlanId");
 
                     b.ToTable("pricing_plan_features", (string)null);
+                });
+
+            modelBuilder.Entity("FrostWoodTech.API.Entities.Product", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("AgencySortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("agency_sort_order");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<bool>("FeaturedOnAgency")
+                        .HasColumnType("boolean")
+                        .HasColumnName("featured_on_agency");
+
+                    b.Property<bool>("FeaturedOnPersonal")
+                        .HasColumnType("boolean")
+                        .HasColumnName("featured_on_personal");
+
+                    b.Property<bool>("IsDeleted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_deleted");
+
+                    b.Property<bool>("IsPublished")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_published");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<int>("PersonalSortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("personal_sort_order");
+
+                    b.Property<string>("PriceDetails")
+                        .HasColumnType("text")
+                        .HasColumnName("price_details");
+
+                    b.Property<string>("ProductUrl")
+                        .HasColumnType("text")
+                        .HasColumnName("product_url");
+
+                    b.Property<DateTimeOffset?>("PublishedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("published_at");
+
+                    b.Property<string>("SeoDescription")
+                        .HasColumnType("text")
+                        .HasColumnName("seo_description");
+
+                    b.Property<string>("SeoTitle")
+                        .HasColumnType("text")
+                        .HasColumnName("seo_title");
+
+                    b.Property<bool>("ShowOnAgency")
+                        .HasColumnType("boolean")
+                        .HasColumnName("show_on_agency");
+
+                    b.Property<bool>("ShowOnPersonal")
+                        .HasColumnType("boolean")
+                        .HasColumnName("show_on_personal");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("slug");
+
+                    b.Property<string>("Tagline")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("tagline");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Slug")
+                        .IsUnique();
+
+                    b.ToTable("products", (string)null);
+                });
+
+            modelBuilder.Entity("FrostWoodTech.API.Entities.ProductImage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AltText")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("alt_text");
+
+                    b.Property<int>("Height")
+                        .HasColumnType("integer")
+                        .HasColumnName("height");
+
+                    b.Property<bool>("IsPrimary")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_primary");
+
+                    b.Property<string>("ObjectKey")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("object_key");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("product_id");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("url");
+
+                    b.Property<int>("Width")
+                        .HasColumnType("integer")
+                        .HasColumnName("width");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProductId")
+                        .IsUnique()
+                        .HasFilter("is_primary");
+
+                    b.ToTable("product_images", (string)null);
                 });
 
             modelBuilder.Entity("FrostWoodTech.API.Entities.Project", b =>
@@ -768,41 +1125,6 @@ namespace FrostWoodTech.API.Migrations
                         });
                 });
 
-            modelBuilder.Entity("FrostWoodTech.API.Entities.ServiceFeature", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<string>("Description")
-                        .HasColumnType("text")
-                        .HasColumnName("description");
-
-                    b.Property<string>("IconName")
-                        .HasColumnType("text")
-                        .HasColumnName("icon_name");
-
-                    b.Property<Guid>("ServiceId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("service_id");
-
-                    b.Property<int>("SortOrder")
-                        .HasColumnType("integer")
-                        .HasColumnName("sort_order");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("title");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ServiceId");
-
-                    b.ToTable("service_features", (string)null);
-                });
-
             modelBuilder.Entity("FrostWoodTech.API.Entities.ServiceOffering", b =>
                 {
                     b.Property<Guid>("Id")
@@ -814,14 +1136,41 @@ namespace FrostWoodTech.API.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("agency_sort_order");
 
+                    b.Property<string>("Capabilities")
+                        .HasColumnType("text")
+                        .HasColumnName("capabilities");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
-                    b.Property<string>("Description")
-                        .IsRequired()
+                    b.Property<string>("Deck")
                         .HasColumnType("text")
-                        .HasColumnName("description");
+                        .HasColumnName("deck");
+
+                    b.Property<string>("DepthImageAltText")
+                        .HasColumnType("text")
+                        .HasColumnName("depth_image_alt_text");
+
+                    b.Property<int?>("DepthImageHeight")
+                        .HasColumnType("integer")
+                        .HasColumnName("depth_image_height");
+
+                    b.Property<string>("DepthImageObjectKey")
+                        .HasColumnType("text")
+                        .HasColumnName("depth_image_object_key");
+
+                    b.Property<string>("DepthImageUrl")
+                        .HasColumnType("text")
+                        .HasColumnName("depth_image_url");
+
+                    b.Property<int?>("DepthImageWidth")
+                        .HasColumnType("integer")
+                        .HasColumnName("depth_image_width");
+
+                    b.Property<string>("Eyebrow")
+                        .HasColumnType("text")
+                        .HasColumnName("eyebrow");
 
                     b.Property<bool>("FeaturedOnAgency")
                         .HasColumnType("boolean")
@@ -831,17 +1180,53 @@ namespace FrostWoodTech.API.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("featured_on_personal");
 
-                    b.Property<string>("HeroImageId")
+                    b.Property<string>("Headline")
                         .HasColumnType("text")
-                        .HasColumnName("hero_image_id");
+                        .HasColumnName("headline");
 
-                    b.Property<string>("IconName")
+                    b.Property<string>("HeroImageAltText")
                         .HasColumnType("text")
-                        .HasColumnName("icon_name");
+                        .HasColumnName("hero_image_alt_text");
+
+                    b.Property<int?>("HeroImageHeight")
+                        .HasColumnType("integer")
+                        .HasColumnName("hero_image_height");
+
+                    b.Property<string>("HeroImageObjectKey")
+                        .HasColumnType("text")
+                        .HasColumnName("hero_image_object_key");
+
+                    b.Property<string>("HeroImageUrl")
+                        .HasColumnType("text")
+                        .HasColumnName("hero_image_url");
+
+                    b.Property<int?>("HeroImageWidth")
+                        .HasColumnType("integer")
+                        .HasColumnName("hero_image_width");
+
+                    b.Property<string>("IconAltText")
+                        .HasColumnType("text")
+                        .HasColumnName("icon_alt_text");
+
+                    b.Property<int?>("IconHeight")
+                        .HasColumnType("integer")
+                        .HasColumnName("icon_height");
 
                     b.Property<string>("IconObjectKey")
                         .HasColumnType("text")
                         .HasColumnName("icon_object_key");
+
+                    b.Property<string>("IconUrl")
+                        .HasColumnType("text")
+                        .HasColumnName("icon_url");
+
+                    b.Property<int?>("IconWidth")
+                        .HasColumnType("integer")
+                        .HasColumnName("icon_width");
+
+                    b.Property<string>("InDepth")
+                        .HasColumnType("text")
+                        .HasColumnName("in_depth");
 
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
@@ -858,13 +1243,41 @@ namespace FrostWoodTech.API.Migrations
                         .HasColumnType("text")
                         .HasColumnName("name");
 
+                    b.Property<string>("Outcomes")
+                        .HasColumnType("text")
+                        .HasColumnName("outcomes");
+
                     b.Property<int>("PersonalSortOrder")
                         .HasColumnType("integer")
                         .HasColumnName("personal_sort_order");
 
+                    b.Property<string>("PrimaryCtaLabel")
+                        .HasColumnType("text")
+                        .HasColumnName("primary_cta_label");
+
+                    b.Property<string>("PrimaryCtaUrl")
+                        .HasColumnType("text")
+                        .HasColumnName("primary_cta_url");
+
                     b.Property<DateTimeOffset?>("PublishedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("published_at");
+
+                    b.Property<string>("SecondaryCtaLabel")
+                        .HasColumnType("text")
+                        .HasColumnName("secondary_cta_label");
+
+                    b.Property<string>("SecondaryCtaUrl")
+                        .HasColumnType("text")
+                        .HasColumnName("secondary_cta_url");
+
+                    b.Property<string>("SeoDescription")
+                        .HasColumnType("text")
+                        .HasColumnName("seo_description");
+
+                    b.Property<string>("SeoTitle")
+                        .HasColumnType("text")
+                        .HasColumnName("seo_title");
 
                     b.Property<string>("ShortDescription")
                         .IsRequired()
@@ -888,12 +1301,33 @@ namespace FrostWoodTech.API.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
 
+                    b.Property<string>("WhoThisIsFor")
+                        .HasColumnType("text")
+                        .HasColumnName("who_this_is_for");
+
                     b.HasKey("Id");
 
                     b.HasIndex("Slug")
                         .IsUnique();
 
                     b.ToTable("services", (string)null);
+                });
+
+            modelBuilder.Entity("FrostWoodTech.API.Entities.ServiceProject", b =>
+                {
+                    b.Property<Guid>("ServiceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("service_id");
+
+                    b.Property<Guid>("ProjectId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("project_id");
+
+                    b.HasKey("ServiceId", "ProjectId");
+
+                    b.HasIndex("ProjectId");
+
+                    b.ToTable("service_projects", (string)null);
                 });
 
             modelBuilder.Entity("FrostWoodTech.API.Entities.Tag", b =>
@@ -903,21 +1337,9 @@ namespace FrostWoodTech.API.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<string>("ColorHex")
-                        .HasColumnType("text")
-                        .HasColumnName("color_hex");
-
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
-
-                    b.Property<string>("IconObjectKey")
-                        .HasColumnType("text")
-                        .HasColumnName("icon_object_key");
-
-                    b.Property<string>("IconUrl")
-                        .HasColumnType("text")
-                        .HasColumnName("icon_url");
 
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
@@ -938,10 +1360,6 @@ namespace FrostWoodTech.API.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("slug");
-
-                    b.Property<int>("SortOrder")
-                        .HasColumnType("integer")
-                        .HasColumnName("sort_order");
 
                     b.Property<int?>("TechnologyCategory")
                         .HasColumnType("tech_category")
@@ -1074,6 +1492,23 @@ namespace FrostWoodTech.API.Migrations
                     b.Navigation("Tag");
                 });
 
+            modelBuilder.Entity("FrostWoodTech.API.Entities.ContactSubmission", b =>
+                {
+                    b.HasOne("FrostWoodTech.API.Entities.User", "RepliedByUser")
+                        .WithMany()
+                        .HasForeignKey("RepliedBy")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("FrostWoodTech.API.Entities.ServiceOffering", "Service")
+                        .WithMany()
+                        .HasForeignKey("ServiceId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("RepliedByUser");
+
+                    b.Navigation("Service");
+                });
+
             modelBuilder.Entity("FrostWoodTech.API.Entities.EmailVerificationToken", b =>
                 {
                     b.HasOne("FrostWoodTech.API.Entities.User", "User")
@@ -1083,6 +1518,16 @@ namespace FrostWoodTech.API.Migrations
                         .IsRequired();
 
                     b.Navigation("User");
+                });
+
+            modelBuilder.Entity("FrostWoodTech.API.Entities.Faq", b =>
+                {
+                    b.HasOne("FrostWoodTech.API.Entities.ServiceOffering", "Service")
+                        .WithMany("Faqs")
+                        .HasForeignKey("ServiceId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Service");
                 });
 
             modelBuilder.Entity("FrostWoodTech.API.Entities.PasswordToken", b =>
@@ -1115,6 +1560,17 @@ namespace FrostWoodTech.API.Migrations
                         .IsRequired();
 
                     b.Navigation("PricingPlan");
+                });
+
+            modelBuilder.Entity("FrostWoodTech.API.Entities.ProductImage", b =>
+                {
+                    b.HasOne("FrostWoodTech.API.Entities.Product", "Product")
+                        .WithMany("Images")
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Product");
                 });
 
             modelBuilder.Entity("FrostWoodTech.API.Entities.ProjectImage", b =>
@@ -1158,13 +1614,21 @@ namespace FrostWoodTech.API.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("FrostWoodTech.API.Entities.ServiceFeature", b =>
+            modelBuilder.Entity("FrostWoodTech.API.Entities.ServiceProject", b =>
                 {
+                    b.HasOne("FrostWoodTech.API.Entities.Project", "Project")
+                        .WithMany("ServiceProjects")
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("FrostWoodTech.API.Entities.ServiceOffering", "Service")
-                        .WithMany("Features")
+                        .WithMany("ServiceProjects")
                         .HasForeignKey("ServiceId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Project");
 
                     b.Navigation("Service");
                 });
@@ -1189,18 +1653,27 @@ namespace FrostWoodTech.API.Migrations
                     b.Navigation("Features");
                 });
 
+            modelBuilder.Entity("FrostWoodTech.API.Entities.Product", b =>
+                {
+                    b.Navigation("Images");
+                });
+
             modelBuilder.Entity("FrostWoodTech.API.Entities.Project", b =>
                 {
                     b.Navigation("Images");
 
                     b.Navigation("ProjectTags");
+
+                    b.Navigation("ServiceProjects");
                 });
 
             modelBuilder.Entity("FrostWoodTech.API.Entities.ServiceOffering", b =>
                 {
-                    b.Navigation("Features");
+                    b.Navigation("Faqs");
 
                     b.Navigation("PricingPlans");
+
+                    b.Navigation("ServiceProjects");
                 });
 
             modelBuilder.Entity("FrostWoodTech.API.Entities.Tag", b =>
