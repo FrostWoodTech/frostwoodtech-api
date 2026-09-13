@@ -4,20 +4,14 @@ using FrostWoodTech.API.DTOs.Public;
 
 namespace FrostWoodTech.API.Interfaces;
 
-/// <summary>
-/// Pricing plans and their feature rows. Per-service tiers and combo packs share one table, so
-/// they share this service too — the public surface splits them into two explicit endpoints.
-/// </summary>
 public interface IPricingService
 {
-    /// <summary>Combo packs: the plans with no owning service.</summary>
     Task<PagedResult<PricingPlanResponse>> GetPublicComboPlansAsync(
         bool? featured,
         int page,
         int pageSize,
         CancellationToken cancellationToken);
 
-    /// <summary>The tiers of one service.</summary>
     Task<PagedResult<PricingPlanResponse>> GetPublicPlansForServiceAsync(
         Guid serviceId,
         int page,

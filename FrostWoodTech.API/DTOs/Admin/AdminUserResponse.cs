@@ -2,7 +2,7 @@ using FrostWoodTech.API.Enums;
 
 namespace FrostWoodTech.API.DTOs.Admin;
 
-/// <summary>Never carries <c>password_hash</c> — this is the only shape a user is returned in.</summary>
+/// <summary>The only shape a user is returned in; never carries the password hash.</summary>
 public sealed class AdminUserResponse
 {
     public required Guid Id { get; init; }
@@ -23,7 +23,6 @@ public sealed class AdminUserResponse
 
     public DateTimeOffset? EmailVerifiedAt { get; init; }
 
-    /// <summary>Set only on a rejected account, so the admin SPA can show why.</summary>
     public string? RejectionReason { get; init; }
 
     public required DateTimeOffset CreatedAt { get; init; }

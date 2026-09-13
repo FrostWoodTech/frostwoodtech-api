@@ -19,8 +19,6 @@ public class SetPricingPlanPublished
         _pricing = pricing;
     }
 
-    /// <summary>Flips the published flag alone, without resubmitting the whole form. Pricing
-    /// plans have no published_at, so nothing is stamped.</summary>
     [Function("SetPricingPlanPublished")]
     public async Task<IActionResult> Run(
         [HttpTrigger(

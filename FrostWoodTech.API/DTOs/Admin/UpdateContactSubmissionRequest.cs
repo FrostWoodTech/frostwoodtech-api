@@ -2,10 +2,7 @@ using FrostWoodTech.API.Enums;
 
 namespace FrostWoodTech.API.DTOs.Admin;
 
-/// <summary>
-/// Triage only — an admin may change status and leave internal notes, never rewrite what the
-/// visitor actually submitted.
-/// </summary>
+/// <summary>Triage only: status and notes. The visitor's submission is never editable.</summary>
 public sealed class UpdateContactSubmissionRequest
 {
     public ContactSubmissionStatus Status { get; set; }

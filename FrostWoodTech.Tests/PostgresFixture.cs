@@ -9,11 +9,7 @@ using Testcontainers.PostgreSql;
 
 namespace FrostWoodTech.Tests;
 
-/// <summary>
-/// One throwaway Postgres container for the whole test run, with the real migrations applied.
-/// The schema uses native enums, citext and a partial unique index, so the in-memory provider
-/// would happily pass tests for behaviour that is actually broken.
-/// </summary>
+/// <summary>One Postgres container per run with real migrations; the in-memory provider can't model enums, citext or partial indexes.</summary>
 public sealed class PostgresFixture : IAsyncLifetime
 {
     private readonly PostgreSqlContainer _container = new PostgreSqlBuilder("postgres:16-alpine")

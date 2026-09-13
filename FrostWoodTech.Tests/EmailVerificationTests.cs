@@ -1,7 +1,5 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
-using Microsoft.IdentityModel.Tokens;
 
 using FrostWoodTech.API.Auth;
 using FrostWoodTech.API.Common;
@@ -115,11 +113,7 @@ public class EmailVerificationTests
     [Fact]
     public async Task Verifying_invalidates_any_other_unused_token_for_the_same_user()
     {
-        // Each step below opens its own context/service, matching how a real request gets its
-        // own scoped DbContext — reusing one context across register/resend/verify would keep
-        // RegisterAsync's tracked token entity alive in memory, hiding the later resend's
-        // ExecuteUpdateAsync (which writes straight to the database, bypassing the tracker) and
-        // making a used token look untouched to a query that resolves back to that stale instance.
+        // Fresh context per step, like real requests: a shared tracker would hide ExecuteUpdate changes.
         string email;
         await using (var db = _fixture.CreateContext())
         {
@@ -141,8 +135,6 @@ public class EmailVerificationTests
             var verify = await NewService(db, out _)
                 .VerifyEmailAsync(new VerifyEmailRequest { Token = firstRawToken }, CancellationToken.None);
 
-            // The resend already invalidated the first token, so re-using it must fail as "used",
-            // not succeed a second time.
             Assert.False(verify.IsSuccess);
             Assert.Equal("verification_token_already_used", verify.Error!.Code);
         }
@@ -203,8 +195,7 @@ public class EmailVerificationTests
         await service.RegisterAsync(NewRegistration(out var email), CancellationToken.None);
         emails.Reset();
 
-        // The registration itself already issued one token, so two more resends reach the limit
-        // of three tokens within the window.
+        // Registration already issued one token, so two resends hit the limit of three.
         await service.ResendVerificationAsync(new ResendVerificationRequest { Email = email }, CancellationToken.None);
         await service.ResendVerificationAsync(new ResendVerificationRequest { Email = email }, CancellationToken.None);
         Assert.Equal(2, emails.SentCount);
@@ -263,11 +254,7 @@ public class EmailVerificationTests
 
     private async Task<string> RawTokenForAsync(string email)
     {
-        // Cannot recover the raw token from its hash, so the test recreates it the same way the
-        // service does and overwrites the stored hash to match — the only way to exercise
-        // VerifyEmailAsync without reaching into private service state. A fresh, short-lived
-        // context (matching how a real request gets its own DbContext) avoids reading back a
-        // stale entry from another context's identity map.
+        // Raw tokens can't be recovered from hashes, so mint one and overwrite the stored hash.
         await using var db = _fixture.CreateContext();
 
         var token = await db.EmailVerificationTokens.Include(t => t.User)
@@ -287,53 +274,9 @@ public class EmailVerificationTests
     {
         emails = new FakeEmailService();
 
-        return new UserService(
+        return TestServices.CreateUserService(
             db,
-            new FakeJwtTokenService(),
-            new FakeGoogleTokenValidator(),
-            new FakeLoginRateLimiter(),
-            new CurrentUser { UserId = Guid.NewGuid(), Role = superAdmin ? UserRole.SuperAdmin : UserRole.Admin },
-            Options.Create(new JwtOptions()),
             emails,
-            Options.Create(new EmailOptions { BaseUrl = "https://admin.frostwoodtech.test" }),
-            NullLogger<UserService>.Instance);
-    }
-
-    private sealed class FakeEmailService : IEmailService
-    {
-        public int SentCount { get; private set; }
-
-        public void Reset() => SentCount = 0;
-
-        public Task<ServiceResult<EmailSendResult>> SendAsync(EmailMessage message, CancellationToken cancellationToken)
-        {
-            SentCount++;
-            return Task.FromResult(ServiceResult<EmailSendResult>.Success(new EmailSendResult { Provider = "fake" }));
-        }
-    }
-
-    private sealed class FakeJwtTokenService : IJwtTokenService
-    {
-        public (string Token, DateTimeOffset ExpiresAt) CreateAccessToken(User user) =>
-            ("fake-token", DateTimeOffset.UtcNow.AddMinutes(15));
-
-        public TokenValidationParameters CreateValidationParameters() => new();
-    }
-
-    private sealed class FakeGoogleTokenValidator : IGoogleTokenValidator
-    {
-        public Task<ServiceResult<GoogleIdentity>> ValidateAsync(string idToken, CancellationToken cancellationToken) =>
-            throw new NotSupportedException("Not exercised by these tests.");
-    }
-
-    private sealed class FakeLoginRateLimiter : ILoginRateLimiter
-    {
-        public Task<bool> IsBlockedAsync(string email, string? ipAddress, AuthAttemptAction action, CancellationToken cancellationToken) =>
-            Task.FromResult(false);
-
-        public Task RecordAttemptAsync(string email, string? ipAddress, AuthAttemptAction action, CancellationToken cancellationToken) =>
-            Task.CompletedTask;
-
-        public Task ClearAsync(string email, AuthAttemptAction action, CancellationToken cancellationToken) => Task.CompletedTask;
+            new CurrentUser { UserId = Guid.NewGuid(), Role = superAdmin ? UserRole.SuperAdmin : UserRole.Admin });
     }
 }

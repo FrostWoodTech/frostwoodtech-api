@@ -16,7 +16,6 @@ public class DeleteContactSubmission
         _contactService = contactService;
     }
 
-    /// <summary>Soft delete — hard delete stays a super-admin-only concern.</summary>
     [Function("DeleteContactSubmission")]
     public async Task<IActionResult> Run(
         [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "cms/admin/contact-submissions/{id:guid}")] HttpRequest req,

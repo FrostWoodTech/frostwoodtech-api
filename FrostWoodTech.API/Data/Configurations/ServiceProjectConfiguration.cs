@@ -20,7 +20,6 @@ public class ServiceProjectConfiguration : IEntityTypeConfiguration<ServiceProje
             .HasForeignKey(sp => sp.ServiceId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        // Restrict, not cascade: a project still linked to a service must not be removable.
         builder.HasOne(sp => sp.Project)
             .WithMany(p => p.ServiceProjects)
             .HasForeignKey(sp => sp.ProjectId)

@@ -9,15 +9,11 @@ using FrostWoodTech.API.Interfaces;
 
 namespace FrostWoodTech.API.Auth;
 
-/// <summary>
-/// Verifies Google ID tokens against Google's published signing keys. Registered as a singleton
-/// so the JWKS is fetched once and cached rather than re-fetched on every sign-in.
-/// </summary>
+/// <summary>Singleton so Google's signing keys are cached between sign-ins.</summary>
 public sealed class GoogleTokenValidator : IGoogleTokenValidator
 {
     private const string Discovery = "https://accounts.google.com/.well-known/openid-configuration";
 
-    /// <summary>Google mints tokens under both spellings and both are legitimate.</summary>
     private static readonly string[] ValidIssuers = ["https://accounts.google.com", "accounts.google.com"];
 
     private readonly IConfigurationManager<OpenIdConnectConfiguration> _configurationManager;
@@ -39,7 +35,7 @@ public sealed class GoogleTokenValidator : IGoogleTokenValidator
     {
         if (string.IsNullOrWhiteSpace(_options.ClientId))
         {
-            // A misconfigured server must not fall back to accepting anything.
+            // Misconfigured: refuse rather than accept anything.
             return ServiceResult<GoogleIdentity>.Forbidden(
                 "google_not_configured", "Google sign-in is not configured on this server.");
         }
@@ -85,7 +81,7 @@ public sealed class GoogleTokenValidator : IGoogleTokenValidator
         return ServiceResult<GoogleIdentity>.Success(new GoogleIdentity(
             subject,
             email.ToLowerInvariant(),
-            // Google sends this as a bool, but it has historically been a string in some flows.
+            // Sometimes sent as a string rather than a bool.
             EmailVerified: bool.TryParse(Claim(result.Claims, "email_verified"), out var verified) && verified,
             FirstName: Claim(result.Claims, "given_name"),
             LastName: Claim(result.Claims, "family_name"),

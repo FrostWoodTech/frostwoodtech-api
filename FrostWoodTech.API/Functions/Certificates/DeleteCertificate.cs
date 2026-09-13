@@ -16,7 +16,6 @@ public class DeleteCertificate
         _certificateService = certificateService;
     }
 
-    /// <summary>Soft delete — hard delete stays a super-admin-only concern.</summary>
     [Function("DeleteCertificate")]
     public async Task<IActionResult> Run(
         [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "cms/admin/certificates/{id:guid}")] HttpRequest req,

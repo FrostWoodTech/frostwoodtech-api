@@ -25,12 +25,10 @@ public class FaqService : IFaqService
         Site site,
         CancellationToken cancellationToken)
     {
-        // is_deleted comes from the global query filter; is_published, the site flag, and being
-        // unscoped (service_id is null) are not optional — a service's own FAQs render only on
-        // that service's page, via ServiceCatalogService, not in this shared list.
+        // Public list is global FAQs only; service-scoped FAQs render on their service page.
         var query = ForSite(_db.Faqs.AsNoTracking().Where(f => f.IsPublished && f.ServiceId == null), site);
 
-        // Not paged: an FAQ page renders the whole list, in CMS sort order.
+        // Not paged: the FAQ page renders the whole list.
         return await query
             .OrderBy(f => f.SortOrder)
             .Select(PublicProjection)
@@ -54,9 +52,7 @@ public class FaqService : IFaqService
             query = ForSite(query, site.Value);
         }
 
-        // Same pairing the admin pricing list uses for its analogous `serviceId`/`comboOnly`
-        // split — a scope filter and "explicitly global" are different questions, so both exist
-        // rather than overloading a missing serviceId to mean "global".
+        // serviceId and globalOnly are separate filters; a missing serviceId never means "global".
         if (serviceId is not null)
         {
             query = query.Where(f => f.ServiceId == serviceId);
@@ -125,8 +121,7 @@ public class FaqService : IFaqService
             return ServiceResult<AdminFaqResponse>.Validation($"Unknown service id: {request.ServiceId}.");
         }
 
-        // Sort order is never taken from the client — it's only ever changed via ReorderAsync,
-        // so a new FAQ is appended to the end of its own scope's order, not the whole table's.
+        // New FAQs go to the end of their own scope's order.
         var nextSortOrder = await _db.Faqs
             .Where(f => f.ServiceId == request.ServiceId)
             .MaxAsync(f => (int?)f.SortOrder, cancellationToken) + 1 ?? 0;
@@ -146,8 +141,7 @@ public class FaqService : IFaqService
         _db.Faqs.Add(faq);
         await _db.SaveChangesAsync(cancellationToken);
 
-        // Re-read rather than project the in-memory entity: Service is a link added by id, so its
-        // navigation is not loaded yet and ToAdminResponse would report a null ServiceName.
+        // Re-read: the Service navigation isn't loaded for a link added by id.
         return await GetByIdAsync(faq.Id, cancellationToken);
     }
 
@@ -176,9 +170,7 @@ public class FaqService : IFaqService
             return ServiceResult<AdminFaqResponse>.Validation($"Unknown service id: {request.ServiceId}.");
         }
 
-        // Sort order is untouched here — it only changes via ReorderAsync. Re-scoping an FAQ
-        // (moving it between global and a service, or between services) keeps its current
-        // sort_order rather than renumbering — the reorder screen for its new scope fixes that up.
+        // Re-scoping keeps sort_order; the reorder screen for the new scope fixes it.
         faq.ServiceId = request.ServiceId;
         faq.Question = question!;
         faq.Answer = answer!;
@@ -188,7 +180,6 @@ public class FaqService : IFaqService
 
         await _db.SaveChangesAsync(cancellationToken);
 
-        // Same reason as CreateAsync: ServiceId may have just changed and Service isn't loaded.
         return await GetByIdAsync(faq.Id, cancellationToken);
     }
 
@@ -247,7 +238,6 @@ public class FaqService : IFaqService
             ? query.Where(f => f.ShowOnAgency)
             : query.Where(f => f.ShowOnPersonal);
 
-    /// <summary>Null when the FAQ is valid, otherwise the message to hand back.</summary>
     private static string? Validate(string? question, string? answer, CreateFaqRequest request)
     {
         if (question is null)
@@ -268,7 +258,6 @@ public class FaqService : IFaqService
 
     private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
-    /// <summary>Projected inside the query so the SQL stays narrow.</summary>
     private static readonly Expression<Func<Faq, FaqResponse>> PublicProjection = f => new FaqResponse
     {
         Id = f.Id,

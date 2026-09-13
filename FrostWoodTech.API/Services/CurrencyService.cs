@@ -13,10 +13,7 @@ namespace FrostWoodTech.API.Services;
 
 public class CurrencyService : ICurrencyService
 {
-    /// <summary>
-    /// The base every rate is expressed against. Its own rate is pinned to 1 — a base that could
-    /// be re-based would silently rescale every converted price on both public sites.
-    /// </summary>
+    // Base currency; its rate is pinned to 1 so prices never silently rescale.
     public const string BaseCurrencyCode = "USD";
 
     private readonly FrostWoodTechDbContext _db;
@@ -32,8 +29,7 @@ public class CurrencyService : ICurrencyService
         CancellationToken cancellationToken) =>
         await _db.Currencies
             .AsNoTracking()
-            // Hide a currency with neither an override nor a fetched rate rather than show a
-            // fabricated number — see Currency.EffectiveRateFromUsd.
+            // Hide currencies with no manual or live rate rather than invent one.
             .Where(c => c.IsActive && (c.ManualRateFromUsd ?? c.LiveRateFromUsd) != null)
             .OrderBy(c => c.Code)
             .Select(PublicProjection)
@@ -147,7 +143,7 @@ public class CurrencyService : ICurrencyService
             return ServiceResult<AdminCurrencyResponse>.Validation(validationError);
         }
 
-        // Renaming the base away would leave the rates expressed against nothing.
+        // Renaming the base away would leave every rate relative to nothing.
         if (IsBase(currency.Code) && !IsBase(code!))
         {
             return ServiceResult<AdminCurrencyResponse>.Conflict(
@@ -186,8 +182,7 @@ public class CurrencyService : ICurrencyService
                 $"{BaseCurrencyCode} is the base every rate is expressed against and cannot be deleted.");
         }
 
-        // Counted through PricingPlans so the global soft-delete filter applies — a currency held
-        // only by deleted plans is free to go.
+        // Counted through PricingPlans so soft-deleted plans don't block deletion.
         var planCount = await _db.PricingPlans
             .CountAsync(p => p.Currency == currency.Code, cancellationToken);
 
@@ -205,10 +200,7 @@ public class CurrencyService : ICurrencyService
         return ServiceResult<bool>.Success(true);
     }
 
-    /// <summary>
-    /// One call to the provider updates every currency's live rate at once. A code the provider
-    /// doesn't recognise (a typo, something exotic) is simply left with whatever it already had.
-    /// </summary>
+    // Codes the provider doesn't know keep their existing live rate.
     public async Task<ServiceResult<RefreshCurrencyRatesResponse>> RefreshLiveRatesAsync(
         CancellationToken cancellationToken)
     {
@@ -244,7 +236,6 @@ public class CurrencyService : ICurrencyService
         });
     }
 
-    /// <summary>Null when the currency is valid, otherwise the message to hand back.</summary>
     private static string? Validate(
         string? code,
         string? name,
@@ -291,7 +282,7 @@ public class CurrencyService : ICurrencyService
     private static bool IsBase(string code) =>
         string.Equals(code, BaseCurrencyCode, StringComparison.Ordinal);
 
-    /// <summary>Upper-cased and trimmed, or null when it is not exactly 3 ASCII letters.</summary>
+    // Upper-cased, or null unless exactly 3 ASCII letters.
     private static string? NormalizeCode(string? value)
     {
         var trimmed = Blank(value)?.ToUpperInvariant();
@@ -300,7 +291,7 @@ public class CurrencyService : ICurrencyService
     }
 
     private Task<bool> CodeExistsAsync(string code, Guid? excludingId, CancellationToken cancellationToken) =>
-        _db.Currencies.AnyAsync(
+        _db.Currencies.IgnoreQueryFilters().AnyAsync(
             c => c.Code == code && (excludingId == null || c.Id != excludingId),
             cancellationToken);
 
@@ -318,11 +309,9 @@ public class CurrencyService : ICurrencyService
             Code = c.Code,
             Name = c.Name,
             Symbol = c.Symbol,
-            // Never null here — the query above only selects rows where one of the two exists.
             RateFromUsd = (c.ManualRateFromUsd ?? c.LiveRateFromUsd)!.Value
         };
 
-    /// <summary>Projected inside the query so the SQL stays narrow.</summary>
     private static readonly Expression<Func<Currency, AdminCurrencyResponse>> AdminProjection =
         c => new AdminCurrencyResponse
         {
@@ -339,6 +328,5 @@ public class CurrencyService : ICurrencyService
             UpdatedAt = c.UpdatedAt
         };
 
-    /// <summary>The same shape for an entity already in memory after a write.</summary>
     private static readonly Func<Currency, AdminCurrencyResponse> ToAdminResponse = AdminProjection.Compile();
 }

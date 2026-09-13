@@ -6,7 +6,7 @@ public sealed class CreateTagRequest
 {
     public string? Name { get; set; }
 
-    /// <summary>Optional — generated from the name when omitted.</summary>
+    /// <summary>Generated from the name when omitted.</summary>
     public string? Slug { get; set; }
 
     public bool IsTechnology { get; set; }

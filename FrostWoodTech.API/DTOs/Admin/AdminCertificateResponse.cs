@@ -1,6 +1,5 @@
 namespace FrostWoodTech.API.DTOs.Admin;
 
-/// <summary>Admin view: draft state and audit metadata included.</summary>
 public sealed class AdminCertificateResponse
 {
     public required Guid Id { get; init; }
@@ -29,7 +28,6 @@ public sealed class AdminCertificateResponse
 
     public required bool Featured { get; init; }
 
-    /// <summary>Drag-and-drop order — never a typed number on create/update.</summary>
     public required int SortOrder { get; init; }
 
     public required DateTimeOffset CreatedAt { get; init; }

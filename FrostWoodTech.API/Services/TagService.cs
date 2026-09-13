@@ -26,7 +26,7 @@ public class TagService : ITagService
         TechCategory? category,
         CancellationToken cancellationToken)
     {
-        // Not paged: tags are a small lookup set the frontend groups client-side.
+        // Not paged: a small lookup set grouped client-side.
         return await FilterTags(_db.Tags.AsNoTracking(), isTechnology, category)
             .OrderBy(t => t.Name)
             .Select(t => new TagResponse
@@ -98,6 +98,11 @@ public class TagService : ITagService
         }
 
         var slug = ResolveSlug(request.Slug, name!);
+        if (slug.Length == 0)
+        {
+            return ServiceResult<AdminTagResponse>.Validation("A slug could not be generated; provide one with letters or digits.");
+        }
+
         if (await SlugExistsAsync(slug, excludingId: null, cancellationToken))
         {
             return SlugTaken(slug);
@@ -139,6 +144,11 @@ public class TagService : ITagService
         }
 
         var slug = ResolveSlug(request.Slug, name!);
+        if (slug.Length == 0)
+        {
+            return ServiceResult<AdminTagResponse>.Validation("A slug could not be generated; provide one with letters or digits.");
+        }
+
         if (await SlugExistsAsync(slug, excludingId: id, cancellationToken))
         {
             return SlugTaken(slug);
@@ -162,8 +172,7 @@ public class TagService : ITagService
             return ServiceResult<bool>.NotFound("not_found", $"No tag with id {id}.");
         }
 
-        // Counted through Projects/Articles so the global soft-delete filter applies — a tag held
-        // only by deleted content is free to go.
+        // Counted through Projects/Articles so soft-deleted content doesn't block deletion.
         var projectCount = await _db.Projects
             .CountAsync(p => p.ProjectTags.Any(pt => pt.TagId == id), cancellationToken);
 
@@ -199,7 +208,6 @@ public class TagService : ITagService
         return query;
     }
 
-    /// <summary>Null when the tag is valid, otherwise the message to hand back.</summary>
     private static string? Validate(string? name, bool isTechnology, TechCategory? technologyCategory)
     {
         if (string.IsNullOrWhiteSpace(name))
@@ -226,7 +234,7 @@ public class TagService : ITagService
         SlugGenerator.Generate(string.IsNullOrWhiteSpace(requestedSlug) ? name : requestedSlug);
 
     private Task<bool> SlugExistsAsync(string slug, Guid? excludingId, CancellationToken cancellationToken) =>
-        _db.Tags.AnyAsync(t => t.Slug == slug && (excludingId == null || t.Id != excludingId), cancellationToken);
+        _db.Tags.IgnoreQueryFilters().AnyAsync(t => t.Slug == slug && (excludingId == null || t.Id != excludingId), cancellationToken);
 
     private static ServiceResult<AdminTagResponse> NotFound(Guid id) =>
         ServiceResult<AdminTagResponse>.NotFound("not_found", $"No tag with id {id}.");
@@ -234,7 +242,6 @@ public class TagService : ITagService
     private static ServiceResult<AdminTagResponse> SlugTaken(string slug) =>
         ServiceResult<AdminTagResponse>.Conflict("slug_taken", $"Slug '{slug}' is already in use.");
 
-    /// <summary>Projected inside the query so the SQL stays narrow.</summary>
     private static readonly Expression<Func<Tag, AdminTagResponse>> AdminProjection = tag => new AdminTagResponse
     {
         Id = tag.Id,
@@ -246,6 +253,5 @@ public class TagService : ITagService
         UpdatedAt = tag.UpdatedAt
     };
 
-    /// <summary>The same shape for an entity already in memory after a write.</summary>
     private static readonly Func<Tag, AdminTagResponse> ToAdminResponse = AdminProjection.Compile();
 }

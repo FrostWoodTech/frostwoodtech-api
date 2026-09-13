@@ -1,6 +1,5 @@
 namespace FrostWoodTech.API.Enums;
 
-/// <summary>Display labels for <see cref="TechCategory"/> — the wire value stays snake_case.</summary>
 public static class TechCategoryLabels
 {
     public static string For(TechCategory category) => category switch

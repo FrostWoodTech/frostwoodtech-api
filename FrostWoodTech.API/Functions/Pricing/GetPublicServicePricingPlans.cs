@@ -7,7 +7,6 @@ using FrostWoodTech.API.Interfaces;
 
 namespace FrostWoodTech.API.Functions.Pricing;
 
-/// <summary>A service page's tiers — Starter, Growth, Pro.</summary>
 public class GetPublicServicePricingPlans
 {
     private readonly IPricingService _pricing;

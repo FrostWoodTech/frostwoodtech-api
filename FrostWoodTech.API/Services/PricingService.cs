@@ -27,7 +27,7 @@ public class PricingService : IPricingService
         int pageSize,
         CancellationToken cancellationToken)
     {
-        // A combo pack is a plan that belongs to no single service.
+        // Combo pack = a plan with no service.
         var query = PublishedPlans().Where(p => p.ServiceId == null);
 
         if (featured is not null)
@@ -61,8 +61,7 @@ public class PricingService : IPricingService
     {
         var query = _db.PricingPlans.AsNoTracking();
 
-        // Admin defaults to everything; these narrow it as explicit filters, not an absent parameter.
-        // comboOnly wins over both if somehow sent together with tiersOnly/serviceId.
+        // Explicit filters; comboOnly wins over tiersOnly and serviceId.
         if (comboOnly)
         {
             query = query.Where(p => p.ServiceId == null);
@@ -73,7 +72,6 @@ public class PricingService : IPricingService
         }
         else if (tiersOnly)
         {
-            // Every service's tiers, regardless of which one — distinct from picking one serviceId.
             query = query.Where(p => p.ServiceId != null);
         }
 
@@ -89,7 +87,6 @@ public class PricingService : IPricingService
 
         var total = await query.CountAsync(cancellationToken);
 
-        // Drafts have no meaningful order, so the admin list is alphabetical instead.
         var items = await query
             .OrderBy(p => p.Name)
             .Skip((page - 1) * pageSize)
@@ -139,9 +136,7 @@ public class PricingService : IPricingService
             return ServiceResult<AdminPricingPlanResponse>.Validation(serviceError);
         }
 
-        // Sort order is never taken from the client — it's only ever changed via ReorderAsync,
-        // so a new plan is appended to the end of its own group's order (combo packs together,
-        // a service's tiers together), not the whole table's.
+        // New plans go to the end of their group's order (combos, or one service's tiers).
         var nextSortOrder = await _db.PricingPlans
             .Where(p => p.ServiceId == request.ServiceId)
             .MaxAsync(p => (int?)p.SortOrder, cancellationToken) + 1 ?? 0;
@@ -168,7 +163,6 @@ public class PricingService : IPricingService
         _db.PricingPlans.Add(plan);
         await _db.SaveChangesAsync(cancellationToken);
 
-        // Re-read so the response shape matches every other admin read (feature list empty here).
         return await GetByIdAsync(plan.Id, cancellationToken);
     }
 
@@ -229,7 +223,7 @@ public class PricingService : IPricingService
             return NotFound(id);
         }
 
-        // Unlike services, pricing_plans has no published_at column — there is nothing to stamp.
+        // pricing_plans has no published_at column.
         plan.IsPublished = request.IsPublished;
 
         await _db.SaveChangesAsync(cancellationToken);
@@ -245,7 +239,7 @@ public class PricingService : IPricingService
             return ServiceResult<bool>.NotFound("not_found", $"No pricing plan with id {id}.");
         }
 
-        // Soft delete: the feature rows stay put so restoring the plan keeps them.
+        // Soft delete keeps feature rows.
         plan.IsDeleted = true;
         await _db.SaveChangesAsync(cancellationToken);
 
@@ -334,7 +328,7 @@ public class PricingService : IPricingService
             return FeaturePlanNotFound(planId);
         }
 
-        // Scoped to the parent, so a feature id borrowed from another plan is a 404.
+        // Scoped to the parent plan: another plan's feature id is a 404.
         var feature = plan.Features.FirstOrDefault(f => f.Id == featureId);
         if (feature is null)
         {
@@ -377,7 +371,6 @@ public class PricingService : IPricingService
                 $"No feature with id {featureId} on pricing plan {planId}.");
         }
 
-        // Hard delete — the row carries no soft-delete flag.
         plan.Features.Remove(feature);
         _db.PricingPlanFeatures.Remove(feature);
 
@@ -429,10 +422,7 @@ public class PricingService : IPricingService
         return ServiceResult<bool>.Success(true);
     }
 
-    /// <summary>
-    /// The only entry point the public routes use: is_deleted is handled by the DbContext's
-    /// global filter, and is_published is applied here and is not optional.
-    /// </summary>
+    // Only entry point for public reads; is_published is mandatory here.
     private IQueryable<PricingPlan> PublishedPlans() =>
         _db.PricingPlans.AsNoTracking().Where(p => p.IsPublished);
 
@@ -461,7 +451,6 @@ public class PricingService : IPricingService
         };
     }
 
-    /// <summary>Null when the plan is valid, otherwise the message to hand back.</summary>
     private static string? Validate(
         string? name,
         string? description,
@@ -483,13 +472,13 @@ public class PricingService : IPricingService
             return "Currency is required.";
         }
 
-        // char(3) column — a longer value would surface as a database error, not a readable one.
+        // char(3) column: reject here instead of a database error.
         if (currency.Length != 3 || !currency.All(char.IsAsciiLetter))
         {
             return "Currency must be a 3-letter ISO 4217 code, e.g. 'LKR'.";
         }
 
-        // Null is meaningful here ("Custom / Contact us"), so only a supplied amount is checked.
+        // Null means "Custom / Contact us"; only a supplied amount is checked.
         if (request.PriceAmount < 0)
         {
             return "priceAmount cannot be negative.";
@@ -503,10 +492,7 @@ public class PricingService : IPricingService
         return null;
     }
 
-    /// <summary>
-    /// A bad service id is a validation failure, not a foreign key violation surfacing as a 500.
-    /// Null is legal and means a combo pack.
-    /// </summary>
+    // Unknown service is a validation error, not an FK 500. Null means a combo pack.
     private async Task<string?> ValidateServiceAsync(Guid? serviceId, CancellationToken cancellationToken)
     {
         if (serviceId is null)
@@ -530,7 +516,6 @@ public class PricingService : IPricingService
     private static ServiceResult<PricingPlanFeatureResponse> FeaturePlanNotFound(Guid planId) =>
         ServiceResult<PricingPlanFeatureResponse>.NotFound("not_found", $"No pricing plan with id {planId}.");
 
-    /// <summary>Trimmed, or null when the caller sent nothing meaningful.</summary>
     private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private static PricingPlanFeatureResponse ToFeatureResponse(PricingPlanFeature feature) => new()
@@ -541,10 +526,6 @@ public class PricingService : IPricingService
         SortOrder = feature.SortOrder
     };
 
-    /// <summary>
-    /// Projected inside the query, features and all, so a pricing page is one round trip rather
-    /// than one query per card.
-    /// </summary>
     private static readonly Expression<Func<PricingPlan, PricingPlanResponse>> PublicProjection = p => new PricingPlanResponse
     {
         Id = p.Id,

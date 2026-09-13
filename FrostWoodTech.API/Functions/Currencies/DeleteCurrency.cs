@@ -16,7 +16,6 @@ public class DeleteCurrency
         _currencyService = currencyService;
     }
 
-    /// <summary>Soft delete. Refused for USD, and while a pricing plan still prices in it.</summary>
     [Function("DeleteCurrency")]
     public async Task<IActionResult> Run(
         [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "cms/admin/currencies/{id:guid}")] HttpRequest req,

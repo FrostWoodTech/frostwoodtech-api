@@ -7,7 +7,6 @@ namespace FrostWoodTech.API.Interfaces;
 
 public interface ITagService
 {
-    /// <summary>Public read. Tags carry no site visibility, so there is no site filter.</summary>
     Task<IReadOnlyList<TagResponse>> GetPublicTagsAsync(
         bool? isTechnology,
         TechCategory? category,
@@ -27,6 +26,6 @@ public interface ITagService
 
     Task<ServiceResult<AdminTagResponse>> UpdateAsync(Guid id, UpdateTagRequest request, CancellationToken cancellationToken);
 
-    /// <summary>Soft delete. Refused while the tag is still attached to a project or article.</summary>
+    /// <summary>Refused with tag_in_use while a live project or article uses the tag.</summary>
     Task<ServiceResult<bool>> DeleteAsync(Guid id, CancellationToken cancellationToken);
 }

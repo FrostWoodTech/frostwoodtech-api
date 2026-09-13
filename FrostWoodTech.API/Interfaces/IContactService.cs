@@ -7,10 +7,7 @@ namespace FrostWoodTech.API.Interfaces;
 
 public interface IContactService
 {
-    /// <summary>
-    /// Anonymous public submission. Rate limited per IP; a filled honeypot lands as spam instead
-    /// of being rejected. Never public content — there is no matching public read.
-    /// </summary>
+    /// <summary>Anonymous; rate limited per IP. A filled honeypot is stored as spam, not rejected.</summary>
     Task<ServiceResult<ContactSubmissionResponse>> SubmitAsync(
         CreateContactSubmissionRequest request,
         string? ipAddress,
@@ -27,12 +24,11 @@ public interface IContactService
 
     Task<ServiceResult<AdminContactSubmissionResponse>> GetByIdAsync(Guid id, CancellationToken cancellationToken);
 
-    /// <summary>Triage only — status and admin notes. Stamps RepliedAt/RepliedBy when status moves to Replied.</summary>
+    /// <summary>Triage only. Moving to Replied stamps RepliedAt/RepliedBy.</summary>
     Task<ServiceResult<AdminContactSubmissionResponse>> UpdateAsync(
         Guid id,
         UpdateContactSubmissionRequest request,
         CancellationToken cancellationToken);
 
-    /// <summary>Soft delete.</summary>
     Task<ServiceResult<bool>> DeleteAsync(Guid id, CancellationToken cancellationToken);
 }

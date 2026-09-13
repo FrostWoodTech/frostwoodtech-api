@@ -16,10 +16,6 @@ public class DeleteProjectImage
         _projectService = projectService;
     }
 
-    /// <summary>
-    /// Hard delete — image rows have no soft-delete flag. Neon Object Storage being unreachable
-    /// leaves an orphan asset but still succeeds; the row is what the caller asked to remove.
-    /// </summary>
     [Function("DeleteProjectImage")]
     public async Task<IActionResult> Run(
         [HttpTrigger(

@@ -1,46 +1,44 @@
 # Roadmap
 
-Planned additions, **not** current state. Nothing here is implemented — don't build from this
-file unless asked. `CLAUDE.md` and `.claude/rules/` describe what the code actually does.
+Known gaps and planned additions — **not** current state. Don't build from this file unless asked;
+`CLAUDE.md` and `.claude/rules/` describe what the code does.
 
-Last reviewed: 2026-08-21.
+Last reviewed: 2026-09-13.
 
 ## Known gaps
 
-### Public contact endpoint
+### Slug change warning
 
-`.claude/rules/auth.md` mentions a public contact endpoint in its rate-limiting section, but no
-route is specified anywhere and none exists. It would need its own rate limiting — the
-`login_attempts` table and `ILoginRateLimiter` are the obvious thing to generalise, since they
-already do per-IP windowing in Postgres.
+The rules say a published entity's slug should stay stable and editors should be warned when it
+changes. Nothing warns today; articles, projects, products, services and tags change slugs silently.
+Adding it needs a `warnings` field on admin write responses, the spec, and the admin SPA.
 
-### API documentation for the frontend teams
+### Service URL validation
 
-The `Worker.Extensions.OpenApi` package was referenced but never wired to anything, so it was
-removed. Three frontends consume this API and currently have no machine-readable contract. If
-that becomes a problem, add the package back along with the attributes — the value is in the
-attributes, not the reference.
+Service CTA URLs and image URLs are not checked for absolute http(s), unlike projects, products,
+images and certificates. Services also still accept sort orders on create/update.
 
 ### Hard delete
 
-Soft delete is everywhere; `.claude/rules/schema.md` calls for hard delete via a
-super-admin-only endpoint, and only `project_images` hard-deletes today. A general one would
-need to destroy the Cloudinary assets behind whatever it removes, after the row commits.
+Content is soft-deleted everywhere. There is no super-admin hard delete (or restore) endpoint; one
+would need to delete the stored files after the rows commit.
+
+### Scheduled exchange-rate refresh
+
+Live rates only change when an admin presses refresh. A timer-triggered Function calling
+`CurrencyService.RefreshLiveRatesAsync` would keep them current.
+
+### Host-level tests
+
+Tests cover services, helpers, the JWT middleware and Functions called directly, but nothing runs
+the Functions host itself (DI registration, routing). The post-deploy `/api/health` check is the
+only end-to-end signal.
 
 ### Combo packs spanning several services
 
-`pricing_plans.service_id = null` means combo pack. If a combo ever needs to name several
-services, `.claude/rules/schema.md` suggests a `pricing_plan_services` join table with
-`service_id` kept as the primary owner.
-
-### Schema doc drift
-
-`.claude/rules/schema.md` does not document `refresh_tokens` (which auth.md requires and the
-code has) or `login_attempts` (added for login rate limiting). Worth folding in next time that
-file is touched.
+`pricing_plans.service_id = null` means combo pack. A combo naming several services would need a
+`pricing_plan_services` join table, keeping `service_id` as the primary owner.
 
 ### Observability
 
-`ILogger` is used in the exception middleware, the health check, the seeder and `MediaService`.
-The service layer's failure paths are still silent, so a rejected write leaves no trace beyond
-the response the caller got.
+Service-layer failure paths don't log, so a rejected write leaves no trace beyond its response.

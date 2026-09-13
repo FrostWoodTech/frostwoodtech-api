@@ -2,7 +2,6 @@ using FrostWoodTech.API.Enums;
 
 namespace FrostWoodTech.API.DTOs.Admin;
 
-/// <summary>Admin view: adds audit metadata.</summary>
 public sealed class AdminTagResponse
 {
     public required Guid Id { get; init; }

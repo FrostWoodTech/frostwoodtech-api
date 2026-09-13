@@ -19,10 +19,6 @@ public class SetProjectPublished
         _projectService = projectService;
     }
 
-    /// <summary>
-    /// Flips the draft flag alone, without resubmitting the whole form. Going live the first
-    /// time stamps published_at.
-    /// </summary>
     [Function("SetProjectPublished")]
     public async Task<IActionResult> Run(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "cms/admin/projects/{id:guid}/publish")] HttpRequest req,

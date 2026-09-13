@@ -8,40 +8,47 @@ paths:
   - ".github/workflows/**"
 ---
 
-# Azure Functions hosting & startup
+# Azure Functions hosting & deployment
 
-Isolated worker model. One `Program.cs` for all DI wiring.
+Isolated worker. All DI wiring lives in `Program.cs`. One Function per endpoint, every trigger
+`AuthorizationLevel.Anonymous` (auth is middleware — see auth.md).
 
-## DbContext
+## Middleware order
 
-Register with `AddDbContextPool` and Npgsql's `EnableRetryOnFailure`. Use Neon's **pooled**
-connection string — Functions scale out and a direct endpoint will exhaust connections.
+`CorsMiddleware` (outermost, so errors get CORS headers) → `ExceptionHandlingMiddleware` (generic
+problem+json 500) → `JwtAuthenticationMiddleware`. OPTIONS preflight is answered by the host's CORS
+settings, not by code.
 
-Keep `MaxPoolSize` small (5–10) per instance and set `Timeout` / `CommandTimeout` explicitly
-rather than relying on defaults.
+## Database
 
-## Cold start
+- `AddDbContextPool` with Npgsql `EnableRetryOnFailure` and a 30s command timeout.
+- Runtime uses Neon's **pooled** connection string; keep the pool small via the connection string
+  (`Maximum Pool Size`). Migrations use the **direct** string.
+- Native enums must be mapped on both the `NpgsqlDataSourceBuilder` and the EF options (and in the
+  design-time factory).
+- Neon cold start (~1s after idle) is expected; don't add keep-alive timers.
 
-Neon serverless compute suspends when idle, so the first request after a pause takes roughly a
-second. That is expected for a FrostWoodTech site — do not treat it as a bug or add a keep-alive
-timer to work around it.
+## Configuration
 
-## Migrations
+- Loaded from `local.settings.json`, `local.settings.{DOTNET_ENVIRONMENT or AZURE_FUNCTIONS_ENVIRONMENT}.json`
+  (default `Development`), then environment variables.
+- `local.settings*.json` files are gitignored and marked `CopyToPublishDirectory=Never`; only
+  `local.settings.example.json` is committed. In Azure everything comes from app settings.
+- Never log configuration values, connection strings or tokens.
 
-Run `dotnet ef database update` **from CI**, never automatically on function startup.
-Concurrent instances starting at once will race each other.
+## Startup
 
-## Auth level
+Seeds the super admin and the USD base currency; a seeding failure is logged and never stops the
+host. Schema changes are **never** applied at startup.
 
-Every HTTP trigger uses `AuthorizationLevel.Anonymous`. Auth is enforced in middleware — see
-`.claude/rules/auth.md`. Function keys are not an auth system.
+## CI/CD
 
-## Endpoint granularity
-
-One function per endpoint, not a single router function. It keeps the portal's per-function
-monitoring and cold-start metrics readable.
-
-## Config
-
-All settings come from app settings / Key Vault. `local.settings.json` stays out of git; keep a
-`local.settings.example.json` with placeholder values checked in instead.
+- `ci.yml` (push/PR to `main` or `develop`): build → test (Testcontainers needs Docker, present on
+  ubuntu runners) → `dotnet ef migrations has-pending-model-changes` (with a dummy connection string).
+- `deploy.yml` (push to `main`, one at a time): build → **test** → `dotnet ef database update`
+  (direct string from `NEON_MIGRATION_CONNECTION_STRING`) → publish → deploy → `/api/health` smoke
+  check when `AZURE_FUNCTIONAPP_URL` is set. Tests run before migrations so a failure never touches
+  the database.
+- Both workflows use `permissions: contents: read`.
+- Migrations are created only with `dotnet ef migrations add`; never hand-edit migration, designer
+  or snapshot files.

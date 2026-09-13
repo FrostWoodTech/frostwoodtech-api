@@ -7,18 +7,11 @@ using Microsoft.Net.Http.Headers;
 
 namespace FrostWoodTech.API.Common;
 
-/// <summary>
-/// Caching rules from the API surface doc: public GETs are cacheable with an ETag, admin
-/// responses are never stored.
-/// </summary>
 public static class HttpResponses
 {
     private const int PublicMaxAgeSeconds = 300;
 
-    /// <summary>
-    /// Serialises <paramref name="payload"/>, tags it with an ETag and returns <c>304</c> when the
-    /// caller already has that version.
-    /// </summary>
+    /// <summary>Public cache headers plus an ETag; returns 304 when If-None-Match matches.</summary>
     public static IActionResult PublicJson(HttpRequest request, object payload)
     {
         var json = JsonSerializer.Serialize(payload, JsonDefaults.Options);
@@ -28,7 +21,7 @@ public static class HttpResponses
         response.Headers.CacheControl = $"public, max-age={PublicMaxAgeSeconds}";
         response.Headers.ETag = etag;
 
-        if (request.Headers.IfNoneMatch.Contains(etag))
+        if (MatchesIfNoneMatch(request, etag))
         {
             return new StatusCodeResult(StatusCodes.Status304NotModified);
         }
@@ -41,18 +34,12 @@ public static class HttpResponses
         };
     }
 
-    /// <summary>Admin payloads must not be cached anywhere — they contain drafts.</summary>
     public static void MarkNoStore(HttpRequest request)
     {
         request.HttpContext.Response.Headers[HeaderNames.CacheControl] = "no-store";
     }
 
-    /// <summary>
-    /// Scoped to the auth routes only — no reason for every admin request to carry it. No
-    /// explicit <c>Domain</c>: the cookie is only ever read back by this API's own origin, and
-    /// <c>Lax</c> still rides along on same-site cross-subdomain calls (SPA and API sharing a
-    /// registrable domain in production; same-host-different-port locally).
-    /// </summary>
+    // Scoped to auth routes; no Domain, since only this API's origin reads it.
     private const string RefreshCookieName = "refreshToken";
     private const string RefreshCookiePath = "/api/cms/admin/auth";
 
@@ -78,6 +65,19 @@ public static class HttpResponses
 
     public static string? ReadRefreshTokenCookie(HttpRequest request) =>
         request.Cookies[RefreshCookieName];
+
+    /// <summary>Weak comparison per RFC 9110: lists, W/ tags and * all match.</summary>
+    private static bool MatchesIfNoneMatch(HttpRequest request, string etag)
+    {
+        if (!EntityTagHeaderValue.TryParseList(request.Headers.IfNoneMatch, out var candidates))
+        {
+            return false;
+        }
+
+        var current = EntityTagHeaderValue.Parse(etag);
+
+        return candidates.Any(c => c.Equals(EntityTagHeaderValue.Any) || c.Compare(current, useStrongComparison: false));
+    }
 
     private static string ComputeETag(string json)
     {

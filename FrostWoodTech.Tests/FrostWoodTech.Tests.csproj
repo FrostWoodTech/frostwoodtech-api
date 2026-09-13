@@ -18,11 +18,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!--
-      The schema leans on native Postgres enums, citext and a partial unique index, none of
-      which the EF in-memory provider models. Testing against anything but real Postgres would
-      pass while the behaviour we care about was broken.
-    -->
+    <!-- Real Postgres: the in-memory provider can't model native enums, citext or partial indexes. -->
     <PackageReference Include="Testcontainers.PostgreSql" Version="4.14.0" />
   </ItemGroup>
 

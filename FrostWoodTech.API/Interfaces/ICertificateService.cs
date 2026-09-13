@@ -6,10 +6,7 @@ namespace FrostWoodTech.API.Interfaces;
 
 public interface ICertificateService
 {
-    /// <summary>
-    /// Public read: always scoped to published, non-deleted rows — there is no site to pick,
-    /// certificates only ever exist for the personal site.
-    /// </summary>
+    /// <summary>Published, non-deleted rows only; personal-site only, so no site parameter.</summary>
     Task<PagedResult<CertificateResponse>> GetPublicCertificatesAsync(
         bool? featured,
         int page,
@@ -34,9 +31,7 @@ public interface ICertificateService
         UpdateCertificateRequest request,
         CancellationToken cancellationToken);
 
-    /// <summary>Soft delete.</summary>
     Task<ServiceResult<bool>> DeleteAsync(Guid id, CancellationToken cancellationToken);
 
-    /// <summary>Bulk sort_order update — certificates share one global order.</summary>
     Task<ServiceResult<bool>> ReorderAsync(CertificateReorderRequest request, CancellationToken cancellationToken);
 }

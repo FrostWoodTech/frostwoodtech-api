@@ -1,6 +1,5 @@
 namespace FrostWoodTech.API.DTOs.Admin;
 
-/// <summary>Open registration. Everything is nullable — <c>UserService</c> does the validating.</summary>
 public class RegisterRequest
 {
     public string? FirstName { get; set; }

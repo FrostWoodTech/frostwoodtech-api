@@ -17,11 +17,7 @@ public class Refresh
         _users = users;
     }
 
-    /// <summary>
-    /// Anonymous by design — this has to work precisely because the access token has expired. See
-    /// the allow-list in <c>JwtAuthenticationMiddleware</c>. The refresh token itself travels as
-    /// an httpOnly cookie, not a body field — there is nothing for JS to read or forward.
-    /// </summary>
+    /// <summary>Must work with an expired access token. The refresh token travels only as an httpOnly cookie.</summary>
     [Function("Refresh")]
     public async Task<IActionResult> Run(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "cms/admin/auth/refresh")] HttpRequest req,

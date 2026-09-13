@@ -19,10 +19,6 @@ public class ResendVerification
         _users = users;
     }
 
-    /// <summary>
-    /// Anonymous by design. Always returns the same generic success, whatever the email resolves
-    /// to — see <c>UserService.ResendVerificationAsync</c>.
-    /// </summary>
     [Function("ResendVerification")]
     public async Task<IActionResult> Run(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "cms/admin/auth/resend-verification")] HttpRequest req,

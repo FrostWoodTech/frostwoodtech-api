@@ -4,11 +4,7 @@ using FrostWoodTech.API.Interfaces;
 
 namespace FrostWoodTech.Tests;
 
-/// <summary>
-/// Keeps Neon Object Storage out of the test run. The rules the project tests care about — one
-/// primary image, required alt text — are decided before anything is deleted, so recording the
-/// calls is enough.
-/// </summary>
+/// <summary>Records deletes instead of calling storage.</summary>
 public sealed class FakeMediaService : IMediaService
 {
     public List<string> Deleted { get; } = [];

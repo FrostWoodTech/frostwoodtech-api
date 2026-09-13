@@ -16,10 +16,7 @@ public class GetOpenApiSpec
         _options = options.Value;
     }
 
-    /// <summary>
-    /// Anonymous, gated on <c>Docs__Enabled</c>; a disabled deployment answers <c>404</c> rather
-    /// than <c>403</c> so it doesn't confirm the endpoint exists.
-    /// </summary>
+    /// <summary>Gated on Docs__Enabled; disabled answers 404 so the endpoint isn't confirmed.</summary>
     [Function("GetOpenApiSpec")]
     public IActionResult Run(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "openapi.yaml")] HttpRequest req)
@@ -31,7 +28,6 @@ public class GetOpenApiSpec
             return new NotFoundResult();
         }
 
-        // No-store, not cached: an edited spec should show up on the next request.
         req.HttpContext.Response.Headers.CacheControl = "no-store";
 
         return new ContentResult

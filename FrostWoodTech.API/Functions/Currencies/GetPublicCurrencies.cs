@@ -16,13 +16,12 @@ public class GetPublicCurrencies
         _currencyService = currencyService;
     }
 
-    /// <summary>The currencies a visitor may switch to, with the rate to convert at.</summary>
     [Function("GetPublicCurrencies")]
     public async Task<IActionResult> Run(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "public/currencies")] HttpRequest req,
         CancellationToken cancellationToken)
     {
-        // No ?site= here: currencies have no site visibility, they are a shared lookup set.
+        // No ?site=: currencies are shared by both sites.
         var currencies = await _currencyService.GetPublicCurrenciesAsync(cancellationToken);
 
         return HttpResponses.PublicJson(req, currencies);

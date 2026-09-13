@@ -22,7 +22,7 @@ public class GetPublicTags
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "public/tags")] HttpRequest req,
         CancellationToken cancellationToken)
     {
-        // No ?site= here: tags have no site visibility flags, they are a shared lookup set.
+        // No ?site=: tags are shared by both sites.
         var isTechnology = QueryParameters.ReadBool(req, "isTechnology");
 
         if (!QueryParameters.TryReadEnum<TechCategory>(req, "category", out var category))

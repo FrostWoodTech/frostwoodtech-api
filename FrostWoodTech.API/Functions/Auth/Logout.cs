@@ -17,10 +17,7 @@ public class Logout
         _users = users;
     }
 
-    /// <summary>
-    /// Anonymous by design: signing out has to work even once the access token is dead, and the
-    /// refresh cookie is itself the proof of ownership.
-    /// </summary>
+    /// <summary>Must work with an expired access token; the refresh cookie proves ownership.</summary>
     [Function("Logout")]
     public async Task<IActionResult> Run(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "cms/admin/auth/logout")] HttpRequest req,

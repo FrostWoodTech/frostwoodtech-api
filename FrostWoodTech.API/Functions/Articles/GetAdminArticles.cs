@@ -23,7 +23,7 @@ public class GetAdminArticles
     {
         HttpResponses.MarkNoStore(req);
 
-        // Optional here, unlike the public surface: the admin SPA lists across both sites.
+        // Optional on admin lists, unlike the public surface.
         if (!QueryParameters.TryReadSite(req, out var site))
         {
             return ProblemResults.BadRequest("validation_failed", "Unknown site.");

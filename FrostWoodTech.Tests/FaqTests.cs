@@ -30,7 +30,7 @@ public class FaqTests
         var publicBefore = await service.GetPublicFaqsAsync(Site.Agency, CancellationToken.None);
         Assert.DoesNotContain(publicBefore, f => f.Id == created.Value!.Id);
 
-        var admin = await service.GetAdminFaqsAsync(null, null, null, null, false, 1, 50, CancellationToken.None);
+        var admin = await service.GetAdminFaqsAsync(null, null, request.Question, null, false, 1, 20, CancellationToken.None);
         Assert.Contains(admin.Items, f => f.Id == created.Value!.Id);
 
         var published = await service.UpdateAsync(
@@ -61,7 +61,6 @@ public class FaqTests
         Assert.True(createdFirst.IsSuccess);
         Assert.True(createdSecond.IsSuccess);
 
-        // Swap so the second-created FAQ now sorts before the first.
         var reordered = await service.ReorderAsync(
             new FaqReorderRequest
             {
@@ -122,6 +121,53 @@ public class FaqTests
             null, null, null, serviceOffering.Id, globalOnly: false, 1, 50, CancellationToken.None);
         Assert.Contains(adminForService.Items, f => f.Id == scopedFaq.Value.Id);
         Assert.DoesNotContain(adminForService.Items, f => f.Id == globalFaq.Value!.Id);
+    }
+
+    [Fact]
+    public async Task A_personal_only_faq_is_not_returned_for_the_agency_site()
+    {
+        await using var db = _fixture.CreateContext();
+        var service = new FaqService(db);
+
+        var request = NewFaq();
+        request.ShowOnAgency = false;
+        request.ShowOnPersonal = true;
+        var created = await service.CreateAsync(request, CancellationToken.None);
+        Assert.True(created.IsSuccess);
+
+        Assert.DoesNotContain(await service.GetPublicFaqsAsync(Site.Agency, CancellationToken.None), f => f.Id == created.Value!.Id);
+        Assert.Contains(await service.GetPublicFaqsAsync(Site.Personal, CancellationToken.None), f => f.Id == created.Value!.Id);
+    }
+
+    [Fact]
+    public async Task A_soft_deleted_faq_disappears_from_both_surfaces()
+    {
+        await using var db = _fixture.CreateContext();
+        var service = new FaqService(db);
+
+        var request = NewFaq();
+        var created = await service.CreateAsync(request, CancellationToken.None);
+        Assert.True((await service.DeleteAsync(created.Value!.Id, CancellationToken.None)).IsSuccess);
+
+        Assert.DoesNotContain(await service.GetPublicFaqsAsync(Site.Agency, CancellationToken.None), f => f.Id == created.Value.Id);
+
+        var admin = await service.GetAdminFaqsAsync(null, null, request.Question, null, false, 1, 20, CancellationToken.None);
+        Assert.DoesNotContain(admin.Items, f => f.Id == created.Value.Id);
+    }
+
+    [Fact]
+    public async Task A_faq_for_an_unknown_service_or_without_an_answer_is_rejected()
+    {
+        await using var db = _fixture.CreateContext();
+        var service = new FaqService(db);
+
+        var unknownService = NewFaq();
+        unknownService.ServiceId = Guid.NewGuid();
+        Assert.Equal("validation_failed", (await service.CreateAsync(unknownService, CancellationToken.None)).Error!.Code);
+
+        var noAnswer = NewFaq();
+        noAnswer.Answer = "  ";
+        Assert.Equal("validation_failed", (await service.CreateAsync(noAnswer, CancellationToken.None)).Error!.Code);
     }
 
     private static CreateFaqRequest NewFaq() => new()

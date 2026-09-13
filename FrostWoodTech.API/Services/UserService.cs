@@ -23,7 +23,6 @@ public class UserService : IUserService
 
     private static readonly TimeSpan VerificationTokenLifetime = TimeSpan.FromHours(24);
 
-    /// <summary>Shorter than the 24h bootstrap link — a reset is used within minutes.</summary>
     private static readonly TimeSpan ResetTokenLifetime = TimeSpan.FromHours(1);
 
     private static readonly TimeSpan ResendWindow = TimeSpan.FromHours(1);
@@ -94,7 +93,7 @@ public class UserService : IUserService
             return ServiceResult<AdminUserResponse>.Validation(validationError);
         }
 
-        // Ignoring the soft-delete filter: a deleted account still owns its email address.
+        // A soft-deleted account still owns its email.
         var emailTaken = await _db.Users
             .IgnoreQueryFilters()
             .AnyAsync(u => u.Email == email, cancellationToken);
@@ -111,7 +110,6 @@ public class UserService : IUserService
             FirstName = firstName!,
             LastName = lastName!,
             PasswordHash = PasswordHasher.Hash(request.Password!),
-            // Open but powerless: no token until verified and approved.
             Role = UserRole.Admin,
             Status = UserStatus.EmailVerificationRequired
         };
@@ -165,7 +163,6 @@ public class UserService : IUserService
         user.EmailVerifiedAt = DateTimeOffset.UtcNow;
         token.UsedAt = DateTimeOffset.UtcNow;
 
-        // Any other unused link for this user is now moot.
         await _db.EmailVerificationTokens
             .Where(t => t.UserId == user.Id && t.UsedAt == null && t.Id != token.Id)
             .ExecuteUpdateAsync(t => t.SetProperty(x => x.UsedAt, DateTimeOffset.UtcNow), cancellationToken);
@@ -179,7 +176,7 @@ public class UserService : IUserService
         ResendVerificationRequest request,
         CancellationToken cancellationToken)
     {
-        // Identical response on every branch — no account enumeration.
+        // Same response on every branch: no account enumeration.
         var response = new ResendVerificationResponse();
 
         var email = NormaliseEmail(request.Email);
@@ -203,7 +200,6 @@ public class UserService : IUserService
             return ServiceResult<ResendVerificationResponse>.Success(response);
         }
 
-        // Prior unused links become invalid the moment a new one is issued.
         await _db.EmailVerificationTokens
             .Where(t => t.UserId == user.Id && t.UsedAt == null)
             .ExecuteUpdateAsync(t => t.SetProperty(x => x.UsedAt, DateTimeOffset.UtcNow), cancellationToken);
@@ -213,10 +209,7 @@ public class UserService : IUserService
         return ServiceResult<ResendVerificationResponse>.Success(response);
     }
 
-    /// <summary>
-    /// Creates and stores a verification token, then emails its link. A failed send does not fail
-    /// the caller — the account still exists and can retry via resend, so this only logs.
-    /// </summary>
+    // A failed send doesn't fail the caller; the user can resend.
     private async Task IssueVerificationEmailAsync(User user, CancellationToken cancellationToken)
     {
         var now = DateTimeOffset.UtcNow;
@@ -262,7 +255,7 @@ public class UserService : IUserService
         string? ipAddress,
         CancellationToken cancellationToken)
     {
-        // Identical response on every branch — no account enumeration.
+        // Same response on every branch: no account enumeration.
         var response = new ForgotPasswordResponse();
         var success = ServiceResult<ForgotPasswordResponse>.Success(response);
 
@@ -292,8 +285,7 @@ public class UserService : IUserService
             return success;
         }
 
-        // Only pending/approved get a link — unverified has its own resend flow; rejected and
-        // disabled must not get a fresh credential.
+        // Only pending/approved get a link; rejected and disabled must not get a new credential.
         if (user.Status is not (UserStatus.Pending or UserStatus.Approved))
         {
             _logger.LogInformation(
@@ -302,7 +294,7 @@ public class UserService : IUserService
             return success;
         }
 
-        // Invalidate first, so only the newest link ever works.
+        // Invalidate first so only the newest link works.
         await _db.PasswordTokens
             .Where(t => t.UserId == user.Id
                 && t.Purpose == PasswordTokenPurpose.Reset
@@ -373,7 +365,7 @@ public class UserService : IUserService
             .Include(t => t.User)
             .FirstOrDefaultAsync(t => t.TokenHash == hash, cancellationToken);
 
-        // Distinct codes are safe: reaching any of them already requires holding a token.
+        // Distinct codes are safe: reaching them already requires a token.
         if (token is null)
         {
             _logger.LogInformation("Password link rejected: no token matches the presented value.");
@@ -407,14 +399,13 @@ public class UserService : IUserService
         user.PasswordHash = PasswordHasher.Hash(request.Password!);
         token.UsedAt = DateTimeOffset.UtcNow;
 
-        // Any other unused link for this user, of either purpose, is now a pure liability.
         await _db.PasswordTokens
             .Where(t => t.UserId == user.Id && t.UsedAt == null && t.Id != token.Id)
             .ExecuteUpdateAsync(t => t.SetProperty(x => x.UsedAt, DateTimeOffset.UtcNow), cancellationToken);
 
         await _db.SaveChangesAsync(cancellationToken);
 
-        // Same as ChangePasswordAsync: a new password ends every session that predates it.
+        // A new password ends every existing session.
         await RevokeAllForUserAsync(user.Id, cancellationToken);
 
         _logger.LogInformation(
@@ -448,14 +439,14 @@ public class UserService : IUserService
 
         if (user is null)
         {
-            // Same work, same answer as a wrong password — no account enumeration.
+            // Same work and answer as a wrong password: no account enumeration.
             PasswordHasher.BurnVerifyTime(password);
             await _rateLimiter.RecordAttemptAsync(email, ipAddress, AuthAttemptAction.Login, cancellationToken);
 
             return InvalidCredentials();
         }
 
-        // No hash (Google-only, or un-redeemed super admin) — burn and fail like a wrong password.
+        // No hash (Google-only or unredeemed super admin): fail like a wrong password.
         if (string.IsNullOrEmpty(user.PasswordHash))
         {
             PasswordHasher.BurnVerifyTime(password);
@@ -471,8 +462,7 @@ public class UserService : IUserService
             return InvalidCredentials();
         }
 
-        // After the password check, so an anonymous caller cannot probe account state.
-        // Non-approved is rejected at token issue, never handed a scopeless token.
+        // After the password check, so account state can't be probed anonymously.
         if (user.Status != UserStatus.Approved)
         {
             return NotApproved(user);
@@ -480,7 +470,6 @@ public class UserService : IUserService
 
         user.LastLoginAt = DateTimeOffset.UtcNow;
 
-        // A successful sign-in clears earlier failed attempts, so they can't cause a later lockout.
         await _rateLimiter.ClearAsync(email, AuthAttemptAction.Login, cancellationToken);
 
         var (response, _) = await IssueTokensAsync(user, cancellationToken);
@@ -505,15 +494,14 @@ public class UserService : IUserService
 
         var identity = validated.Value!;
 
-        // Never match on an unverified address — anyone could claim another user's CMS account.
+        // Never match an unverified Google email, or anyone could claim a CMS account.
         if (!identity.EmailVerified)
         {
             return ServiceResult<AuthResponse>.Unauthorized(
                 "google_email_unverified", "This Google account's email address is not verified.");
         }
 
-        // Subject first: it's stable, an address can be reassigned. IgnoreQueryFilters so a
-        // soft-deleted account is refused, not silently re-created as a new pending user.
+        // Subject first (stable). Include deleted users so they're refused, not re-created.
         var user = await _db.Users
             .IgnoreQueryFilters()
             .FirstOrDefaultAsync(
@@ -529,7 +517,6 @@ public class UserService : IUserService
                 LastName = identity.LastName ?? string.Empty,
                 GoogleSubjectId = identity.Subject,
                 AvatarUrl = identity.AvatarUrl,
-                // No password: this account can only ever arrive through Google.
                 PasswordHash = null,
                 Role = UserRole.Admin,
                 Status = UserStatus.Pending
@@ -547,7 +534,7 @@ public class UserService : IUserService
                 "account_disabled", "This account has been disabled. Contact the super admin.");
         }
 
-        // First Google sign-in on a password account: link them. The password still works.
+        // Links Google to an existing password account; the password keeps working.
         user.GoogleSubjectId ??= identity.Subject;
         user.AvatarUrl = identity.AvatarUrl ?? user.AvatarUrl;
 
@@ -576,8 +563,7 @@ public class UserService : IUserService
 
         var hash = RefreshTokenGenerator.Hash(presented);
 
-        // IgnoreQueryFilters so a soft-deleted owner still loads — otherwise User is null and
-        // the account checks below never run.
+        // Include deleted owners so the account checks below still run.
         var stored = await _db.RefreshTokens
             .IgnoreQueryFilters()
             .Include(t => t.User)
@@ -590,8 +576,7 @@ public class UserService : IUserService
 
         if (stored.RevokedAt is not null)
         {
-            // A replayed revoked token means theft — the real client holds its replacement.
-            // Kill the whole family, not just this one.
+            // A reused revoked token means theft: revoke the whole family.
             await RevokeAllForUserAsync(stored.UserId, cancellationToken);
 
             return ServiceResult<AuthResponse>.Unauthorized(
@@ -605,7 +590,7 @@ public class UserService : IUserService
                 "refresh_token_expired", "This refresh token has expired. Sign in again.");
         }
 
-        // What bounds a revoked user's access: they cannot renew, whatever their JWT still says.
+        // Blocks renewal for revoked users, whatever their JWT still says.
         if (stored.User.Status != UserStatus.Approved || stored.User.IsDeleted)
         {
             await RevokeAllForUserAsync(stored.UserId, cancellationToken);
@@ -627,7 +612,7 @@ public class UserService : IUserService
         RefreshTokenRequest request,
         CancellationToken cancellationToken)
     {
-        // No error for an unknown token: signing out is not a way to discover which tokens exist.
+        // No error for unknown tokens: logout can't be used to probe tokens.
         if (Blank(request.RefreshToken) is { } presented)
         {
             var hash = RefreshTokenGenerator.Hash(presented);
@@ -680,7 +665,6 @@ public class UserService : IUserService
             return ServiceResult<bool>.Unauthorized("unauthenticated", "This account no longer exists.");
         }
 
-        // No password means nothing to "change" — that's what the setup link is for.
         if (string.IsNullOrEmpty(user.PasswordHash)
             || string.IsNullOrEmpty(request.CurrentPassword)
             || !PasswordHasher.Verify(user.PasswordHash, request.CurrentPassword))
@@ -691,7 +675,7 @@ public class UserService : IUserService
         user.PasswordHash = PasswordHasher.Hash(request.NewPassword!);
         await _db.SaveChangesAsync(cancellationToken);
 
-        // Changing a password signs out everywhere else, including whoever prompted the change.
+        // Signs out everywhere, including the current session.
         await RevokeAllForUserAsync(userId, cancellationToken);
 
         return ServiceResult<bool>.Success(true);
@@ -831,10 +815,7 @@ public class UserService : IUserService
         return ServiceResult<bool>.Success(true);
     }
 
-    /// <summary>
-    /// The guard every management method shares: super admin only, and the super admin's own row is
-    /// off limits so the CMS cannot be locked out of itself.
-    /// </summary>
+    // Super admin only; nobody may modify themselves or the super admin row.
     private async Task<ServiceResult<User>> LoadManageableUserAsync(Guid id, CancellationToken cancellationToken)
     {
         if (RequireSuperAdmin<User>() is { } denied)
@@ -866,10 +847,7 @@ public class UserService : IUserService
     private ServiceResult<T>? RequireSuperAdmin<T>() =>
         _currentUser.IsSuperAdmin ? null : ServiceResult<T>.Forbidden("forbidden", SuperAdminOnly);
 
-    /// <summary>
-    /// Issues the access token and a fresh refresh token, storing only the refresh token's hash.
-    /// Expired rows for the same user are swept here, which is why no timer function is needed.
-    /// </summary>
+    // Stores only the refresh token hash; expired rows are swept here (no timer needed).
     private async Task<(AuthResponse Response, RefreshToken Row)> IssueTokensAsync(
         User user,
         CancellationToken cancellationToken)
@@ -906,10 +884,7 @@ public class UserService : IUserService
         }, row);
     }
 
-    /// <summary>
-    /// Kills every live session for a user. Called when the password changes and whenever the super
-    /// admin takes access away — without it a revoked user keeps renewing for another 30 days.
-    /// </summary>
+    // Called on password change and whenever access is removed.
     private Task RevokeAllForUserAsync(Guid userId, CancellationToken cancellationToken) =>
         _db.RefreshTokens
             .Where(t => t.UserId == userId && t.RevokedAt == null)
@@ -921,7 +896,6 @@ public class UserService : IUserService
     private static ServiceResult<AuthResponse> InvalidRefreshToken() =>
         ServiceResult<AuthResponse>.Unauthorized("invalid_refresh_token", "This refresh token is not valid.");
 
-    /// <summary>Shared by login and refresh, so both surfaces report account state identically.</summary>
     private static ServiceResult<AuthResponse> NotApproved(User user) => user.Status switch
     {
         UserStatus.EmailVerificationRequired => ServiceResult<AuthResponse>.Forbidden(
@@ -968,10 +942,7 @@ public class UserService : IUserService
         return password == confirmation ? null : $"{label} and its confirmation do not match.";
     }
 
-    /// <summary>
-    /// Deliberately loose: the column is <c>citext</c> and the real check is whether the person can
-    /// receive mail there, which no regex settles.
-    /// </summary>
+    // Deliberately loose: the real check is whether mail arrives.
     private static bool LooksLikeEmail(string email)
     {
         var at = email.IndexOf('@');

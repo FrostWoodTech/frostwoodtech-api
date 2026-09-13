@@ -16,7 +16,6 @@ public class DeleteService
         _serviceCatalog = serviceCatalog;
     }
 
-    /// <summary>Soft delete — hard delete stays a super-admin-only concern.</summary>
     [Function("DeleteService")]
     public async Task<IActionResult> Run(
         [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "cms/admin/services/{id:guid}")] HttpRequest req,

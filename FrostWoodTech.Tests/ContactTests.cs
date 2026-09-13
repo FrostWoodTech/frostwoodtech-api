@@ -45,8 +45,6 @@ public class ContactTests
         var result = await service.SubmitAsync(NewSubmission(), IpAddress(), CancellationToken.None);
 
         Assert.True(result.IsSuccess);
-        // ContactSubmissionResponse only has an Id property — this is a compile-time guarantee,
-        // but the assertion documents the intent: nothing admin-only rides along in the ack.
         Assert.NotEqual(Guid.Empty, result.Value!.Id);
     }
 

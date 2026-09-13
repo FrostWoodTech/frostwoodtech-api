@@ -1,7 +1,6 @@
 namespace FrostWoodTech.API.DTOs.Admin;
 
-/// <summary>For an admin manually adding a testimonial collected elsewhere — not what the public
-/// submission endpoint uses.</summary>
+/// <summary>Admin-entered testimonial; the public submission uses its own DTO.</summary>
 public class CreateReviewRequest
 {
     public string? Name { get; set; }

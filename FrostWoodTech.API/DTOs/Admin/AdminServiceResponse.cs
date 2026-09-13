@@ -1,6 +1,5 @@
 namespace FrostWoodTech.API.DTOs.Admin;
 
-/// <summary>Admin view: both sites' visibility, the draft flag and audit metadata.</summary>
 public sealed class AdminServiceResponse
 {
     public required Guid Id { get; init; }
@@ -63,7 +62,6 @@ public sealed class AdminServiceResponse
 
     public string? DepthImageAltText { get; init; }
 
-    /// <summary>Linked case studies, oldest link order irrelevant — sorted by year descending.</summary>
     public required List<ServiceProjectSummary> Projects { get; init; }
 
     public string? SeoTitle { get; init; }

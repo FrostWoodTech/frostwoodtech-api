@@ -17,7 +17,6 @@ public class GetMediaConfig
         _mediaService = mediaService;
     }
 
-    /// <summary>Hands the admin SPA the base URL it needs to render a round-tripped `media://` token.</summary>
     [Function("GetMediaConfig")]
     public IActionResult Run(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "cms/admin/media/config")] HttpRequest req)

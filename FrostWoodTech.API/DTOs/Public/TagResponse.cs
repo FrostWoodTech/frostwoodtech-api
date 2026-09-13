@@ -2,9 +2,6 @@ using FrostWoodTech.API.Enums;
 
 namespace FrostWoodTech.API.DTOs.Public;
 
-/// <summary>
-/// What the two public frontends see. No audit fields, no object keys — those are admin-only.
-/// </summary>
 public sealed class TagResponse
 {
     public required Guid Id { get; init; }

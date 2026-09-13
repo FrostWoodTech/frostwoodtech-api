@@ -20,8 +20,6 @@ public class PasswordTokenConfiguration : IEntityTypeConfiguration<PasswordToken
         builder.Property(t => t.CreatedAt).HasColumnName("created_at");
         builder.Property(t => t.UsedAt).HasColumnName("used_at");
 
-        // The hash is the lookup key when a link is redeemed; (UserId, Purpose, CreatedAt) backs
-        // "invalidate this user's outstanding reset links" without touching their setup link.
         builder.HasIndex(t => t.TokenHash).IsUnique();
         builder.HasIndex(t => new { t.UserId, t.Purpose, t.CreatedAt });
 

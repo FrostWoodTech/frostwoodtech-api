@@ -31,7 +31,7 @@ public class ArticleService : IArticleService
         int pageSize,
         CancellationToken cancellationToken)
     {
-        // is_deleted comes from the global query filter; is_published and the site flag are not optional.
+        // is_deleted comes from the global filter; is_published and the site flag are mandatory.
         var query = ForSite(_db.Articles.AsNoTracking().Where(a => a.IsPublished), site);
 
         if (tagSlug is not null)
@@ -80,12 +80,7 @@ public class ArticleService : IArticleService
             : ServiceResult<ArticleResponse>.Success(ResolveMedia(article));
     }
 
-    /// <summary>
-    /// Public responses only — the admin surface hands back raw Markdown/cover so the editor
-    /// round-trips the original <c>media://</c> tokens instead of baked-in URLs. A legacy value
-    /// that's already a real URL has no <c>media://</c> prefix to match, so it passes through
-    /// untouched — this covers articles saved before the token scheme existed.
-    /// </summary>
+    /// <summary>Public only: resolves media:// tokens to URLs. Admin keeps raw tokens; legacy real URLs pass through.</summary>
     private ArticleResponse ResolveMedia(ArticleResponse article) => article with
     {
         ContentMarkdown = article.ContentMarkdown is null
@@ -107,12 +102,7 @@ public class ArticleService : IArticleService
     {
         var query = _db.Articles.AsNoTracking();
 
-        // The reorder/visibility screen needs every published article in both
-        // columns — including ones not yet shown anywhere — so it can be the
-        // place that turns showing on in the first place. `includeHidden` is
-        // how that screen opts out of the show-on-site filter while still
-        // passing `site` (kept for the response's per-site sort order and to
-        // keep the two columns' query-cache entries distinct on the client).
+        // includeHidden: the visibility screen passes site (for sort order) but must see rows not shown yet.
         if (site is not null && !includeHidden)
         {
             query = ForSite(query, site.Value);
@@ -130,7 +120,6 @@ public class ArticleService : IArticleService
 
         var total = await query.CountAsync(cancellationToken);
 
-        // Drafts have no meaningful site order, so the admin list is most-recently-edited first instead.
         var items = await query
             .OrderByDescending(a => a.UpdatedAt)
             .ThenBy(a => a.Title)
@@ -181,13 +170,17 @@ public class ArticleService : IArticleService
         }
 
         var slug = ResolveSlug(request.Slug, title!);
+        if (slug.Length == 0)
+        {
+            return ServiceResult<AdminArticleResponse>.Validation("A slug could not be generated; provide one with letters or digits.");
+        }
+
         if (await SlugExistsAsync(slug, excludingId: null, cancellationToken))
         {
             return SlugTaken(slug);
         }
 
-        // Sort order is never taken from the client — it only changes via ReorderAsync, so a new
-        // article is simply appended to the end of each site's shared order.
+        // Sort order never comes from the client; new rows go to the end of each site's order.
         var nextAgencySortOrder = await _db.Articles.MaxAsync(a => (int?)a.AgencySortOrder, cancellationToken) + 1 ?? 0;
         var nextPersonalSortOrder = await _db.Articles.MaxAsync(a => (int?)a.PersonalSortOrder, cancellationToken) + 1 ?? 0;
 
@@ -212,7 +205,7 @@ public class ArticleService : IArticleService
         _db.Articles.Add(article);
         await _db.SaveChangesAsync(cancellationToken);
 
-        // Re-read: links were added by tag id, so their Tag navigations are not loaded yet.
+        // Re-read: tag navigations aren't loaded for links added by id.
         return await GetByIdAsync(article.Id, cancellationToken);
     }
 
@@ -248,6 +241,11 @@ public class ArticleService : IArticleService
         }
 
         var slug = ResolveSlug(request.Slug, title!);
+        if (slug.Length == 0)
+        {
+            return ServiceResult<AdminArticleResponse>.Validation("A slug could not be generated; provide one with letters or digits.");
+        }
+
         if (await SlugExistsAsync(slug, excludingId: id, cancellationToken))
         {
             return SlugTaken(slug);
@@ -282,11 +280,8 @@ public class ArticleService : IArticleService
             return NotFound(id);
         }
 
-        // A first publish makes the article visible on both sites by default — the
-        // reorder/visibility screen is where an editor dials that back down
-        // afterwards. Re-publishing, and the full edit form (which has its own
-        // explicit show checkboxes), never overrides an existing choice.
-        if (request.IsPublished && !article.IsPublished)
+        // First publish only: show on both sites. Republishing keeps the editor's choice.
+        if (request.IsPublished && article.PublishedAt is null)
         {
             article.ShowOnAgency = true;
             article.ShowOnPersonal = true;
@@ -307,7 +302,7 @@ public class ArticleService : IArticleService
             return ServiceResult<bool>.NotFound("not_found", $"No article with id {id}.");
         }
 
-        // Soft delete: the tag links stay put so restoring the row keeps its tags.
+        // Soft delete keeps tag links so a restore keeps its tags.
         article.IsDeleted = true;
         await _db.SaveChangesAsync(cancellationToken);
 
@@ -372,7 +367,6 @@ public class ArticleService : IArticleService
             ? query.OrderBy(a => a.AgencySortOrder).ThenByDescending(a => a.PublishedAt)
             : query.OrderBy(a => a.PersonalSortOrder).ThenByDescending(a => a.PublishedAt);
 
-    /// <summary>Null when the article is valid, otherwise the message to hand back.</summary>
     private static string? Validate(string? title, string? excerpt, CreateArticleRequest request)
     {
         if (title is null)
@@ -398,7 +392,6 @@ public class ArticleService : IArticleService
         return null;
     }
 
-    /// <summary>Null when every id resolves to a live tag, otherwise the message to hand back.</summary>
     private async Task<string?> UnknownTagIdsAsync(IReadOnlyList<Guid> tagIds, CancellationToken cancellationToken)
     {
         if (tagIds.Count == 0)
@@ -416,7 +409,6 @@ public class ArticleService : IArticleService
         return missing.Count == 0 ? null : $"Unknown tag id(s): {string.Join(", ", missing)}.";
     }
 
-    /// <summary>Adds and removes only what changed, so untouched links keep their row.</summary>
     private void SyncTags(Article article, IReadOnlyList<Guid> tagIds)
     {
         foreach (var link in article.ArticleTags.Where(at => !tagIds.Contains(at.TagId)).ToList())
@@ -438,7 +430,7 @@ public class ArticleService : IArticleService
         SlugGenerator.Generate(string.IsNullOrWhiteSpace(requestedSlug) ? title : requestedSlug);
 
     private Task<bool> SlugExistsAsync(string slug, Guid? excludingId, CancellationToken cancellationToken) =>
-        _db.Articles.AnyAsync(a => a.Slug == slug && (excludingId == null || a.Id != excludingId), cancellationToken);
+        _db.Articles.IgnoreQueryFilters().AnyAsync(a => a.Slug == slug && (excludingId == null || a.Id != excludingId), cancellationToken);
 
     private static ServiceResult<AdminArticleResponse> NotFound(Guid id) =>
         ServiceResult<AdminArticleResponse>.NotFound("not_found", $"No article with id {id}.");
@@ -446,10 +438,7 @@ public class ArticleService : IArticleService
     private static ServiceResult<AdminArticleResponse> SlugTaken(string slug) =>
         ServiceResult<AdminArticleResponse>.Conflict("slug_taken", $"Slug '{slug}' is already in use.");
 
-    /// <summary>
-    /// Going live stamps published_at the first time only; unpublishing never clears it, so an
-    /// article that comes back keeps its original date.
-    /// </summary>
+    // published_at is stamped on first publish and never cleared.
     private static void ApplyPublished(Article article, bool isPublished)
     {
         if (isPublished && article.PublishedAt is null)
@@ -462,10 +451,6 @@ public class ArticleService : IArticleService
 
     private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
-    /// <summary>
-    /// Projected inside the query, tags and all, so a list page is one round trip rather than one
-    /// query per article. The site picks which visibility pair is exposed.
-    /// </summary>
     private static Expression<Func<Article, ArticleResponse>> PublicProjection(Site site)
     {
         if (site == Site.Agency)

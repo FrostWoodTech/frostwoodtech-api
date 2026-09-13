@@ -14,10 +14,7 @@ namespace FrostWoodTech.API.Services;
 
 public class ReviewService : IReviewService
 {
-    /// <summary>
-    /// Rows are already kept forever (a review is real content, not a disposable attempt record),
-    /// so the submission rate limit counts them directly instead of a second attempts table.
-    /// </summary>
+    // Rate limit counts review rows directly; no separate attempts table.
     private static readonly TimeSpan SubmissionWindow = TimeSpan.FromHours(24);
 
     private const int MaxSubmissionsPerIpPerWindow = 3;
@@ -87,8 +84,7 @@ public class ReviewService : IReviewService
         int pageSize,
         CancellationToken cancellationToken)
     {
-        // is_deleted is handled by the DbContext's global filter; is_published is applied here
-        // and is not optional.
+        // is_published is mandatory; is_deleted comes from the global filter.
         var query = _db.Reviews.AsNoTracking().Where(r => r.IsPublished);
 
         var total = await query.CountAsync(cancellationToken);
@@ -197,8 +193,7 @@ public class ReviewService : IReviewService
             return ServiceResult<AdminReviewResponse>.Validation(validationError);
         }
 
-        // Sort order is never taken from the client — it's only ever changed via ReorderAsync,
-        // so a new review is simply appended to the end of the shared order.
+        // Sort order never comes from the client; new rows go to the end.
         var nextSortOrder = await _db.Reviews.MaxAsync(r => (int?)r.SortOrder, cancellationToken) + 1 ?? 0;
 
         var review = new Review
@@ -244,7 +239,6 @@ public class ReviewService : IReviewService
             return ServiceResult<AdminReviewResponse>.Validation(validationError);
         }
 
-        // Sort order is untouched here — it only changes via ReorderAsync.
         review.Name = name!;
         review.Country = country!;
         review.CountryCode = countryCode!;
@@ -316,7 +310,6 @@ public class ReviewService : IReviewService
         _ => query.OrderByDescending(r => r.CreatedAt)
     };
 
-    /// <summary>Null when the review is valid, otherwise the message to hand back.</summary>
     private static string? Validate(
         string? name,
         string? country,
@@ -393,6 +386,5 @@ public class ReviewService : IReviewService
         UpdatedAt = r.UpdatedAt
     };
 
-    /// <summary>The same shape for an entity already in memory after a write.</summary>
     private static readonly Func<Review, AdminReviewResponse> ToAdminResponse = AdminProjection.Compile();
 }

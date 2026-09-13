@@ -7,11 +7,7 @@ using FrostWoodTech.API.Interfaces;
 
 namespace FrostWoodTech.API.Services;
 
-/// <summary>
-/// Reads rates from open.er-api.com's free, keyless endpoint. The <c>HttpClient</c>'s
-/// <c>BaseAddress</c> is set to <see cref="ExchangeRates.ExchangeRateOptions.BaseUrl"/> in
-/// <c>Program.cs</c>, so a request here is just the trailing path.
-/// </summary>
+/// <summary>Reads rates from open.er-api.com (free, keyless).</summary>
 public class OpenExchangeRateProvider : IExchangeRateProvider
 {
     private readonly HttpClient _httpClient;
@@ -44,8 +40,7 @@ public class OpenExchangeRateProvider : IExchangeRateProvider
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
         {
-            // A refresh that can't reach the provider leaves every currency's live rate exactly
-            // where it was — the caller decides how to report that, this just returns "nothing new."
+            // Empty result means "unreachable"; the caller leaves live rates unchanged.
             _logger.LogError(ex, "Fetching exchange rates failed.");
 
             return new Dictionary<string, decimal>();

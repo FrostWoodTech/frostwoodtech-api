@@ -8,7 +8,6 @@ public class CreateCertificateRequest
 
     public DateOnly IssuedDate { get; set; }
 
-    /// <summary>Free text — a score, grade, or "Distinction" style result. Optional.</summary>
     public string? Marks { get; set; }
 
     public string? ObjectKey { get; set; }

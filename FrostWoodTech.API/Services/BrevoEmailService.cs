@@ -10,12 +10,7 @@ using FrostWoodTech.API.Interfaces;
 
 namespace FrostWoodTech.API.Services;
 
-/// <summary>
-/// Sends mail through Brevo's transactional email API
-/// (<c>POST https://api.brevo.com/v3/smtp/email</c>). Validation is identical to
-/// <see cref="LoggingEmailService"/> — callers see the same failures whichever transport is wired
-/// up, only a configured deployment actually reaches the network.
-/// </summary>
+/// <summary>Sends via Brevo's transactional API; validation matches LoggingEmailService.</summary>
 public class BrevoEmailService : IEmailService
 {
     private readonly HttpClient _httpClient;
@@ -89,11 +84,6 @@ public class BrevoEmailService : IEmailService
         }
     }
 
-    /// <summary>
-    /// Returns the failure to report, or null when the message is sendable. Mirrors
-    /// <see cref="LoggingEmailService"/>'s checks so callers see the same contract regardless of
-    /// which transport is wired up.
-    /// </summary>
     private ServiceResult<EmailSendResult>? Validate(EmailMessage message)
     {
         if (!_options.IsConfigured)

@@ -19,7 +19,6 @@ public class ReorderPricingPlans
         _pricing = pricing;
     }
 
-    /// <summary>Bulk sort_order update. Pricing is agency-only, so there is one order to keep.</summary>
     [Function("ReorderPricingPlans")]
     public async Task<IActionResult> Run(
         [HttpTrigger(

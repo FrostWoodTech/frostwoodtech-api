@@ -28,7 +28,7 @@ public class ServiceCatalogService : IServiceCatalogService
         int pageSize,
         CancellationToken cancellationToken)
     {
-        // is_deleted comes from the global query filter; is_published and the site flag are not optional.
+        // is_deleted comes from the global filter; is_published and the site flag are mandatory.
         var query = ForSite(_db.Services.AsNoTracking().Where(s => s.IsPublished), site);
 
         if (featured is not null)
@@ -83,12 +83,7 @@ public class ServiceCatalogService : IServiceCatalogService
     {
         var query = _db.Services.AsNoTracking();
 
-        // The reorder/visibility screen needs every published service in both
-        // columns — including ones not yet shown anywhere — so it can be the
-        // place that turns showing on in the first place. `includeHidden` is
-        // how that screen opts out of the show-on-site filter while still
-        // passing `site` (kept for the response's per-site sort order and to
-        // keep the two columns' query-cache entries distinct on the client).
+        // includeHidden: the visibility screen passes site (for sort order) but must see rows not shown yet.
         if (site is not null && !includeHidden)
         {
             query = ForSite(query, site.Value);
@@ -106,7 +101,6 @@ public class ServiceCatalogService : IServiceCatalogService
 
         var total = await query.CountAsync(cancellationToken);
 
-        // Drafts have no meaningful site order, so the admin list is alphabetical instead.
         var items = await query
             .OrderBy(s => s.Name)
             .Skip((page - 1) * pageSize)
@@ -156,6 +150,11 @@ public class ServiceCatalogService : IServiceCatalogService
         }
 
         var slug = ResolveSlug(request.Slug, name!);
+        if (slug.Length == 0)
+        {
+            return ServiceResult<AdminServiceResponse>.Validation("A slug could not be generated; provide one with letters or digits.");
+        }
+
         if (await SlugExistsAsync(slug, excludingId: null, cancellationToken))
         {
             return SlugTaken(slug);
@@ -217,7 +216,7 @@ public class ServiceCatalogService : IServiceCatalogService
         UpdateServiceRequest request,
         CancellationToken cancellationToken)
     {
-        // Includes the links because SyncProjects diffs against them.
+        // Links included: SyncProjects diffs against them.
         var service = await _db.Services
             .Include(s => s.ServiceProjects)
             .FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
@@ -244,6 +243,11 @@ public class ServiceCatalogService : IServiceCatalogService
         }
 
         var slug = ResolveSlug(request.Slug, name!);
+        if (slug.Length == 0)
+        {
+            return ServiceResult<AdminServiceResponse>.Validation("A slug could not be generated; provide one with letters or digits.");
+        }
+
         if (await SlugExistsAsync(slug, excludingId: id, cancellationToken))
         {
             return SlugTaken(slug);
@@ -306,11 +310,8 @@ public class ServiceCatalogService : IServiceCatalogService
             return NotFound(id);
         }
 
-        // A first publish makes the service visible on both sites by default — the
-        // reorder/visibility screen is where an editor dials that back down
-        // afterwards. Re-publishing, and the full edit form (which has its own
-        // explicit show checkboxes), never overrides an existing choice.
-        if (request.IsPublished && !service.IsPublished)
+        // First publish only: show on both sites. Republishing keeps the editor's choice.
+        if (request.IsPublished && service.PublishedAt is null)
         {
             service.ShowOnAgency = true;
             service.ShowOnPersonal = true;
@@ -331,7 +332,7 @@ public class ServiceCatalogService : IServiceCatalogService
             return ServiceResult<bool>.NotFound("not_found", $"No service with id {id}.");
         }
 
-        // Soft delete: the pricing plans stay put so restoring the row keeps them.
+        // Soft delete keeps pricing plans.
         service.IsDeleted = true;
         await _db.SaveChangesAsync(cancellationToken);
 
@@ -396,7 +397,6 @@ public class ServiceCatalogService : IServiceCatalogService
             ? query.OrderBy(s => s.AgencySortOrder).ThenByDescending(s => s.PublishedAt)
             : query.OrderBy(s => s.PersonalSortOrder).ThenByDescending(s => s.PublishedAt);
 
-    /// <summary>Null when the service is valid, otherwise the message to hand back.</summary>
     private static string? Validate(
         string? name,
         string? shortDescription,
@@ -437,7 +437,6 @@ public class ServiceCatalogService : IServiceCatalogService
             return "depthImageAltText is required whenever a depth image is set.";
         }
 
-        // A label with no URL renders a dead button, a URL with no label renders nothing at all.
         if (string.IsNullOrWhiteSpace(request.PrimaryCtaLabel) != string.IsNullOrWhiteSpace(request.PrimaryCtaUrl))
         {
             return "primaryCtaLabel and primaryCtaUrl must be set together.";
@@ -451,7 +450,6 @@ public class ServiceCatalogService : IServiceCatalogService
         return null;
     }
 
-    /// <summary>Null when every id resolves to a live project, otherwise the message to hand back.</summary>
     private async Task<string?> UnknownProjectIdsAsync(
         IReadOnlyList<Guid> projectIds,
         CancellationToken cancellationToken)
@@ -471,7 +469,6 @@ public class ServiceCatalogService : IServiceCatalogService
         return missing.Count == 0 ? null : $"Unknown project id(s): {string.Join(", ", missing)}.";
     }
 
-    /// <summary>Adds and removes only what changed, so untouched links keep their row.</summary>
     private void SyncProjects(ServiceOffering service, IReadOnlyList<Guid> projectIds)
     {
         foreach (var link in service.ServiceProjects.Where(sp => !projectIds.Contains(sp.ProjectId)).ToList())
@@ -489,10 +486,7 @@ public class ServiceCatalogService : IServiceCatalogService
     private static IReadOnlyList<Guid> Distinct(List<Guid>? projectIds) =>
         projectIds is null ? [] : [.. projectIds.Distinct()];
 
-    /// <summary>
-    /// Going live stamps published_at the first time only; unpublishing never clears it, so a
-    /// service that comes back keeps its original date.
-    /// </summary>
+    // published_at is stamped on first publish and never cleared.
     private static void ApplyPublished(ServiceOffering service, bool isPublished)
     {
         if (isPublished && service.PublishedAt is null)
@@ -507,7 +501,7 @@ public class ServiceCatalogService : IServiceCatalogService
         SlugGenerator.Generate(string.IsNullOrWhiteSpace(requestedSlug) ? name : requestedSlug);
 
     private Task<bool> SlugExistsAsync(string slug, Guid? excludingId, CancellationToken cancellationToken) =>
-        _db.Services.AnyAsync(s => s.Slug == slug && (excludingId == null || s.Id != excludingId), cancellationToken);
+        _db.Services.IgnoreQueryFilters().AnyAsync(s => s.Slug == slug && (excludingId == null || s.Id != excludingId), cancellationToken);
 
     private static ServiceResult<AdminServiceResponse> NotFound(Guid id) =>
         ServiceResult<AdminServiceResponse>.NotFound("not_found", $"No service with id {id}.");
@@ -515,18 +509,11 @@ public class ServiceCatalogService : IServiceCatalogService
     private static ServiceResult<AdminServiceResponse> SlugTaken(string slug) =>
         ServiceResult<AdminServiceResponse>.Conflict("slug_taken", $"Slug '{slug}' is already in use.");
 
-    /// <summary>Trimmed, or null when the caller sent nothing meaningful.</summary>
     private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
-    /// <summary>
-    /// The public shape for one site. <paramref name="withDetail"/> adds the linked projects and
-    /// this service's own FAQs — only the single-service endpoint asks for those, since the list
-    /// cards render neither and loading them per row would be an N+1 for nothing.
-    /// </summary>
+    // withDetail adds projects and FAQs; only the single-service endpoint needs them (avoids N+1 on lists).
     private static Expression<Func<ServiceOffering, ServiceResponse>> PublicProjection(Site site, bool withDetail)
     {
-        // Captured, so EF parameterises the site choice instead of this method needing one
-        // near-identical copy of the projection per site.
         var isAgency = site == Site.Agency;
 
         if (!withDetail)
@@ -602,8 +589,7 @@ public class ServiceCatalogService : IServiceCatalogService
             PublishedAt = s.PublishedAt,
             Featured = isAgency ? s.FeaturedOnAgency : s.FeaturedOnPersonal,
             SortOrder = isAgency ? s.AgencySortOrder : s.PersonalSortOrder,
-            // ServiceProject is not an AuditableEntity, so the global soft-delete filter skips it
-            // — the project's own published/deleted/site state has to be checked here.
+            // ServiceProject has no soft-delete filter, so check the project's own state here.
             Projects = s.ServiceProjects
                 .Where(sp => !sp.Project.IsDeleted
                     && sp.Project.IsPublished

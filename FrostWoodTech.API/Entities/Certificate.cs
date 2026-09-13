@@ -2,12 +2,7 @@ using FrostWoodTech.API.Entities.Common;
 
 namespace FrostWoodTech.API.Entities;
 
-/// <summary>
-/// Personal-site only — there is no agency equivalent, so unlike <see cref="SiteVisibleEntity"/>
-/// there is no site choice at all, just a plain <see cref="Featured"/> flag and one
-/// <see cref="SortOrder"/>. The uploaded file can be a PDF or an image, so <see cref="Width"/>/
-/// <see cref="Height"/> are nullable — a PDF has no dimensions.
-/// </summary>
+/// <summary>Personal-site only. A PDF has no Width/Height.</summary>
 public class Certificate : AuditableEntity
 {
     public required string Name { get; set; }
@@ -16,7 +11,6 @@ public class Certificate : AuditableEntity
 
     public DateOnly IssuedDate { get; set; }
 
-    /// <summary>Free text — a score, grade, or "Distinction" style result. Optional.</summary>
     public string? Marks { get; set; }
 
     public required string ObjectKey { get; set; }
@@ -35,6 +29,6 @@ public class Certificate : AuditableEntity
 
     public bool Featured { get; set; }
 
-    /// <summary>Display order, set only via the drag-and-drop reorder endpoint — never a typed number.</summary>
+    /// <summary>Changed only via the reorder endpoint.</summary>
     public int SortOrder { get; set; }
 }

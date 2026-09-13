@@ -1,9 +1,5 @@
 namespace FrostWoodTech.API.DTOs.Public;
 
-/// <summary>
-/// What the personal site sees. The draft state and audit metadata never cross this boundary.
-/// There is no `site` concept here at all — certificates only ever exist for the personal site.
-/// </summary>
 public sealed class CertificateResponse
 {
     public required Guid Id { get; init; }

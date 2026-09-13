@@ -28,7 +28,6 @@ public class PricingPlanConfiguration : IEntityTypeConfiguration<PricingPlan>
         builder.Property(p => p.Featured).HasColumnName("featured");
         builder.Property(p => p.SortOrder).HasColumnName("sort_order");
 
-        // A null service_id means a combo pack, so the FK is optional.
         builder.HasOne(p => p.Service)
             .WithMany(s => s.PricingPlans)
             .HasForeignKey(p => p.ServiceId)

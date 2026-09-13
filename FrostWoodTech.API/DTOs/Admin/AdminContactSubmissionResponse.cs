@@ -2,8 +2,7 @@ using FrostWoodTech.API.Enums;
 
 namespace FrostWoodTech.API.DTOs.Admin;
 
-/// <summary>Full admin view: everything the visitor sent, plus triage state and the submitter's
-/// IP for spam moderation. Never reused on the public surface.</summary>
+/// <summary>Admin only: includes triage state and submitter IP.</summary>
 public sealed class AdminContactSubmissionResponse
 {
     public required Guid Id { get; init; }

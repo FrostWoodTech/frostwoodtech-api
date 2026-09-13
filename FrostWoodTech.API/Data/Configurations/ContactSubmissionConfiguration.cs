@@ -28,7 +28,7 @@ public class ContactSubmissionConfiguration : IEntityTypeConfiguration<ContactSu
         builder.Property(c => c.RepliedBy).HasColumnName("replied_by");
         builder.Property(c => c.SubmitterIp).HasColumnName("submitter_ip");
 
-        // SetNull both ways: losing a service or an admin account must never destroy the enquiry.
+        // SetNull: deleting a service or admin never deletes the enquiry.
         builder.HasOne(c => c.Service)
             .WithMany()
             .HasForeignKey(c => c.ServiceId)
@@ -39,11 +39,10 @@ public class ContactSubmissionConfiguration : IEntityTypeConfiguration<ContactSu
             .HasForeignKey(c => c.RepliedBy)
             .OnDelete(DeleteBehavior.SetNull);
 
-        // The default admin inbox query.
         builder.HasIndex(c => new { c.Status, c.CreatedAt })
             .HasDatabaseName("ix_contact_submissions_status_created_at");
 
-        // The per-IP submission rate limit count.
+        // Backs the per-IP rate limit.
         builder.HasIndex(c => new { c.SubmitterIp, c.CreatedAt })
             .HasDatabaseName("ix_contact_submissions_submitter_ip_created_at");
     }

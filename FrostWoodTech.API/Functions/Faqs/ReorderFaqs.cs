@@ -19,7 +19,6 @@ public class ReorderFaqs
         _faqService = faqService;
     }
 
-    /// <summary>Bulk sort_order update, in a single save. FAQs share one order across both sites.</summary>
     [Function("ReorderFaqs")]
     public async Task<IActionResult> Run(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "cms/admin/faqs/reorder")] HttpRequest req,

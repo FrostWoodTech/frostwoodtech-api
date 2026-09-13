@@ -6,10 +6,7 @@ using FrostWoodTech.API.Services;
 
 namespace FrostWoodTech.API.Data;
 
-/// <summary>
-/// Ensures USD exists, since every other rate is expressed against it and the public sites fall
-/// back to it. Every other currency is the admin's to add — only they know today's rate.
-/// </summary>
+/// <summary>Ensures USD exists; every other currency is added by an admin.</summary>
 public static class BaseCurrencySeeder
 {
     public static async Task EnsureSeededAsync(
@@ -17,7 +14,7 @@ public static class BaseCurrencySeeder
         ILogger logger,
         CancellationToken cancellationToken = default)
     {
-        // IgnoreQueryFilters: a soft-deleted USD row still occupies the unique code index.
+        // Include soft-deleted rows: they still hold the unique code.
         var exists = await db.Currencies
             .IgnoreQueryFilters()
             .AnyAsync(c => c.Code == CurrencyService.BaseCurrencyCode, cancellationToken);
@@ -44,7 +41,6 @@ public static class BaseCurrencySeeder
         }
         catch (DbUpdateException ex)
         {
-            // The unique index on code catches two cold starts racing here. Either way it now exists.
             logger.LogWarning(ex, "Base currency seeding lost a race — it already exists.");
         }
     }

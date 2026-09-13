@@ -18,7 +18,6 @@ public class LoginAttemptConfiguration : IEntityTypeConfiguration<LoginAttempt>
         builder.Property(a => a.Action).HasColumnName("action").HasColumnType("auth_attempt_action");
         builder.Property(a => a.AttemptedAt).HasColumnName("attempted_at");
 
-        // Every counting query filters on the action and the window, so both lead each index.
         builder.HasIndex(a => new { a.Email, a.Action, a.AttemptedAt });
         builder.HasIndex(a => new { a.IpAddress, a.Action, a.AttemptedAt });
     }

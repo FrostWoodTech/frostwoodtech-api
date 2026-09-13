@@ -19,10 +19,6 @@ public class SubmitContactSubmission
         _contactService = contactService;
     }
 
-    /// <summary>
-    /// Anonymous public write. Never public content — there is no matching public read; this
-    /// lands only in the admin inbox.
-    /// </summary>
     [Function("SubmitContactSubmission")]
     public async Task<IActionResult> Run(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "public/contact")] HttpRequest req,

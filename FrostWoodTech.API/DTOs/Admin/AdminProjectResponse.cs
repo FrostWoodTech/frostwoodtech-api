@@ -2,7 +2,6 @@ using FrostWoodTech.API.DTOs.Public;
 
 namespace FrostWoodTech.API.DTOs.Admin;
 
-/// <summary>Admin view: both sites' visibility, the draft flag and audit metadata.</summary>
 public sealed class AdminProjectResponse
 {
     public required Guid Id { get; init; }
@@ -51,7 +50,6 @@ public sealed class AdminProjectResponse
 
     public required IReadOnlyList<AdminTagResponse> Tags { get; init; }
 
-    /// <summary>Images carry no admin-only fields, so the public shape is reused as is.</summary>
     public required IReadOnlyList<ProjectImageResponse> Images { get; init; }
 
     public required DateTimeOffset CreatedAt { get; init; }

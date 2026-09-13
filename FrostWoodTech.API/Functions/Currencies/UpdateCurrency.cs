@@ -19,7 +19,6 @@ public class UpdateCurrency
         _currencyService = currencyService;
     }
 
-    /// <summary>A full replacement — changing today's rate goes through this.</summary>
     [Function("UpdateCurrency")]
     public async Task<IActionResult> Run(
         [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "cms/admin/currencies/{id:guid}")] HttpRequest req,

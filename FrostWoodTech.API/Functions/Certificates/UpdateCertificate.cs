@@ -19,7 +19,6 @@ public class UpdateCertificate
         _certificateService = certificateService;
     }
 
-    /// <summary>A full replacement — every field is written as given.</summary>
     [Function("UpdateCertificate")]
     public async Task<IActionResult> Run(
         [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "cms/admin/certificates/{id:guid}")] HttpRequest req,

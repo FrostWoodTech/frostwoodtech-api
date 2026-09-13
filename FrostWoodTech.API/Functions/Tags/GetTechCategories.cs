@@ -8,7 +8,6 @@ using FrostWoodTech.API.Enums;
 
 namespace FrostWoodTech.API.Functions.Tags;
 
-/// <summary>Fixed lookup list — lets the admin SPA build its category picker without hardcoding the enum.</summary>
 public class GetTechCategories
 {
     [Function("GetTechCategories")]

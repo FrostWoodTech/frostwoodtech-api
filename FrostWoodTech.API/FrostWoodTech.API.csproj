@@ -9,13 +9,19 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="FrostWoodTech.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Local secrets: copied for func start, never published. -->
     <Content Include="local.settings*.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Never</CopyToPublishDirectory>
     </Content>
   </ItemGroup>
 
   <ItemGroup>
-    <!-- The hand-authored API contract, served by GetOpenApiSpec. -->
+    <!-- Served by GetOpenApiSpec. -->
     <EmbeddedResource Include="Docs\openapi.yaml" />
   </ItemGroup>
 

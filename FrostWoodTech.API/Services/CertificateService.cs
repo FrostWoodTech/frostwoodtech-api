@@ -14,10 +14,12 @@ namespace FrostWoodTech.API.Services;
 public class CertificateService : ICertificateService
 {
     private readonly FrostWoodTechDbContext _db;
+    private readonly IMediaService _mediaService;
 
-    public CertificateService(FrostWoodTechDbContext db)
+    public CertificateService(FrostWoodTechDbContext db, IMediaService mediaService)
     {
         _db = db;
+        _mediaService = mediaService;
     }
 
     public async Task<PagedResult<CertificateResponse>> GetPublicCertificatesAsync(
@@ -37,6 +39,7 @@ public class CertificateService : ICertificateService
 
         var items = await query
             .OrderBy(c => c.SortOrder)
+            .ThenByDescending(c => c.IssuedDate)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .Select(PublicProjection)
@@ -76,6 +79,7 @@ public class CertificateService : ICertificateService
 
         var items = await query
             .OrderBy(c => c.SortOrder)
+            .ThenByDescending(c => c.IssuedDate)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .Select(AdminProjection)
@@ -111,8 +115,7 @@ public class CertificateService : ICertificateService
             return ServiceResult<AdminCertificateResponse>.Validation(validationError);
         }
 
-        // Sort order is never taken from the client — it's only ever changed via ReorderAsync,
-        // so a new certificate is appended to the end of the (single, global) order.
+        // Sort order never comes from the client; new rows go to the end.
         var nextSortOrder = await _db.Certificates.MaxAsync(c => (int?)c.SortOrder, cancellationToken) + 1 ?? 0;
 
         var certificate = new Certificate
@@ -156,7 +159,8 @@ public class CertificateService : ICertificateService
             return ServiceResult<AdminCertificateResponse>.Validation(validationError);
         }
 
-        // Sort order is untouched here — it only changes via ReorderAsync.
+        var previousObjectKey = certificate.ObjectKey;
+
         certificate.Name = request.Name!.Trim();
         certificate.IssuedBy = request.IssuedBy!.Trim();
         certificate.IssuedDate = request.IssuedDate;
@@ -171,6 +175,12 @@ public class CertificateService : ICertificateService
         certificate.Featured = request.Featured;
 
         await _db.SaveChangesAsync(cancellationToken);
+
+        // After the commit: a failed delete only orphans the old file, never the row.
+        if (previousObjectKey != certificate.ObjectKey)
+        {
+            await _mediaService.DeleteFileAsync(previousObjectKey, cancellationToken);
+        }
 
         return await GetByIdAsync(certificate.Id, cancellationToken);
     }
@@ -225,7 +235,6 @@ public class CertificateService : ICertificateService
         return ServiceResult<bool>.Success(true);
     }
 
-    /// <summary>Null when the certificate is valid, otherwise the message to hand back.</summary>
     private static string? Validate(CreateCertificateRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Name))
@@ -243,14 +252,43 @@ public class CertificateService : ICertificateService
             return "Object key is required.";
         }
 
-        if (string.IsNullOrWhiteSpace(request.Url))
+        if (request.IssuedDate == default)
         {
-            return "Url is required.";
+            return "issuedDate is required.";
         }
 
-        if (string.IsNullOrWhiteSpace(request.MimeType))
+        if (request.IssuedDate > DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)))
         {
-            return "Mime type is required.";
+            return "issuedDate cannot be in the future.";
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Url) || !IsAbsoluteHttpUrl(request.Url.Trim()))
+        {
+            return "url is required and must be an absolute http(s) URL.";
+        }
+
+        var mimeType = request.MimeType?.Trim().ToLowerInvariant();
+        var isPdf = mimeType == "application/pdf";
+        var isImage = mimeType is not null && mimeType.StartsWith("image/", StringComparison.Ordinal) && mimeType.Length > "image/".Length;
+
+        if (!isPdf && !isImage)
+        {
+            return "mimeType must be application/pdf or an image/* type.";
+        }
+
+        if (request.Width is null != request.Height is null)
+        {
+            return "width and height must be set together.";
+        }
+
+        if (request.Width <= 0 || request.Height <= 0)
+        {
+            return "width and height must be greater than zero.";
+        }
+
+        if (isImage && request.Width is null)
+        {
+            return "width and height are required for an image.";
         }
 
         if (string.IsNullOrWhiteSpace(request.AltText))
@@ -261,12 +299,15 @@ public class CertificateService : ICertificateService
         return null;
     }
 
+    private static bool IsAbsoluteHttpUrl(string value) =>
+        Uri.TryCreate(value, UriKind.Absolute, out var uri)
+        && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+
     private static ServiceResult<AdminCertificateResponse> NotFound(Guid id) =>
         ServiceResult<AdminCertificateResponse>.NotFound("not_found", $"No certificate with id {id}.");
 
     private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
-    /// <summary>Projected inside the query so the SQL stays narrow.</summary>
     private static readonly Expression<Func<Certificate, CertificateResponse>> PublicProjection = c => new CertificateResponse
     {
         Id = c.Id,

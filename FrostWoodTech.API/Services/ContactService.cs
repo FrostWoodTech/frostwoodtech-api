@@ -18,15 +18,10 @@ namespace FrostWoodTech.API.Services;
 
 public class ContactService : IContactService
 {
-    /// <summary>
-    /// Rows are kept forever for the admin inbox, so the submission rate limit counts them
-    /// directly instead of a second attempts table — same reasoning as <see cref="ReviewService"/>.
-    /// </summary>
+    // Rate limit counts contact rows directly; they're kept for the inbox anyway.
     private static readonly TimeSpan SubmissionWindow = TimeSpan.FromHours(24);
 
-    /// <summary>
-    /// Higher than reviews' 3 — a genuine prospect may legitimately follow up more than once.
-    /// </summary>
+    // Higher than reviews (3): a real prospect may follow up.
     private const int MaxSubmissionsPerIpPerWindow = 5;
 
     private readonly FrostWoodTechDbContext _db;
@@ -75,7 +70,11 @@ public class ContactService : IContactService
         {
             var since = DateTimeOffset.UtcNow - SubmissionWindow;
             var recentCount = await _db.ContactSubmissions
-                .CountAsync(c => c.SubmitterIp == ipAddress && c.CreatedAt >= since, cancellationToken);
+                .CountAsync(
+                    c => c.SubmitterIp == ipAddress
+                        && c.CreatedAt >= since
+                        && c.Status != ContactSubmissionStatus.Spam,
+                    cancellationToken);
 
             if (recentCount >= MaxSubmissionsPerIpPerWindow)
             {
@@ -111,8 +110,7 @@ public class ContactService : IContactService
             ServiceId = serviceId,
             BudgetRange = request.BudgetRange,
             Site = request.Site!.Value,
-            // A filled honeypot is filed as spam and still answered normally — telling a bot it
-            // was caught just teaches it to stop filling the field.
+            // Honeypot hits are filed as spam but answered normally, so bots don't learn.
             Status = isHoneypot ? ContactSubmissionStatus.Spam : ContactSubmissionStatus.New,
             SubmitterIp = ipAddress
         };
@@ -239,10 +237,7 @@ public class ContactService : IContactService
         return ServiceResult<bool>.Success(true);
     }
 
-    /// <summary>
-    /// Best-effort: a bounced notification must never fail the visitor's submission, so any
-    /// failure is logged and swallowed.
-    /// </summary>
+    // Best effort: a failed notification never fails the visitor's submission.
     private async Task NotifyAdminsAsync(ContactSubmission submission, CancellationToken cancellationToken)
     {
         var to = Blank(_contactOptions.NotifyAddress) ?? Blank(_superAdminOptions.Email);
@@ -280,7 +275,6 @@ public class ContactService : IContactService
         }
     }
 
-    /// <summary>Null when the submission is valid, otherwise the message to hand back.</summary>
     private static string? Validate(string? name, string? email, string? message, Site? site)
     {
         if (name is null)

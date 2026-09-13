@@ -7,8 +7,7 @@ using FrostWoodTech.API.Interfaces;
 
 namespace FrostWoodTech.API.Functions.Pricing;
 
-/// <summary>Combo packs get their own route instead of "pricing list with serviceId omitted" —
-/// an absent parameter silently changing the query is invisible in the URL.</summary>
+/// <summary>Own route rather than an omitted serviceId, so the query is visible in the URL.</summary>
 public class GetPublicComboPricingPlans
 {
     private readonly IPricingService _pricing;

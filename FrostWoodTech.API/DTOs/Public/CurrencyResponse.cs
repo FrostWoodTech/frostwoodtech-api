@@ -1,9 +1,5 @@
 namespace FrostWoodTech.API.DTOs.Public;
 
-/// <summary>
-/// One selectable display currency. `isActive` never crosses this boundary — the public list only
-/// ever contains active rows, so the flag would be a constant.
-/// </summary>
 public sealed class CurrencyResponse
 {
     public required string Code { get; init; }

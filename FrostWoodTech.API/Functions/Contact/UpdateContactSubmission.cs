@@ -19,7 +19,6 @@ public class UpdateContactSubmission
         _contactService = contactService;
     }
 
-    /// <summary>Triage — status and internal notes. Publishing/reordering concepts don't apply here.</summary>
     [Function("UpdateContactSubmission")]
     public async Task<IActionResult> Run(
         [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "cms/admin/contact-submissions/{id:guid}")] HttpRequest req,

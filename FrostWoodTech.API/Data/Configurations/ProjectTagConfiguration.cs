@@ -20,7 +20,6 @@ public class ProjectTagConfiguration : IEntityTypeConfiguration<ProjectTag>
             .HasForeignKey(pt => pt.ProjectId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        // Restrict, not cascade: a tag still in use must not be removable.
         builder.HasOne(pt => pt.Tag)
             .WithMany(t => t.ProjectTags)
             .HasForeignKey(pt => pt.TagId)

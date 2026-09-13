@@ -28,17 +28,13 @@ var configuration = ConfigurationHelper.Build();
 
 builder.Configuration.AddConfiguration(configuration);
 
-Console.WriteLine($"Environment - ProgramCS: {Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")}");
-Console.WriteLine(
-    $"Connection String - ProgramCS: {configuration.GetConnectionString("Default")}");
-
 builder.ConfigureFunctionsWebApplication();
 
 var connectionString = builder.Configuration.GetConnectionString("Default")
     ?? throw new InvalidOperationException(
         "Connection string 'Default' is missing. Use Neon's pooled connection string.");
 
-// The enums must be mapped on the data source as well as in the model.
+// Enums are mapped on both the data source and the EF model; either alone sends ints.
 var dataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
 dataSourceBuilder.MapEnum<TechCategory>("tech_category");
 dataSourceBuilder.MapEnum<PriceType>("price_type");
@@ -56,8 +52,6 @@ builder.Services.AddSingleton(dataSource);
 builder.Services.AddDbContextPool<FrostWoodTechDbContext>(options =>
     options.UseNpgsql(dataSource, npgsql =>
     {
-        // The data source mapping above is not enough — without this the model sends enums as
-        // plain integers, which native enum columns reject.
         npgsql.MapEnum<TechCategory>("tech_category");
         npgsql.MapEnum<PriceType>("price_type");
         npgsql.MapEnum<UserRole>("user_role");
@@ -71,7 +65,7 @@ builder.Services.AddDbContextPool<FrostWoodTechDbContext>(options =>
         npgsql.CommandTimeout(30);
     }));
 
-// Keep IActionResult payloads on the same JSON contract as the hand-serialised public responses.
+// Same JSON contract for IActionResult payloads as hand-serialized public responses.
 builder.Services.Configure<JsonOptions>(options =>
 {
     options.JsonSerializerOptions.PropertyNamingPolicy = JsonDefaults.Options.PropertyNamingPolicy;
@@ -86,6 +80,7 @@ builder.Services.Configure<JsonOptions>(options =>
 builder.Services.AddScoped<ITagService, TagService>();
 builder.Services.AddScoped<IArticleService, ArticleService>();
 builder.Services.AddScoped<IProjectService, ProjectService>();
+builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IServiceCatalogService, ServiceCatalogService>();
 builder.Services.AddScoped<IPricingService, PricingService>();
 builder.Services.AddScoped<IFaqService, FaqService>();
@@ -95,7 +90,6 @@ builder.Services.AddScoped<IContactService, ContactService>();
 builder.Services.AddScoped<ICurrencyService, CurrencyService>();
 
 builder.Services.Configure<NeonStorageOptions>(builder.Configuration.GetSection("NeonS3"));
-// Thread-safe and meant to be long-lived, so built once rather than per request.
 builder.Services.AddSingleton<IAmazonS3>(sp =>
 {
     var options = sp.GetRequiredService<IOptions<NeonStorageOptions>>().Value;
@@ -118,7 +112,7 @@ builder.Services.Configure<SuperAdminOptions>(builder.Configuration.GetSection("
 builder.Services.AddSingleton<IJwtTokenService, JwtTokenService>();
 
 builder.Services.Configure<GoogleOptions>(builder.Configuration.GetSection("Google"));
-// Singleton so Google's discovery document and signing keys are cached, not refetched per sign-in.
+// Singleton so Google's signing keys are cached.
 builder.Services.AddSingleton<IGoogleTokenValidator, GoogleTokenValidator>();
 
 builder.Services.AddScoped<ILoginRateLimiter, LoginRateLimiter>();
@@ -130,8 +124,7 @@ builder.Services.Configure<CorsOptions>(builder.Configuration.GetSection("Cors")
 builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection("Email"));
 builder.Services.Configure<ContactOptions>(builder.Configuration.GetSection("Contact"));
 
-// Anything but "brevo" falls back to logging, so a keyless deployment says so in the log
-// instead of failing every send at the provider.
+// Anything but "brevo" logs mail instead of sending.
 if (string.Equals(builder.Configuration["Email:Provider"], "brevo", StringComparison.OrdinalIgnoreCase))
 {
     builder.Services.AddHttpClient<IEmailService, BrevoEmailService>(client =>
@@ -151,21 +144,18 @@ builder.Services.AddHttpClient<IExchangeRateProvider, OpenExchangeRateProvider>(
     client.BaseAddress = new Uri(options.BaseUrl);
 });
 
-// /api/docs and /api/openapi.yaml, both 404 unless Docs__Enabled is set.
+// /api/docs and /api/openapi.yaml return 404 unless Docs__Enabled is set.
 builder.Services.Configure<DocsOptions>(builder.Configuration.GetSection("Docs"));
 
-// Order matters. CORS outermost so its headers land on error responses too — a 401 the browser
-// cannot read is one the SPA cannot report. The exception handler then wraps auth too.
+// Order matters: CORS outermost so error responses get headers; the exception handler wraps auth.
 builder.UseMiddleware<CorsMiddleware>();
 builder.UseMiddleware<ExceptionHandlingMiddleware>();
 
-// Everything under /api/cms/admin/* is authorised here, not per function.
 builder.UseMiddleware<JwtAuthenticationMiddleware>();
 
 var host = builder.Build();
 
-// The one account never created through the API. Safe to repeat on every cold start;
-// schema changes still belong in CI migrations.
+// Safe on every cold start; schema changes still belong to CI migrations.
 await using (var scope = host.Services.CreateAsyncScope())
 {
     var logger = scope.ServiceProvider
@@ -183,7 +173,7 @@ await using (var scope = host.Services.CreateAsyncScope())
     }
     catch (Exception ex)
     {
-        // A transient Neon failure must not stop the host from serving the public sites.
+        // A transient database failure must not stop the host from starting.
         logger.LogError(ex, "Super admin seeding failed. The host is starting anyway.");
     }
 

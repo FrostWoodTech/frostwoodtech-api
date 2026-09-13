@@ -19,10 +19,6 @@ public class GoogleSignIn
         _userService = userService;
     }
 
-    /// <summary>
-    /// Exchanges a Google ID token for the same JWT pair password login returns. Anonymous by
-    /// necessity — this is one of the ways a caller gets a token in the first place.
-    /// </summary>
     [Function("GoogleSignIn")]
     public async Task<IActionResult> Run(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "cms/admin/auth/google")] HttpRequest req,

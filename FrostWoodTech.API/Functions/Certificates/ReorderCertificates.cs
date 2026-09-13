@@ -19,7 +19,6 @@ public class ReorderCertificates
         _certificateService = certificateService;
     }
 
-    /// <summary>Bulk sort_order update, in a single save. Certificates share one global order.</summary>
     [Function("ReorderCertificates")]
     public async Task<IActionResult> Run(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "cms/admin/certificates/reorder")] HttpRequest req,

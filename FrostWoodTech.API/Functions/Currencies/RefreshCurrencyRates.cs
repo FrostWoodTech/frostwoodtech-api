@@ -16,7 +16,6 @@ public class RefreshCurrencyRates
         _currencyService = currencyService;
     }
 
-    /// <summary>The "Refresh now" button — one call to the FX provider, applied to every currency at once.</summary>
     [Function("RefreshCurrencyRates")]
     public async Task<IActionResult> Run(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "cms/admin/currencies/refresh-rates")] HttpRequest req,

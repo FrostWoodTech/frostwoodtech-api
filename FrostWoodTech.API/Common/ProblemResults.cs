@@ -5,10 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace FrostWoodTech.API.Common;
 
-/// <summary>
-/// RFC 7807 responses. Every error carries a stable <c>code</c> the frontends can switch on —
-/// they must never have to match on the human-readable detail string.
-/// </summary>
+/// <summary>RFC 7807 errors with a stable code the frontends switch on.</summary>
 public static class ProblemResults
 {
     public const string ContentType = "application/problem+json";
@@ -28,14 +25,10 @@ public static class ProblemResults
     public static IActionResult Conflict(string code, string detail) =>
         Create(StatusCodes.Status409Conflict, "Conflict", code, detail);
 
-    /// <summary>
-    /// The guard that stops personal content leaking onto the agency site: a public endpoint with
-    /// site visibility never falls back to "return everything".
-    /// </summary>
+    /// <summary>Public site-scoped endpoints never fall back to returning every site.</summary>
     public static IActionResult SiteRequired() =>
         BadRequest("site_required", "?site=agency or ?site=personal is required.");
 
-    /// <summary>Maps a service failure onto the matching status code.</summary>
     public static IActionResult FromError(ServiceError error) => error.Kind switch
     {
         ServiceErrorKind.NotFound => NotFound(error.Code, error.Message),
@@ -45,10 +38,7 @@ public static class ProblemResults
         _ => BadRequest(error.Code, error.Message)
     };
 
-    /// <summary>
-    /// The middleware runs before the Functions pipeline can turn an <see cref="IActionResult"/>
-    /// into a response, so it writes the same document straight onto the stream.
-    /// </summary>
+    /// <summary>For middleware, which runs before IActionResult results are written.</summary>
     public static Task WriteAsync(HttpResponse response, int status, string title, string code, string detail)
     {
         response.StatusCode = status;

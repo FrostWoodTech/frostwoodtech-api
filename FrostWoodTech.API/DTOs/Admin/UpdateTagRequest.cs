@@ -2,7 +2,6 @@ using FrostWoodTech.API.Enums;
 
 namespace FrostWoodTech.API.DTOs.Admin;
 
-/// <summary>Full replacement — every field is written, so send the whole tag.</summary>
 public sealed class UpdateTagRequest
 {
     public string? Name { get; set; }

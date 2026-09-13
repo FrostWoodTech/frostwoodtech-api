@@ -19,7 +19,6 @@ public class UpdateReview
         _reviewService = reviewService;
     }
 
-    /// <summary>A full replacement — publish/unpublish, featured, and reorder-by-hand all go through this.</summary>
     [Function("UpdateReview")]
     public async Task<IActionResult> Run(
         [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "cms/admin/reviews/{id:guid}")] HttpRequest req,

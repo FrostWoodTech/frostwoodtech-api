@@ -6,12 +6,7 @@ namespace FrostWoodTech.API.Interfaces;
 
 public interface ICurrencyService
 {
-    /// <summary>
-    /// Public read: active rows only. Not paged and not site-scoped — currencies are a small
-    /// shared lookup set, same as tags. There is no overload that returns inactive rows.
-    /// </summary>
-    /// Never a currency with neither a manual override nor a fetched live rate — see
-    /// `Currency.EffectiveRateFromUsd`.
+    /// <summary>Active currencies that have a manual or live rate.</summary>
     Task<IReadOnlyList<CurrencyResponse>> GetPublicCurrenciesAsync(CancellationToken cancellationToken);
 
     Task<PagedResult<AdminCurrencyResponse>> GetAdminCurrenciesAsync(
@@ -32,12 +27,8 @@ public interface ICurrencyService
         UpdateCurrencyRequest request,
         CancellationToken cancellationToken);
 
-    /// <summary>Soft delete. Refused for USD, and while a pricing plan still prices in it.</summary>
+    /// <summary>Refused for USD and while a pricing plan uses the currency.</summary>
     Task<ServiceResult<bool>> DeleteAsync(Guid id, CancellationToken cancellationToken);
 
-    /// <summary>
-    /// Fetches every rate the provider knows in one call and updates each currency's live rate.
-    /// A currency whose code the provider doesn't recognise is left untouched.
-    /// </summary>
     Task<ServiceResult<RefreshCurrencyRatesResponse>> RefreshLiveRatesAsync(CancellationToken cancellationToken);
 }

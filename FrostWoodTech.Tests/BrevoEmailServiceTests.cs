@@ -9,10 +9,6 @@ using FrostWoodTech.API.Services;
 
 namespace FrostWoodTech.Tests;
 
-/// <summary>
-/// The validation contract is shared with <see cref="EmailTests"/> (which exercises
-/// <see cref="LoggingEmailService"/>) — what's specific here is the HTTP call to Brevo.
-/// </summary>
 public class BrevoEmailServiceTests
 {
     [Fact]

@@ -16,7 +16,7 @@ public class GetPublicCertificates
         _certificateService = certificateService;
     }
 
-    /// <summary>No `?site=` — certificates only ever exist for the personal site.</summary>
+    /// <summary>No ?site=: certificates are personal-site only.</summary>
     [Function("GetPublicCertificates")]
     public async Task<IActionResult> Run(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "public/certificates")] HttpRequest req,

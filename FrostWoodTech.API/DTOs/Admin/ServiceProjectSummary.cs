@@ -1,9 +1,5 @@
 namespace FrostWoodTech.API.DTOs.Admin;
 
-/// <summary>
-/// A linked project as the admin service form needs it — enough to render a chip and say whether
-/// the project is live, not the whole case study.
-/// </summary>
 public sealed class ServiceProjectSummary
 {
     public required Guid Id { get; init; }

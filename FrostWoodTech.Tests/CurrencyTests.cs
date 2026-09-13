@@ -107,7 +107,9 @@ public class CurrencyTests
     public async Task Refreshing_ignores_a_code_the_provider_does_not_know()
     {
         await using var db = _fixture.CreateContext();
+        // An empty rate table means "unreachable", so include one unrelated code.
         var provider = new FakeExchangeRateProvider();
+        provider.Rates["ZZZZ"] = 1m;
         var service = NewService(db, provider);
 
         var request = NewCurrency();
@@ -115,12 +117,47 @@ public class CurrencyTests
         var created = await service.CreateAsync(request, CancellationToken.None);
         Assert.True(created.IsSuccess);
 
-        // The fake provider has no entry for this code at all.
         var result = await service.RefreshLiveRatesAsync(CancellationToken.None);
 
         Assert.True(result.IsSuccess);
         var reread = await service.GetByIdAsync(created.Value!.Id, CancellationToken.None);
         Assert.Null(reread.Value!.LiveRateFromUsd);
+    }
+
+    [Fact]
+    public async Task An_unreachable_provider_is_reported_and_leaves_live_rates_alone()
+    {
+        await using var db = _fixture.CreateContext();
+        var provider = new FakeExchangeRateProvider();
+        var service = NewService(db, provider);
+
+        var created = await service.CreateAsync(NewCurrency(), CancellationToken.None);
+        provider.Rates[created.Value!.Code] = 42m;
+        Assert.True((await service.RefreshLiveRatesAsync(CancellationToken.None)).IsSuccess);
+
+        provider.Rates.Clear();
+        var result = await service.RefreshLiveRatesAsync(CancellationToken.None);
+
+        Assert.Equal("validation_failed", result.Error!.Code);
+        Assert.Equal(42m, (await service.GetByIdAsync(created.Value.Id, CancellationToken.None)).Value!.LiveRateFromUsd);
+    }
+
+    [Fact]
+    public async Task The_code_of_a_soft_deleted_currency_is_still_taken()
+    {
+        await using var db = _fixture.CreateContext();
+        var service = NewService(db);
+
+        var request = NewCurrency();
+        var created = await service.CreateAsync(request, CancellationToken.None);
+        Assert.True((await service.DeleteAsync(created.Value!.Id, CancellationToken.None)).IsSuccess);
+
+        var again = NewCurrency();
+        again.Code = request.Code;
+        var result = await service.CreateAsync(again, CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ServiceErrorKind.Conflict, result.Error!.Kind);
     }
 
     [Fact]
@@ -301,7 +338,6 @@ public class CurrencyTests
         Assert.Equal(333m, reread.Value!.EffectiveRateFromUsd);
     }
 
-    /// <summary>The seeder normally does this on startup; the tests own their own database.</summary>
     private static async Task SeedBaseAsync(FrostWoodTechDbContext db) =>
         await BaseCurrencySeeder.EnsureSeededAsync(
             db,
@@ -318,7 +354,6 @@ public class CurrencyTests
     private static CurrencyService NewService(FrostWoodTechDbContext db, IExchangeRateProvider? provider = null) =>
         new(db, provider ?? new FakeExchangeRateProvider());
 
-    /// <summary>Never calls the network — hands back whatever the test put in <see cref="Rates"/>.</summary>
     private sealed class FakeExchangeRateProvider : IExchangeRateProvider
     {
         public Dictionary<string, decimal> Rates { get; } = [];
@@ -327,11 +362,7 @@ public class CurrencyTests
             Task.FromResult<IReadOnlyDictionary<string, decimal>>(Rates);
     }
 
-    /// <summary>
-    /// Walks the 3-letter space from a random start rather than picking letters at random: these
-    /// tests share one database, and a collision with another test's code — or with USD — would
-    /// fail as a spurious `code_taken`.
-    /// </summary>
+    // Walks codes from a random start to avoid collisions (and USD) in the shared database.
     private static int _nextCode = Random.Shared.Next(26 * 26 * 26);
 
     private static string UniqueCode()

@@ -19,7 +19,6 @@ public class SetPassword
         _users = users;
     }
 
-    /// <summary>Anonymous by design — the emailed token is the authentication here, not a JWT.</summary>
     [Function("SetPassword")]
     public async Task<IActionResult> Run(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "cms/admin/auth/set-password")] HttpRequest req,
