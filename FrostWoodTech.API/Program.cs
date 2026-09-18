@@ -44,6 +44,7 @@ dataSourceBuilder.MapEnum<PasswordTokenPurpose>("password_token_purpose");
 dataSourceBuilder.MapEnum<AuthAttemptAction>("auth_attempt_action");
 dataSourceBuilder.MapEnum<ContactSubmissionStatus>("contact_submission_status");
 dataSourceBuilder.MapEnum<ContactBudgetRange>("contact_budget_range");
+dataSourceBuilder.MapEnum<CertificateCategory>("certificate_category");
 dataSourceBuilder.MapEnum<Site>("site");
 var dataSource = dataSourceBuilder.Build();
 
@@ -60,6 +61,7 @@ builder.Services.AddDbContextPool<FrostWoodTechDbContext>(options =>
         npgsql.MapEnum<AuthAttemptAction>("auth_attempt_action");
         npgsql.MapEnum<ContactSubmissionStatus>("contact_submission_status");
         npgsql.MapEnum<ContactBudgetRange>("contact_budget_range");
+        npgsql.MapEnum<CertificateCategory>("certificate_category");
         npgsql.MapEnum<Site>("site");
         npgsql.EnableRetryOnFailure(maxRetryCount: 3, maxRetryDelay: TimeSpan.FromSeconds(5), errorCodesToAdd: null);
         npgsql.CommandTimeout(30);
@@ -186,6 +188,17 @@ await using (var scope = host.Services.CreateAsyncScope())
     catch (Exception ex)
     {
         logger.LogError(ex, "Base currency seeding failed. The host is starting anyway.");
+    }
+
+    try
+    {
+        await TagSeeder.EnsureSeededAsync(
+            scope.ServiceProvider.GetRequiredService<FrostWoodTechDbContext>(),
+            logger);
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Tag seeding failed. The host is starting anyway.");
     }
 }
 

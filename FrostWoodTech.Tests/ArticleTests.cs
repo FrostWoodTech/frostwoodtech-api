@@ -1,3 +1,4 @@
+using FrostWoodTech.API.Auth;
 using FrostWoodTech.API.Data;
 using FrostWoodTech.API.DTOs.Admin;
 using FrostWoodTech.API.Enums;
@@ -137,7 +138,7 @@ public class ArticleTests
         await using var db = _fixture.CreateContext();
         var service = NewService(db);
 
-        var tag = (await new TagService(db).CreateAsync(
+        var tag = (await new TagService(db, new CurrentUser()).CreateAsync(
             new CreateTagRequest { Name = $"Agentic AI {Guid.NewGuid():N}" }, CancellationToken.None)).Value!;
 
         var taggedRequest = NewArticle();
@@ -183,7 +184,7 @@ public class ArticleTests
     }
 
     private static ArticleService NewService(FrostWoodTechDbContext db) =>
-        new(db, new ArticleMediaResolver(new FakeMediaService()));
+        new(db, new ArticleMediaResolver(new FakeMediaService()), new FakeMediaService(), new CurrentUser());
 
     private static async Task<AdminArticleResponse> CreateAsync(ArticleService service, CreateArticleRequest request)
     {

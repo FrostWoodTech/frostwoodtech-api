@@ -1,3 +1,4 @@
+using FrostWoodTech.API.Auth;
 using FrostWoodTech.API.DTOs.Admin;
 using FrostWoodTech.API.Entities;
 using FrostWoodTech.API.Enums;
@@ -19,7 +20,7 @@ public class FaqTests
     public async Task A_draft_faq_is_admin_only_until_it_is_published()
     {
         await using var db = _fixture.CreateContext();
-        var service = new FaqService(db);
+        var service = new FaqService(db, new CurrentUser());
 
         var request = NewFaq();
         request.IsPublished = false;
@@ -54,7 +55,7 @@ public class FaqTests
     public async Task Reordering_faqs_changes_their_public_order()
     {
         await using var db = _fixture.CreateContext();
-        var service = new FaqService(db);
+        var service = new FaqService(db, new CurrentUser());
 
         var createdFirst = await service.CreateAsync(NewFaq(), CancellationToken.None);
         var createdSecond = await service.CreateAsync(NewFaq(), CancellationToken.None);
@@ -85,7 +86,7 @@ public class FaqTests
     public async Task A_service_scoped_faq_never_appears_in_the_global_public_list()
     {
         await using var db = _fixture.CreateContext();
-        var service = new FaqService(db);
+        var service = new FaqService(db, new CurrentUser());
 
         var serviceOffering = new ServiceOffering
         {
@@ -127,7 +128,7 @@ public class FaqTests
     public async Task A_personal_only_faq_is_not_returned_for_the_agency_site()
     {
         await using var db = _fixture.CreateContext();
-        var service = new FaqService(db);
+        var service = new FaqService(db, new CurrentUser());
 
         var request = NewFaq();
         request.ShowOnAgency = false;
@@ -143,7 +144,7 @@ public class FaqTests
     public async Task A_soft_deleted_faq_disappears_from_both_surfaces()
     {
         await using var db = _fixture.CreateContext();
-        var service = new FaqService(db);
+        var service = new FaqService(db, new CurrentUser());
 
         var request = NewFaq();
         var created = await service.CreateAsync(request, CancellationToken.None);
@@ -159,7 +160,7 @@ public class FaqTests
     public async Task A_faq_for_an_unknown_service_or_without_an_answer_is_rejected()
     {
         await using var db = _fixture.CreateContext();
-        var service = new FaqService(db);
+        var service = new FaqService(db, new CurrentUser());
 
         var unknownService = NewFaq();
         unknownService.ServiceId = Guid.NewGuid();

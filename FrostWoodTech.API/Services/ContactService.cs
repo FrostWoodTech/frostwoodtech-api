@@ -232,6 +232,84 @@ public class ContactService : IContactService
         }
 
         submission.IsDeleted = true;
+        submission.DeletedBy = _currentUser.UserId;
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return ServiceResult<bool>.Success(true);
+    }
+
+    public async Task<PagedResult<TrashedItemResponse>> GetTrashAsync(
+        string? search,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        var query = _db.ContactSubmissions.Trashed().AsNoTracking();
+
+        if (search is not null)
+        {
+            query = query.Where(c =>
+                EF.Functions.ILike(c.Name, $"%{search}%")
+                || EF.Functions.ILike(c.Email, $"%{search}%"));
+        }
+
+        var total = await query.CountAsync(cancellationToken);
+
+        var items = await query
+            .OrderByDescending(c => c.DeletedAt)
+            .ThenByDescending(c => c.UpdatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(c => new TrashedItemResponse
+            {
+                Id = c.Id,
+                Label = c.Name,
+                DeletedAt = c.DeletedAt,
+                DeletedBy = c.DeletedBy,
+                DeletedByEmail = _db.Users.Where(u => u.Id == c.DeletedBy).Select(u => u.Email).FirstOrDefault()
+            })
+            .ToListAsync(cancellationToken);
+
+        return new PagedResult<TrashedItemResponse>
+        {
+            Items = items,
+            Page = page,
+            PageSize = pageSize,
+            Total = total
+        };
+    }
+
+    public async Task<ServiceResult<AdminContactSubmissionResponse>> RestoreAsync(
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        var submission = await _db.ContactSubmissions.FindTrashedAsync(id, cancellationToken);
+        if (submission is null)
+        {
+            return ServiceResult<AdminContactSubmissionResponse>.NotFound(
+                "not_found", $"No deleted contact submission with id {id}.");
+        }
+
+        submission.IsDeleted = false;
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return await GetByIdAsync(id, cancellationToken);
+    }
+
+    public async Task<ServiceResult<bool>> PurgeAsync(Guid id, CancellationToken cancellationToken)
+    {
+        if (_currentUser.RequireSuperAdmin<bool>() is { } denied)
+        {
+            return denied;
+        }
+
+        var submission = await _db.ContactSubmissions.FindTrashedAsync(id, cancellationToken);
+        if (submission is null)
+        {
+            return ServiceResult<bool>.NotFound("not_found", $"No deleted contact submission with id {id}.");
+        }
+
+        _db.ContactSubmissions.Remove(submission);
         await _db.SaveChangesAsync(cancellationToken);
 
         return ServiceResult<bool>.Success(true);

@@ -28,4 +28,16 @@ public interface ITagService
 
     /// <summary>Refused with tag_in_use while a live project or article uses the tag.</summary>
     Task<ServiceResult<bool>> DeleteAsync(Guid id, CancellationToken cancellationToken);
+
+    Task<PagedResult<TrashedItemResponse>> GetTrashAsync(
+        string? search,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken);
+
+    /// <summary>404 unless the row is in the trash.</summary>
+    Task<ServiceResult<AdminTagResponse>> RestoreAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <summary>Super admin only; stored files are deleted after the commit.</summary>
+    Task<ServiceResult<bool>> PurgeAsync(Guid id, CancellationToken cancellationToken);
 }

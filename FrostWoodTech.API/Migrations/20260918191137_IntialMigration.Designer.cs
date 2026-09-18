@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace FrostWoodTech.API.Migrations
 {
     [DbContext(typeof(FrostWoodTechDbContext))]
-    [Migration("20260913100124_InitialCreate")]
-    partial class InitialCreate
+    [Migration("20260918191137_IntialMigration")]
+    partial class IntialMigration
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -24,6 +24,7 @@ namespace FrostWoodTech.API.Migrations
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "auth_attempt_action", new[] { "login", "password_reset" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "certificate_category", new[] { "course", "exam" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "contact_budget_range", new[] { "under_one_k", "one_to_five_k", "five_to_fifteen_k", "over_fifteen_k", "not_sure" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "contact_submission_status", new[] { "new", "read", "replied", "archived", "spam" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "password_token_purpose", new[] { "setup", "reset" });
@@ -57,6 +58,14 @@ namespace FrostWoodTech.API.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("deleted_by");
 
                     b.Property<string>("Excerpt")
                         .IsRequired()
@@ -112,6 +121,10 @@ namespace FrostWoodTech.API.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("DeletedAt")
+                        .HasDatabaseName("ix_articles_deleted_at")
+                        .HasFilter("is_deleted");
+
                     b.HasIndex("Slug")
                         .IsUnique();
 
@@ -147,9 +160,23 @@ namespace FrostWoodTech.API.Migrations
                         .HasColumnType("text")
                         .HasColumnName("alt_text");
 
+                    b.Property<int>("Category")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("certificate_category")
+                        .HasColumnName("category")
+                        .HasDefaultValueSql("'course'");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("deleted_by");
 
                     b.Property<bool>("Featured")
                         .HasColumnType("boolean")
@@ -216,6 +243,10 @@ namespace FrostWoodTech.API.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("DeletedAt")
+                        .HasDatabaseName("ix_certificates_deleted_at")
+                        .HasFilter("is_deleted");
+
                     b.ToTable("certificates", (string)null);
                 });
 
@@ -243,6 +274,14 @@ namespace FrostWoodTech.API.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("deleted_by");
 
                     b.Property<string>("Email")
                         .IsRequired()
@@ -308,6 +347,10 @@ namespace FrostWoodTech.API.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("DeletedAt")
+                        .HasDatabaseName("ix_contact_submissions_deleted_at")
+                        .HasFilter("is_deleted");
+
                     b.HasIndex("RepliedBy");
 
                     b.HasIndex("ServiceId");
@@ -336,6 +379,14 @@ namespace FrostWoodTech.API.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("deleted_by");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean")
@@ -379,6 +430,10 @@ namespace FrostWoodTech.API.Migrations
 
                     b.HasIndex("Code")
                         .IsUnique();
+
+                    b.HasIndex("DeletedAt")
+                        .HasDatabaseName("ix_currencies_deleted_at")
+                        .HasFilter("is_deleted");
 
                     b.ToTable("currencies", (string)null);
                 });
@@ -437,6 +492,14 @@ namespace FrostWoodTech.API.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("deleted_by");
+
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -473,6 +536,10 @@ namespace FrostWoodTech.API.Migrations
                         .HasColumnName("updated_at");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("DeletedAt")
+                        .HasDatabaseName("ix_faqs_deleted_at")
+                        .HasFilter("is_deleted");
 
                     b.HasIndex("ServiceId");
 
@@ -578,6 +645,14 @@ namespace FrostWoodTech.API.Migrations
                         .HasColumnType("char(3)")
                         .HasColumnName("currency");
 
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("deleted_by");
+
                     b.Property<string>("DeliveryText")
                         .HasColumnType("text")
                         .HasColumnName("delivery_text");
@@ -636,6 +711,10 @@ namespace FrostWoodTech.API.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("DeletedAt")
+                        .HasDatabaseName("ix_pricing_plans_deleted_at")
+                        .HasFilter("is_deleted");
+
                     b.HasIndex("ServiceId");
 
                     b.ToTable("pricing_plans", (string)null);
@@ -686,6 +765,14 @@ namespace FrostWoodTech.API.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("deleted_by");
 
                     b.Property<string>("Description")
                         .IsRequired()
@@ -763,6 +850,10 @@ namespace FrostWoodTech.API.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("DeletedAt")
+                        .HasDatabaseName("ix_products_deleted_at")
+                        .HasFilter("is_deleted");
+
                     b.HasIndex("Slug")
                         .IsUnique();
 
@@ -838,6 +929,14 @@ namespace FrostWoodTech.API.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("deleted_by");
 
                     b.Property<string>("Description")
                         .IsRequired()
@@ -930,6 +1029,10 @@ namespace FrostWoodTech.API.Migrations
                         .HasColumnName("year");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("DeletedAt")
+                        .HasDatabaseName("ix_projects_deleted_at")
+                        .HasFilter("is_deleted");
 
                     b.HasIndex("Slug")
                         .IsUnique();
@@ -1070,6 +1173,14 @@ namespace FrostWoodTech.API.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("deleted_by");
+
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -1119,6 +1230,10 @@ namespace FrostWoodTech.API.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("DeletedAt")
+                        .HasDatabaseName("ix_reviews_deleted_at")
+                        .HasFilter("is_deleted");
+
                     b.ToTable("reviews", null, t =>
                         {
                             t.HasCheckConstraint("ck_reviews_rating_range", "rating BETWEEN 1 AND 5");
@@ -1147,6 +1262,14 @@ namespace FrostWoodTech.API.Migrations
                     b.Property<string>("Deck")
                         .HasColumnType("text")
                         .HasColumnName("deck");
+
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("deleted_by");
 
                     b.Property<string>("DepthImageAltText")
                         .HasColumnType("text")
@@ -1307,6 +1430,10 @@ namespace FrostWoodTech.API.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("DeletedAt")
+                        .HasDatabaseName("ix_services_deleted_at")
+                        .HasFilter("is_deleted");
+
                     b.HasIndex("Slug")
                         .IsUnique();
 
@@ -1341,6 +1468,14 @@ namespace FrostWoodTech.API.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("deleted_by");
+
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -1370,6 +1505,10 @@ namespace FrostWoodTech.API.Migrations
                         .HasColumnName("updated_at");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("DeletedAt")
+                        .HasDatabaseName("ix_tags_deleted_at")
+                        .HasFilter("is_deleted");
 
                     b.HasIndex("IsTechnology");
 
@@ -1401,6 +1540,14 @@ namespace FrostWoodTech.API.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<Guid?>("DeletedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("deleted_by");
 
                     b.Property<string>("Email")
                         .IsRequired()
@@ -1458,6 +1605,10 @@ namespace FrostWoodTech.API.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ApprovedBy");
+
+                    b.HasIndex("DeletedAt")
+                        .HasDatabaseName("ix_users_deleted_at")
+                        .HasFilter("is_deleted");
 
                     b.HasIndex("Email")
                         .IsUnique();

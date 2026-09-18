@@ -14,6 +14,16 @@ paths:
 snake_case in Postgres, PascalCase in C#. Every content table also has `created_at`, `updated_at`
 (stamped by the DbContext) and `is_deleted` (hidden by a global query filter).
 
+Soft delete also records `deleted_at timestamptz null` (stamped by the DbContext when `is_deleted`
+flips true, cleared on restore) and `deleted_by uuid null` (set by the service; a plain uuid, no FK to
+`users`). Each table has a partial index `ix_{table}_deleted_at ... where is_deleted` for the trash lists.
+Rows deleted before these columns existed have a null `deleted_at`.
+
+A permanent delete is the first path where the `Cascade` foreign keys actually fire. `project_tags.tag_id`,
+`article_tags.tag_id`, `service_projects.project_id`, `faqs.service_id` and `pricing_plans.service_id`
+are `Restrict`, so purging their target needs an explicit guard. `contact_submissions.service_id` is
+`SetNull`: purging a service keeps its enquiries and drops the link.
+
 ## Site visibility block
 
 Applies to `projects`, `products`, `articles`, `services`:
@@ -141,8 +151,9 @@ Personal-site only: no visibility block, one `featured` flag and one global `sor
 
 ```
 id, name, issued_by,
+category certificate_category   -- course | exam, required; existing rows backfilled to course
 issued_date date     -- required, not in the future
-marks text null
+marks text null      -- optional free text for both categories
 object_key, url      -- url is absolute http(s)
 mime_type            -- application/pdf or image/*
 width, height int null   -- set together, positive; required for images, null allowed for PDFs
@@ -150,7 +161,11 @@ alt_text             -- required
 is_published, featured, sort_order
 ```
 
-Replacing the file on update deletes the old object after the save. Soft delete keeps the file.
+`CertificateCategory` lists `Course` first so the CLR default matches the column default; EF omits a
+property equal to its CLR default on insert, so putting `Exam` first would store exams as courses.
+
+Replacing the file on update deletes the old object after the save. Soft delete keeps the file; a purge
+deletes it.
 
 ## faqs
 
@@ -231,5 +246,9 @@ Behaviour rules: `.claude/rules/auth.md`.
 
 ## Seeding
 
-On startup: the super admin (identity from config, null password, emailed setup link) and the USD
-base currency. Both are idempotent.
+On startup: the super admin (identity from config, null password, emailed setup link), the USD base
+currency, and the starter tag list. All idempotent.
+
+`TagSeeder` inserts only slugs that have never existed, checked with `IgnoreQueryFilters()`, so a tag an
+admin deleted is never resurrected and a renamed one is left alone. Entries added to its array are
+picked up on the next deploy.

@@ -1,3 +1,5 @@
+using FrostWoodTech.API.Enums;
+
 namespace FrostWoodTech.API.DTOs.Admin;
 
 public class CreateCertificateRequest
@@ -5,6 +7,8 @@ public class CreateCertificateRequest
     public string? Name { get; set; }
 
     public string? IssuedBy { get; set; }
+
+    public CertificateCategory? Category { get; set; }
 
     public DateOnly IssuedDate { get; set; }
 

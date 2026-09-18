@@ -72,6 +72,12 @@ CRUD /currencies    + POST /currencies/refresh-rates; ?isActive=
 GET,PUT,DELETE /contact-submissions[/{id}]   ?status=&site=&serviceId=&search=
 
 POST /media/presigned-upload    GET /media/config
+
+# Trash: the same three routes for projects, products, articles, services, pricing-plans, faqs,
+# certificates, tags, currencies, reviews and contact-submissions (not users)
+GET    /{entity}/trash?search=&page=&pageSize=     # soft-deleted rows -> { items: TrashedItemResponse }
+POST   /{entity}/{id}/restore                      # back to the live list; 200 with the admin DTO
+DELETE /{entity}/{id}/permanent                    # super admin only; 204
 ```
 
 All paths above are under `/api/cms/admin`. Admin lists take `?site=` as an optional filter plus

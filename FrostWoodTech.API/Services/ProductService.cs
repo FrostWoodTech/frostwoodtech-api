@@ -2,6 +2,7 @@ using System.Linq.Expressions;
 
 using Microsoft.EntityFrameworkCore;
 
+using FrostWoodTech.API.Auth;
 using FrostWoodTech.API.Common;
 using FrostWoodTech.API.Data;
 using FrostWoodTech.API.DTOs.Admin;
@@ -16,11 +17,13 @@ public class ProductService : IProductService
 {
     private readonly FrostWoodTechDbContext _db;
     private readonly IMediaService _mediaService;
+    private readonly CurrentUser _currentUser;
 
-    public ProductService(FrostWoodTechDbContext db, IMediaService mediaService)
+    public ProductService(FrostWoodTechDbContext db, IMediaService mediaService, CurrentUser currentUser)
     {
         _db = db;
         _mediaService = mediaService;
+        _currentUser = currentUser;
     }
 
     public async Task<PagedResult<ProductResponse>> GetPublicProductsAsync(
@@ -275,7 +278,93 @@ public class ProductService : IProductService
         }
 
         product.IsDeleted = true;
+        product.DeletedBy = _currentUser.UserId;
         await _db.SaveChangesAsync(cancellationToken);
+
+        return ServiceResult<bool>.Success(true);
+    }
+
+    public async Task<PagedResult<TrashedItemResponse>> GetTrashAsync(
+        string? search,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        var query = _db.Products.Trashed().AsNoTracking();
+
+        if (search is not null)
+        {
+            query = query.Where(p => EF.Functions.ILike(p.Name, $"%{search}%"));
+        }
+
+        var total = await query.CountAsync(cancellationToken);
+
+        var items = await query
+            .OrderByDescending(p => p.DeletedAt)
+            .ThenByDescending(p => p.UpdatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(p => new TrashedItemResponse
+            {
+                Id = p.Id,
+                Label = p.Name,
+                DeletedAt = p.DeletedAt,
+                DeletedBy = p.DeletedBy,
+                DeletedByEmail = _db.Users.Where(u => u.Id == p.DeletedBy).Select(u => u.Email).FirstOrDefault()
+            })
+            .ToListAsync(cancellationToken);
+
+        return new PagedResult<TrashedItemResponse>
+        {
+            Items = items,
+            Page = page,
+            PageSize = pageSize,
+            Total = total
+        };
+    }
+
+    public async Task<ServiceResult<AdminProductResponse>> RestoreAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var product = await _db.Products.FindTrashedAsync(id, cancellationToken);
+        if (product is null)
+        {
+            return ServiceResult<AdminProductResponse>.NotFound("not_found", $"No deleted product with id {id}.");
+        }
+
+        product.IsDeleted = false;
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return await GetByIdAsync(id, cancellationToken);
+    }
+
+    public async Task<ServiceResult<bool>> PurgeAsync(Guid id, CancellationToken cancellationToken)
+    {
+        if (_currentUser.RequireSuperAdmin<bool>() is { } denied)
+        {
+            return denied;
+        }
+
+        var product = await _db.Products
+            .IgnoreQueryFilters()
+            .Include(p => p.Images)
+            .FirstOrDefaultAsync(p => p.Id == id && p.IsDeleted, cancellationToken);
+
+        if (product is null)
+        {
+            return ServiceResult<bool>.NotFound("not_found", $"No deleted product with id {id}.");
+        }
+
+        // Read the keys before the row goes; the image rows follow it by cascade.
+        var objectKeys = product.Images.Select(i => i.ObjectKey).ToList();
+
+        _db.Products.Remove(product);
+        await _db.SaveChangesAsync(cancellationToken);
+
+        // After the commit: a failed delete only orphans a file, never keeps the row.
+        foreach (var objectKey in objectKeys)
+        {
+            await _mediaService.DeleteFileAsync(objectKey, cancellationToken);
+        }
 
         return ServiceResult<bool>.Success(true);
     }

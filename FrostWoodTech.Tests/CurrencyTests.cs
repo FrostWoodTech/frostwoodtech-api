@@ -1,3 +1,4 @@
+using FrostWoodTech.API.Auth;
 using FrostWoodTech.API.Common;
 using FrostWoodTech.API.Data;
 using FrostWoodTech.API.DTOs.Admin;
@@ -352,7 +353,7 @@ public class CurrencyTests
     }
 
     private static CurrencyService NewService(FrostWoodTechDbContext db, IExchangeRateProvider? provider = null) =>
-        new(db, provider ?? new FakeExchangeRateProvider());
+        new(db, provider ?? new FakeExchangeRateProvider(), new CurrentUser());
 
     private sealed class FakeExchangeRateProvider : IExchangeRateProvider
     {

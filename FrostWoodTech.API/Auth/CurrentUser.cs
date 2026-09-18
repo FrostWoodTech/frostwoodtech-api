@@ -1,3 +1,4 @@
+using FrostWoodTech.API.Common;
 using FrostWoodTech.API.Enums;
 
 namespace FrostWoodTech.API.Auth;
@@ -14,4 +15,8 @@ public sealed class CurrentUser
     public bool IsAuthenticated => UserId is not null;
 
     public bool IsSuperAdmin => Role == UserRole.SuperAdmin;
+
+    /// <summary>Null when allowed, otherwise the failure to return.</summary>
+    public ServiceResult<T>? RequireSuperAdmin<T>(string message = "Only the super admin can do this.") =>
+        IsSuperAdmin ? null : ServiceResult<T>.Forbidden("forbidden", message);
 }

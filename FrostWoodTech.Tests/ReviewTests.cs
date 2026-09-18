@@ -1,3 +1,4 @@
+using FrostWoodTech.API.Auth;
 using FrostWoodTech.API.Common;
 using FrostWoodTech.API.DTOs.Admin;
 using FrostWoodTech.API.Enums;
@@ -19,7 +20,7 @@ public class ReviewTests
     public async Task A_submitted_review_is_admin_only_until_it_is_published()
     {
         await using var db = _fixture.CreateContext();
-        var service = new ReviewService(db);
+        var service = new ReviewService(db, new CurrentUser());
 
         var submitted = await service.SubmitAsync(NewReview(), IpAddress(), CancellationToken.None);
         Assert.True(submitted.IsSuccess);
@@ -55,7 +56,7 @@ public class ReviewTests
     public async Task A_rating_outside_1_to_5_is_rejected(int rating)
     {
         await using var db = _fixture.CreateContext();
-        var service = new ReviewService(db);
+        var service = new ReviewService(db, new CurrentUser());
 
         var request = NewReview();
         request.Rating = rating;
@@ -72,7 +73,7 @@ public class ReviewTests
     public async Task A_country_code_that_is_not_two_letters_is_rejected(string countryCode)
     {
         await using var db = _fixture.CreateContext();
-        var service = new ReviewService(db);
+        var service = new ReviewService(db, new CurrentUser());
 
         var request = NewReview();
         request.CountryCode = countryCode;
@@ -87,7 +88,7 @@ public class ReviewTests
     public async Task A_fourth_submission_from_the_same_ip_inside_the_window_is_rejected()
     {
         await using var db = _fixture.CreateContext();
-        var service = new ReviewService(db);
+        var service = new ReviewService(db, new CurrentUser());
 
         var ip = IpAddress();
 
@@ -108,7 +109,7 @@ public class ReviewTests
     public async Task Public_reviews_can_be_sorted_by_rating_or_country()
     {
         await using var db = _fixture.CreateContext();
-        var service = new ReviewService(db);
+        var service = new ReviewService(db, new CurrentUser());
 
         var low = await service.CreateAsync(NewAdminReview(rating: 1, country: "Alpha Country"), CancellationToken.None);
         var mid = await service.CreateAsync(NewAdminReview(rating: 3, country: "Bravo Country"), CancellationToken.None);
@@ -135,7 +136,7 @@ public class ReviewTests
     public async Task Only_published_and_featured_reviews_appear_in_the_home_slice()
     {
         await using var db = _fixture.CreateContext();
-        var service = new ReviewService(db);
+        var service = new ReviewService(db, new CurrentUser());
 
         var featured = await service.CreateAsync(
             NewAdminReview(isPublished: true, isFeatured: true),
@@ -158,7 +159,7 @@ public class ReviewTests
     public async Task Reorder_updates_sort_order_in_one_call()
     {
         await using var db = _fixture.CreateContext();
-        var service = new ReviewService(db);
+        var service = new ReviewService(db, new CurrentUser());
 
         var first = await service.CreateAsync(NewAdminReview(), CancellationToken.None);
         var second = await service.CreateAsync(NewAdminReview(), CancellationToken.None);
@@ -190,7 +191,7 @@ public class ReviewTests
     public async Task Reorder_rejects_a_duplicate_id()
     {
         await using var db = _fixture.CreateContext();
-        var service = new ReviewService(db);
+        var service = new ReviewService(db, new CurrentUser());
 
         var created = await service.CreateAsync(NewAdminReview(), CancellationToken.None);
         Assert.True(created.IsSuccess);
@@ -214,7 +215,7 @@ public class ReviewTests
     public async Task Reorder_rejects_an_unknown_id()
     {
         await using var db = _fixture.CreateContext();
-        var service = new ReviewService(db);
+        var service = new ReviewService(db, new CurrentUser());
 
         var result = await service.ReorderAsync(
             new ReviewReorderRequest

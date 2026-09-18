@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 
+using FrostWoodTech.API.Auth;
 using FrostWoodTech.API.Common;
 using FrostWoodTech.API.DTOs.Admin;
 using FrostWoodTech.API.Enums;
@@ -21,7 +22,7 @@ public class ProductTests
     public async Task Personal_only_product_is_not_returned_for_the_agency_site()
     {
         await using var db = _fixture.CreateContext();
-        var service = new ProductService(db, new FakeMediaService());
+        var service = new ProductService(db, new FakeMediaService(), new CurrentUser());
 
         var created = await service.CreateAsync(
             NewProduct(showOnAgency: false, showOnPersonal: true),
@@ -42,7 +43,7 @@ public class ProductTests
     public async Task Public_projection_flattens_the_requested_sites_flags()
     {
         await using var db = _fixture.CreateContext();
-        var service = new ProductService(db, new FakeMediaService());
+        var service = new ProductService(db, new FakeMediaService(), new CurrentUser());
 
         var request = NewProduct(showOnAgency: true, showOnPersonal: true);
         request.FeaturedOnAgency = true;
@@ -68,7 +69,7 @@ public class ProductTests
     public async Task Featuring_a_product_on_a_site_it_is_not_shown_on_is_rejected(bool agency, bool personal)
     {
         await using var db = _fixture.CreateContext();
-        var service = new ProductService(db, new FakeMediaService());
+        var service = new ProductService(db, new FakeMediaService(), new CurrentUser());
 
         var request = NewProduct(showOnAgency: false, showOnPersonal: false);
         request.FeaturedOnAgency = agency;
@@ -84,7 +85,7 @@ public class ProductTests
     public async Task A_second_product_with_the_same_slug_is_rejected()
     {
         await using var db = _fixture.CreateContext();
-        var service = new ProductService(db, new FakeMediaService());
+        var service = new ProductService(db, new FakeMediaService(), new CurrentUser());
 
         var first = await service.CreateAsync(NewProduct(), CancellationToken.None);
         Assert.True(first.IsSuccess);
@@ -102,7 +103,7 @@ public class ProductTests
     public async Task A_new_product_is_appended_to_the_end_of_both_orders()
     {
         await using var db = _fixture.CreateContext();
-        var service = new ProductService(db, new FakeMediaService());
+        var service = new ProductService(db, new FakeMediaService(), new CurrentUser());
 
         var first = await service.CreateAsync(NewProduct(), CancellationToken.None);
         var second = await service.CreateAsync(NewProduct(), CancellationToken.None);
@@ -118,7 +119,7 @@ public class ProductTests
     public async Task Reordering_one_site_leaves_the_other_sites_order_alone()
     {
         await using var db = _fixture.CreateContext();
-        var service = new ProductService(db, new FakeMediaService());
+        var service = new ProductService(db, new FakeMediaService(), new CurrentUser());
 
         var created = await service.CreateAsync(NewProduct(), CancellationToken.None);
         Assert.True(created.IsSuccess);
@@ -145,7 +146,7 @@ public class ProductTests
     public async Task Reorder_without_a_site_is_rejected()
     {
         await using var db = _fixture.CreateContext();
-        var service = new ProductService(db, new FakeMediaService());
+        var service = new ProductService(db, new FakeMediaService(), new CurrentUser());
 
         var created = await service.CreateAsync(NewProduct(), CancellationToken.None);
         Assert.True(created.IsSuccess);
@@ -166,7 +167,7 @@ public class ProductTests
     public async Task Setting_a_new_primary_image_clears_the_previous_one()
     {
         await using var db = _fixture.CreateContext();
-        var service = new ProductService(db, new FakeMediaService());
+        var service = new ProductService(db, new FakeMediaService(), new CurrentUser());
 
         var product = await service.CreateAsync(NewProduct(), CancellationToken.None);
         Assert.True(product.IsSuccess);
@@ -193,7 +194,7 @@ public class ProductTests
     public async Task An_image_without_alt_text_is_rejected()
     {
         await using var db = _fixture.CreateContext();
-        var service = new ProductService(db, new FakeMediaService());
+        var service = new ProductService(db, new FakeMediaService(), new CurrentUser());
 
         var product = await service.CreateAsync(NewProduct(), CancellationToken.None);
         Assert.True(product.IsSuccess);
@@ -211,7 +212,7 @@ public class ProductTests
     public async Task Soft_deleted_product_disappears_from_both_surfaces()
     {
         await using var db = _fixture.CreateContext();
-        var service = new ProductService(db, new FakeMediaService());
+        var service = new ProductService(db, new FakeMediaService(), new CurrentUser());
 
         var created = await service.CreateAsync(NewProduct(), CancellationToken.None);
         Assert.True(created.IsSuccess);
@@ -230,7 +231,7 @@ public class ProductTests
     public async Task The_slug_of_a_soft_deleted_product_is_still_taken()
     {
         await using var db = _fixture.CreateContext();
-        var service = new ProductService(db, new FakeMediaService());
+        var service = new ProductService(db, new FakeMediaService(), new CurrentUser());
 
         var deleted = await service.CreateAsync(NewProduct(), CancellationToken.None);
         Assert.True((await service.DeleteAsync(deleted.Value!.Id, CancellationToken.None)).IsSuccess);
@@ -249,7 +250,7 @@ public class ProductTests
     public async Task A_name_that_yields_no_slug_is_rejected(string name)
     {
         await using var db = _fixture.CreateContext();
-        var service = new ProductService(db, new FakeMediaService());
+        var service = new ProductService(db, new FakeMediaService(), new CurrentUser());
 
         var request = NewProduct();
         request.Name = name;
@@ -264,7 +265,7 @@ public class ProductTests
     public async Task A_product_url_that_is_not_absolute_http_is_rejected(string url)
     {
         await using var db = _fixture.CreateContext();
-        var service = new ProductService(db, new FakeMediaService());
+        var service = new ProductService(db, new FakeMediaService(), new CurrentUser());
 
         var request = NewProduct();
         request.ProductUrl = url;
@@ -276,7 +277,7 @@ public class ProductTests
     public async Task Republishing_keeps_the_original_date_and_the_editors_site_choice()
     {
         await using var db = _fixture.CreateContext();
-        var service = new ProductService(db, new FakeMediaService());
+        var service = new ProductService(db, new FakeMediaService(), new CurrentUser());
 
         var created = (await service.CreateAsync(NewProduct(showOnAgency: false, showOnPersonal: true), CancellationToken.None)).Value!;
 
@@ -293,7 +294,7 @@ public class ProductTests
     public async Task Unsetting_the_primary_flag_does_not_leave_the_product_without_one()
     {
         await using var db = _fixture.CreateContext();
-        var service = new ProductService(db, new FakeMediaService());
+        var service = new ProductService(db, new FakeMediaService(), new CurrentUser());
         var product = (await service.CreateAsync(NewProduct(), CancellationToken.None)).Value!;
 
         var primary = (await service.AddImageAsync(product.Id, NewImage("primary", isPrimary: true), CancellationToken.None)).Value!;
@@ -323,7 +324,7 @@ public class ProductTests
     {
         await using var db = _fixture.CreateContext();
         var media = new FakeMediaService();
-        var service = new ProductService(db, media);
+        var service = new ProductService(db, media, new CurrentUser());
         var product = (await service.CreateAsync(NewProduct(), CancellationToken.None)).Value!;
 
         var primaryRequest = NewImage("primary", isPrimary: true);
@@ -344,7 +345,7 @@ public class ProductTests
     {
         await using var db = _fixture.CreateContext();
         var media = new FakeMediaService();
-        var service = new ProductService(db, media);
+        var service = new ProductService(db, media, new CurrentUser());
         var product = (await service.CreateAsync(NewProduct(), CancellationToken.None)).Value!;
 
         var result = await service.DeleteImageAsync(product.Id, Guid.NewGuid(), CancellationToken.None);
@@ -357,7 +358,7 @@ public class ProductTests
     public async Task Image_reorder_applies_sort_orders_and_rejects_duplicates()
     {
         await using var db = _fixture.CreateContext();
-        var service = new ProductService(db, new FakeMediaService());
+        var service = new ProductService(db, new FakeMediaService(), new CurrentUser());
         var product = (await service.CreateAsync(NewProduct(), CancellationToken.None)).Value!;
 
         var image = (await service.AddImageAsync(product.Id, NewImage("one", isPrimary: true), CancellationToken.None)).Value!;

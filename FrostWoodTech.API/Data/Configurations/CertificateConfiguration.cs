@@ -15,6 +15,12 @@ public class CertificateConfiguration : IEntityTypeConfiguration<Certificate>
         builder.Property(c => c.Id).HasColumnName("id");
         builder.Property(c => c.Name).HasColumnName("name").IsRequired();
         builder.Property(c => c.IssuedBy).HasColumnName("issued_by").IsRequired();
+        // SQL, not HasDefaultValue: EF scaffolds a CLR enum as an integer, which a native enum column rejects.
+        builder.Property(c => c.Category)
+            .HasColumnName("category")
+            .HasColumnType("certificate_category")
+            .HasDefaultValueSql("'course'");
+
         builder.Property(c => c.IssuedDate).HasColumnName("issued_date");
         builder.Property(c => c.Marks).HasColumnName("marks");
         builder.Property(c => c.ObjectKey).HasColumnName("object_key").IsRequired();

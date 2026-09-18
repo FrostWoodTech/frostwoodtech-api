@@ -2,6 +2,7 @@ using System.Linq.Expressions;
 
 using Microsoft.EntityFrameworkCore;
 
+using FrostWoodTech.API.Auth;
 using FrostWoodTech.API.Common;
 using FrostWoodTech.API.Data;
 using FrostWoodTech.API.DTOs.Admin;
@@ -18,11 +19,16 @@ public class CurrencyService : ICurrencyService
 
     private readonly FrostWoodTechDbContext _db;
     private readonly IExchangeRateProvider _exchangeRateProvider;
+    private readonly CurrentUser _currentUser;
 
-    public CurrencyService(FrostWoodTechDbContext db, IExchangeRateProvider exchangeRateProvider)
+    public CurrencyService(
+        FrostWoodTechDbContext db,
+        IExchangeRateProvider exchangeRateProvider,
+        CurrentUser currentUser)
     {
         _db = db;
         _exchangeRateProvider = exchangeRateProvider;
+        _currentUser = currentUser;
     }
 
     public async Task<IReadOnlyList<CurrencyResponse>> GetPublicCurrenciesAsync(
@@ -195,6 +201,101 @@ public class CurrencyService : ICurrencyService
         }
 
         currency.IsDeleted = true;
+        currency.DeletedBy = _currentUser.UserId;
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return ServiceResult<bool>.Success(true);
+    }
+
+    public async Task<PagedResult<TrashedItemResponse>> GetTrashAsync(
+        string? search,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        var query = _db.Currencies.Trashed().AsNoTracking();
+
+        if (search is not null)
+        {
+            query = query.Where(c =>
+                EF.Functions.ILike(c.Code, $"%{search}%")
+                || EF.Functions.ILike(c.Name, $"%{search}%"));
+        }
+
+        var total = await query.CountAsync(cancellationToken);
+
+        var items = await query
+            .OrderByDescending(c => c.DeletedAt)
+            .ThenByDescending(c => c.UpdatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(c => new TrashedItemResponse
+            {
+                Id = c.Id,
+                Label = c.Code,
+                DeletedAt = c.DeletedAt,
+                DeletedBy = c.DeletedBy,
+                DeletedByEmail = _db.Users.Where(u => u.Id == c.DeletedBy).Select(u => u.Email).FirstOrDefault()
+            })
+            .ToListAsync(cancellationToken);
+
+        return new PagedResult<TrashedItemResponse>
+        {
+            Items = items,
+            Page = page,
+            PageSize = pageSize,
+            Total = total
+        };
+    }
+
+    public async Task<ServiceResult<AdminCurrencyResponse>> RestoreAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var currency = await _db.Currencies.FindTrashedAsync(id, cancellationToken);
+        if (currency is null)
+        {
+            return ServiceResult<AdminCurrencyResponse>.NotFound("not_found", $"No deleted currency with id {id}.");
+        }
+
+        currency.IsDeleted = false;
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return await GetByIdAsync(id, cancellationToken);
+    }
+
+    public async Task<ServiceResult<bool>> PurgeAsync(Guid id, CancellationToken cancellationToken)
+    {
+        if (_currentUser.RequireSuperAdmin<bool>() is { } denied)
+        {
+            return denied;
+        }
+
+        var currency = await _db.Currencies.FindTrashedAsync(id, cancellationToken);
+        if (currency is null)
+        {
+            return ServiceResult<bool>.NotFound("not_found", $"No deleted currency with id {id}.");
+        }
+
+        if (IsBase(currency.Code))
+        {
+            return ServiceResult<bool>.Conflict(
+                "cannot_delete_base_currency",
+                $"{BaseCurrencyCode} is the base every rate is expressed against and cannot be deleted.");
+        }
+
+        // Deleted plans count too, so restoring one never finds its currency gone.
+        var planCount = await _db.PricingPlans
+            .IgnoreQueryFilters()
+            .CountAsync(p => p.Currency == currency.Code, cancellationToken);
+
+        if (planCount > 0)
+        {
+            return ServiceResult<bool>.Conflict(
+                "currency_in_use",
+                $"Currency '{currency.Code}' prices {planCount} pricing plan(s), including deleted ones. "
+                + "Move them to another currency before deleting permanently.");
+        }
+
+        _db.Currencies.Remove(currency);
         await _db.SaveChangesAsync(cancellationToken);
 
         return ServiceResult<bool>.Success(true);

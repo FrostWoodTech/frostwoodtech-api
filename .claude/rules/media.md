@@ -43,7 +43,10 @@ articles and is re-run through `SlugGenerator`, so nothing outside the base fold
 
 ## Deletes
 
-- Soft-deleting a row never deletes its file.
+- Soft-deleting a row never deletes its file, so a restore keeps it.
+- Purging a row (super admin, from the trash) deletes every file it owns after the commit: project and
+  product images, a certificate file, a service's icon/hero/depth images, and an article's cover image plus
+  every `media://` key in its Markdown. Legacy `http(s)` cover URLs are skipped: nothing maps a URL back to a key.
 - Hard-deleting an image row, or replacing a certificate's file, deletes the object **after** the
   row is committed. A failed delete is logged, never surfaced; a missing object counts as success.
 

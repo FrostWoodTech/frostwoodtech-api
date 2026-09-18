@@ -2,6 +2,7 @@ using System.Linq.Expressions;
 
 using Microsoft.EntityFrameworkCore;
 
+using FrostWoodTech.API.Auth;
 using FrostWoodTech.API.Common;
 using FrostWoodTech.API.Data;
 using FrostWoodTech.API.DTOs.Admin;
@@ -15,10 +16,12 @@ namespace FrostWoodTech.API.Services;
 public class PricingService : IPricingService
 {
     private readonly FrostWoodTechDbContext _db;
+    private readonly CurrentUser _currentUser;
 
-    public PricingService(FrostWoodTechDbContext db)
+    public PricingService(FrostWoodTechDbContext db, CurrentUser currentUser)
     {
         _db = db;
+        _currentUser = currentUser;
     }
 
     public Task<PagedResult<PricingPlanResponse>> GetPublicComboPlansAsync(
@@ -241,6 +244,100 @@ public class PricingService : IPricingService
 
         // Soft delete keeps feature rows.
         plan.IsDeleted = true;
+        plan.DeletedBy = _currentUser.UserId;
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return ServiceResult<bool>.Success(true);
+    }
+
+    public async Task<PagedResult<TrashedItemResponse>> GetTrashAsync(
+        string? search,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        var query = _db.PricingPlans.Trashed().AsNoTracking();
+
+        if (search is not null)
+        {
+            query = query.Where(p => EF.Functions.ILike(p.Name, $"%{search}%"));
+        }
+
+        var total = await query.CountAsync(cancellationToken);
+
+        var items = await query
+            .OrderByDescending(p => p.DeletedAt)
+            .ThenByDescending(p => p.UpdatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(p => new TrashedItemResponse
+            {
+                Id = p.Id,
+                Label = p.Name,
+                DeletedAt = p.DeletedAt,
+                DeletedBy = p.DeletedBy,
+                DeletedByEmail = _db.Users.Where(u => u.Id == p.DeletedBy).Select(u => u.Email).FirstOrDefault()
+            })
+            .ToListAsync(cancellationToken);
+
+        return new PagedResult<TrashedItemResponse>
+        {
+            Items = items,
+            Page = page,
+            PageSize = pageSize,
+            Total = total
+        };
+    }
+
+    public async Task<ServiceResult<AdminPricingPlanResponse>> RestoreAsync(
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        var plan = await _db.PricingPlans.FindTrashedAsync(id, cancellationToken);
+        if (plan is null)
+        {
+            return ServiceResult<AdminPricingPlanResponse>.NotFound(
+                "not_found", $"No deleted pricing plan with id {id}.");
+        }
+
+        // Deleting a service keeps its plans, so a tier can outlive the page it belongs to.
+        if (plan.ServiceId is { } serviceId
+            && !await _db.Services.AnyAsync(s => s.Id == serviceId, cancellationToken))
+        {
+            return ServiceResult<AdminPricingPlanResponse>.Conflict(
+                "service_deleted", "This plan belongs to a deleted service. Restore the service first.");
+        }
+
+        // Only a deleted currency row blocks this; a code with no row at all is what create allows too.
+        if (await _db.Currencies
+            .IgnoreQueryFilters()
+            .AnyAsync(c => c.Code == plan.Currency && c.IsDeleted, cancellationToken))
+        {
+            return ServiceResult<AdminPricingPlanResponse>.Conflict(
+                "currency_deleted",
+                $"Currency '{plan.Currency}' no longer exists. Restore it or move the plan first.");
+        }
+
+        plan.IsDeleted = false;
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return await GetByIdAsync(id, cancellationToken);
+    }
+
+    public async Task<ServiceResult<bool>> PurgeAsync(Guid id, CancellationToken cancellationToken)
+    {
+        if (_currentUser.RequireSuperAdmin<bool>() is { } denied)
+        {
+            return denied;
+        }
+
+        var plan = await _db.PricingPlans.FindTrashedAsync(id, cancellationToken);
+        if (plan is null)
+        {
+            return ServiceResult<bool>.NotFound("not_found", $"No deleted pricing plan with id {id}.");
+        }
+
+        _db.PricingPlans.Remove(plan);
         await _db.SaveChangesAsync(cancellationToken);
 
         return ServiceResult<bool>.Success(true);

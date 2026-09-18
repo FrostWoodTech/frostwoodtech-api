@@ -30,6 +30,7 @@ public class FrostWoodTechDbContextDesignTimeFactory : IDesignTimeDbContextFacto
         dataSourceBuilder.MapEnum<AuthAttemptAction>("auth_attempt_action");
         dataSourceBuilder.MapEnum<ContactSubmissionStatus>("contact_submission_status");
         dataSourceBuilder.MapEnum<ContactBudgetRange>("contact_budget_range");
+        dataSourceBuilder.MapEnum<CertificateCategory>("certificate_category");
         dataSourceBuilder.MapEnum<Site>("site");
 
         var options = new DbContextOptionsBuilder<FrostWoodTechDbContext>()
