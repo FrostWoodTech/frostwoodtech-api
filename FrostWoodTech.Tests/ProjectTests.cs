@@ -9,16 +9,8 @@ using FrostWoodTech.API.Services;
 
 namespace FrostWoodTech.Tests;
 
-[Collection(nameof(PostgresCollection))]
-public class ProjectTests
+public class ProjectTests(PostgresFixture fixture) : DatabaseTest(fixture)
 {
-    private readonly PostgresFixture _fixture;
-
-    public ProjectTests(PostgresFixture fixture)
-    {
-        _fixture = fixture;
-    }
-
     [Fact]
     public async Task Personal_only_project_is_not_returned_for_the_agency_site()
     {

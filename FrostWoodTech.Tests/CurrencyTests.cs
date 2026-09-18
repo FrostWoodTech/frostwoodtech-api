@@ -7,16 +7,8 @@ using FrostWoodTech.API.Services;
 
 namespace FrostWoodTech.Tests;
 
-[Collection(nameof(PostgresCollection))]
-public class CurrencyTests
+public class CurrencyTests(PostgresFixture fixture) : DatabaseTest(fixture)
 {
-    private readonly PostgresFixture _fixture;
-
-    public CurrencyTests(PostgresFixture fixture)
-    {
-        _fixture = fixture;
-    }
-
     [Fact]
     public async Task An_active_currency_appears_on_the_public_list()
     {

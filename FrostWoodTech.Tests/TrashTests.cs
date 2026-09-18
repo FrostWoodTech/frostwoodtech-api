@@ -11,18 +11,10 @@ using FrostWoodTech.API.Services;
 namespace FrostWoodTech.Tests;
 
 /// <summary>Delete, list in trash, restore, delete again, purge: once per content type, then the cross-entity guards.</summary>
-[Collection(nameof(PostgresCollection))]
-public class TrashTests
+public class TrashTests(PostgresFixture fixture) : DatabaseTest(fixture)
 {
     private static readonly CurrentUser Admin = new() { UserId = Guid.NewGuid(), Role = UserRole.Admin };
     private static readonly CurrentUser SuperAdmin = new() { UserId = Guid.NewGuid(), Role = UserRole.SuperAdmin };
-
-    private readonly PostgresFixture _fixture;
-
-    public TrashTests(PostgresFixture fixture)
-    {
-        _fixture = fixture;
-    }
 
     [Fact]
     public async Task Faqs_can_be_trashed_restored_and_purged()

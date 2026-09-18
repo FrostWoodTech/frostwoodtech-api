@@ -10,17 +10,9 @@ using FrostWoodTech.API.Services;
 
 namespace FrostWoodTech.Tests;
 
-[Collection(nameof(PostgresCollection))]
-public class UserManagementTests
+public class UserManagementTests(PostgresFixture fixture) : DatabaseTest(fixture)
 {
     private const string Password = "correct horse battery staple";
-
-    private readonly PostgresFixture _fixture;
-
-    public UserManagementTests(PostgresFixture fixture)
-    {
-        _fixture = fixture;
-    }
 
     [Fact]
     public async Task Only_the_super_admin_can_manage_users()

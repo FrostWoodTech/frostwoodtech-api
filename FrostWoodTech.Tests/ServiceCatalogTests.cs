@@ -6,16 +6,8 @@ using FrostWoodTech.API.Services;
 
 namespace FrostWoodTech.Tests;
 
-[Collection(nameof(PostgresCollection))]
-public class ServiceCatalogTests
+public class ServiceCatalogTests(PostgresFixture fixture) : DatabaseTest(fixture)
 {
-    private readonly PostgresFixture _fixture;
-
-    public ServiceCatalogTests(PostgresFixture fixture)
-    {
-        _fixture = fixture;
-    }
-
     [Fact]
     public async Task Personal_only_and_draft_services_are_not_returned_for_the_agency_site()
     {

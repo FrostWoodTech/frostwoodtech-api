@@ -5,16 +5,8 @@ using FrostWoodTech.API.Services;
 
 namespace FrostWoodTech.Tests;
 
-[Collection(nameof(PostgresCollection))]
-public class TagAndPricingRulesTests
+public class TagAndPricingRulesTests(PostgresFixture fixture) : DatabaseTest(fixture)
 {
-    private readonly PostgresFixture _fixture;
-
-    public TagAndPricingRulesTests(PostgresFixture fixture)
-    {
-        _fixture = fixture;
-    }
-
     [Fact]
     public async Task A_tag_still_used_by_an_article_cannot_be_deleted()
     {

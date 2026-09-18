@@ -14,16 +14,8 @@ using FrostWoodTech.API.Services;
 namespace FrostWoodTech.Tests;
 
 /// <summary>Uses the real Postgres-backed LoginRateLimiter.</summary>
-[Collection(nameof(PostgresCollection))]
-public class PasswordResetTests
+public class PasswordResetTests(PostgresFixture fixture) : DatabaseTest(fixture)
 {
-    private readonly PostgresFixture _fixture;
-
-    public PasswordResetTests(PostgresFixture fixture)
-    {
-        _fixture = fixture;
-    }
-
     [Fact]
     public async Task A_request_for_an_approved_account_issues_one_reset_link()
     {

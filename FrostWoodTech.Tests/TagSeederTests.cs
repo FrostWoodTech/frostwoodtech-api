@@ -10,16 +10,8 @@ using FrostWoodTech.API.Services;
 
 namespace FrostWoodTech.Tests;
 
-[Collection(nameof(PostgresCollection))]
-public class TagSeederTests
+public class TagSeederTests(PostgresFixture fixture) : DatabaseTest(fixture)
 {
-    private readonly PostgresFixture _fixture;
-
-    public TagSeederTests(PostgresFixture fixture)
-    {
-        _fixture = fixture;
-    }
-
     [Fact]
     public async Task Seeding_creates_the_starter_tags()
     {
@@ -31,7 +23,7 @@ public class TagSeederTests
         Assert.True(react.IsTechnology);
         Assert.Equal(TechCategory.Frontend, react.TechnologyCategory);
 
-        var category = await FindAsync(db, "landing-page-development");
+        var category = await FindAsync(db, "web-application");
         Assert.False(category.IsTechnology);
         Assert.Null(category.TechnologyCategory);
 

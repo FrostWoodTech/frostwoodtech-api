@@ -8,17 +8,9 @@ using FrostWoodTech.API.Services;
 namespace FrostWoodTech.Tests;
 
 /// <summary>Permanent delete against the Restrict foreign keys, where deleted rows still hold their links.</summary>
-[Collection(nameof(PostgresCollection))]
-public class PurgeGuardTests
+public class PurgeGuardTests(PostgresFixture fixture) : DatabaseTest(fixture)
 {
     private static readonly CurrentUser SuperAdmin = new() { UserId = Guid.NewGuid(), Role = UserRole.SuperAdmin };
-
-    private readonly PostgresFixture _fixture;
-
-    public PurgeGuardTests(PostgresFixture fixture)
-    {
-        _fixture = fixture;
-    }
 
     [Fact]
     public async Task Purging_a_tag_is_blocked_by_a_deleted_project_that_still_links_it()

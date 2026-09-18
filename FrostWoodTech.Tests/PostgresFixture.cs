@@ -55,6 +55,20 @@ public sealed class PostgresFixture : IAsyncLifetime
             })
             .Options);
 
+    /// <summary>One TRUNCATE of every mapped table; the schema and migration history stay put.</summary>
+    public async Task ResetAsync()
+    {
+        await using var db = CreateContext();
+        var tables = db.Model.GetEntityTypes()
+            .Select(t => t.GetTableName())
+            .Where(name => name is not null)
+            .Distinct()
+            .Select(name => "\"" + name + "\"");
+
+        await db.Database.ExecuteSqlRawAsync(
+            $"TRUNCATE {string.Join(", ", tables)} RESTART IDENTITY CASCADE;");
+    }
+
     public async Task DisposeAsync()
     {
         await _dataSource.DisposeAsync();
