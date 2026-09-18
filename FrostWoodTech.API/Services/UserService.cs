@@ -845,7 +845,7 @@ public class UserService : IUserService
     }
 
     private ServiceResult<T>? RequireSuperAdmin<T>() =>
-        _currentUser.IsSuperAdmin ? null : ServiceResult<T>.Forbidden("forbidden", SuperAdminOnly);
+        _currentUser.RequireSuperAdmin<T>(SuperAdminOnly);
 
     // Stores only the refresh token hash; expired rows are swept here (no timer needed).
     private async Task<(AuthResponse Response, RefreshToken Row)> IssueTokensAsync(

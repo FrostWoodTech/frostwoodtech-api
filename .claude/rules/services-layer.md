@@ -33,6 +33,22 @@ One service per aggregate, registered scoped in `Program.cs`. Services return
 - Unknown foreign ids (tags, projects, services) are validation errors, not 500s.
 - Sort orders never come from create/update (services excepted); new rows are appended.
 
+## Trash
+
+- Every content service has `GetTrashAsync`, `RestoreAsync` and `PurgeAsync`. Users are excluded.
+- `DeleteAsync` sets `DeletedBy = _currentUser.UserId`; the DbContext stamps `DeletedAt` and clears both
+  on restore. The DbContext can't take `CurrentUser`: it is pooled, and the pool needs a single
+  `DbContextOptions` constructor.
+- Load trashed rows with `_db.X.FindTrashedAsync(id, ct)` / `.Trashed()` (`Data/TrashQueries.cs`), so a
+  live row is `not_found` for restore and purge.
+- Purge starts with `_currentUser.RequireSuperAdmin<bool>()`. Read the object keys **before** removing
+  the row, and delete the files after the commit.
+- Purge guards count with `IgnoreQueryFilters()`, the opposite of the soft-delete guards: a deleted row
+  still holds its `Restrict` links, and dropping one would strip a later restore. Codes: `tag_in_use`,
+  `project_in_use`, `service_in_use`, `currency_in_use`.
+- Restore has no slug guard: unique indexes cover deleted rows, so nothing can take a trashed slug. The
+  real guards: `service_deleted` (FAQ or plan whose service is deleted) and `currency_deleted`.
+
 ## Publishing
 
 `published_at` is stamped on the first publish and never cleared. `SetPublishedAsync` shows the row

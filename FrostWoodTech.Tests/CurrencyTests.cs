@@ -1,3 +1,4 @@
+using FrostWoodTech.API.Auth;
 using FrostWoodTech.API.Common;
 using FrostWoodTech.API.Data;
 using FrostWoodTech.API.DTOs.Admin;
@@ -6,16 +7,8 @@ using FrostWoodTech.API.Services;
 
 namespace FrostWoodTech.Tests;
 
-[Collection(nameof(PostgresCollection))]
-public class CurrencyTests
+public class CurrencyTests(PostgresFixture fixture) : DatabaseTest(fixture)
 {
-    private readonly PostgresFixture _fixture;
-
-    public CurrencyTests(PostgresFixture fixture)
-    {
-        _fixture = fixture;
-    }
-
     [Fact]
     public async Task An_active_currency_appears_on_the_public_list()
     {
@@ -352,7 +345,7 @@ public class CurrencyTests
     }
 
     private static CurrencyService NewService(FrostWoodTechDbContext db, IExchangeRateProvider? provider = null) =>
-        new(db, provider ?? new FakeExchangeRateProvider());
+        new(db, provider ?? new FakeExchangeRateProvider(), new CurrentUser());
 
     private sealed class FakeExchangeRateProvider : IExchangeRateProvider
     {

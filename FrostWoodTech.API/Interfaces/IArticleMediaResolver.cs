@@ -4,4 +4,7 @@ namespace FrostWoodTech.API.Interfaces;
 public interface IArticleMediaResolver
 {
     string ResolveMediaReferences(string markdown);
+
+    /// <summary>The object keys a piece of Markdown references, for deleting them when an article is purged.</summary>
+    IReadOnlyList<string> ExtractMediaKeys(string? markdown);
 }

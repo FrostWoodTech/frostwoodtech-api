@@ -2,6 +2,7 @@ using System.Linq.Expressions;
 
 using Microsoft.EntityFrameworkCore;
 
+using FrostWoodTech.API.Auth;
 using FrostWoodTech.API.Common;
 using FrostWoodTech.API.Data;
 using FrostWoodTech.API.DTOs.Admin;
@@ -15,10 +16,12 @@ namespace FrostWoodTech.API.Services;
 public class FaqService : IFaqService
 {
     private readonly FrostWoodTechDbContext _db;
+    private readonly CurrentUser _currentUser;
 
-    public FaqService(FrostWoodTechDbContext db)
+    public FaqService(FrostWoodTechDbContext db, CurrentUser currentUser)
     {
         _db = db;
+        _currentUser = currentUser;
     }
 
     public async Task<IReadOnlyList<FaqResponse>> GetPublicFaqsAsync(
@@ -192,6 +195,87 @@ public class FaqService : IFaqService
         }
 
         faq.IsDeleted = true;
+        faq.DeletedBy = _currentUser.UserId;
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return ServiceResult<bool>.Success(true);
+    }
+
+    public async Task<PagedResult<TrashedItemResponse>> GetTrashAsync(
+        string? search,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        var query = _db.Faqs.Trashed().AsNoTracking();
+
+        if (search is not null)
+        {
+            query = query.Where(f => EF.Functions.ILike(f.Question, $"%{search}%"));
+        }
+
+        var total = await query.CountAsync(cancellationToken);
+
+        var items = await query
+            .OrderByDescending(f => f.DeletedAt)
+            .ThenByDescending(f => f.UpdatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(f => new TrashedItemResponse
+            {
+                Id = f.Id,
+                Label = f.Question,
+                DeletedAt = f.DeletedAt,
+                DeletedBy = f.DeletedBy,
+                DeletedByEmail = _db.Users.Where(u => u.Id == f.DeletedBy).Select(u => u.Email).FirstOrDefault()
+            })
+            .ToListAsync(cancellationToken);
+
+        return new PagedResult<TrashedItemResponse>
+        {
+            Items = items,
+            Page = page,
+            PageSize = pageSize,
+            Total = total
+        };
+    }
+
+    public async Task<ServiceResult<AdminFaqResponse>> RestoreAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var faq = await _db.Faqs.FindTrashedAsync(id, cancellationToken);
+        if (faq is null)
+        {
+            return ServiceResult<AdminFaqResponse>.NotFound("not_found", $"No deleted FAQ with id {id}.");
+        }
+
+        // A restored FAQ scoped to a deleted service would have no page to appear on.
+        if (faq.ServiceId is { } serviceId
+            && !await _db.Services.AnyAsync(s => s.Id == serviceId, cancellationToken))
+        {
+            return ServiceResult<AdminFaqResponse>.Conflict(
+                "service_deleted", "This FAQ belongs to a deleted service. Restore the service first.");
+        }
+
+        faq.IsDeleted = false;
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return await GetByIdAsync(id, cancellationToken);
+    }
+
+    public async Task<ServiceResult<bool>> PurgeAsync(Guid id, CancellationToken cancellationToken)
+    {
+        if (_currentUser.RequireSuperAdmin<bool>() is { } denied)
+        {
+            return denied;
+        }
+
+        var faq = await _db.Faqs.FindTrashedAsync(id, cancellationToken);
+        if (faq is null)
+        {
+            return ServiceResult<bool>.NotFound("not_found", $"No deleted FAQ with id {id}.");
+        }
+
+        _db.Faqs.Remove(faq);
         await _db.SaveChangesAsync(cancellationToken);
 
         return ServiceResult<bool>.Success(true);

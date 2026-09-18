@@ -2,6 +2,7 @@ using System.Linq.Expressions;
 
 using Microsoft.EntityFrameworkCore;
 
+using FrostWoodTech.API.Auth;
 using FrostWoodTech.API.Common;
 using FrostWoodTech.API.Data;
 using FrostWoodTech.API.DTOs.Admin;
@@ -20,10 +21,12 @@ public class ReviewService : IReviewService
     private const int MaxSubmissionsPerIpPerWindow = 3;
 
     private readonly FrostWoodTechDbContext _db;
+    private readonly CurrentUser _currentUser;
 
-    public ReviewService(FrostWoodTechDbContext db)
+    public ReviewService(FrostWoodTechDbContext db, CurrentUser currentUser)
     {
         _db = db;
+        _currentUser = currentUser;
     }
 
     public async Task<ServiceResult<ReviewSubmissionResponse>> SubmitAsync(
@@ -262,6 +265,79 @@ public class ReviewService : IReviewService
         }
 
         review.IsDeleted = true;
+        review.DeletedBy = _currentUser.UserId;
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return ServiceResult<bool>.Success(true);
+    }
+
+    public async Task<PagedResult<TrashedItemResponse>> GetTrashAsync(
+        string? search,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        var query = _db.Reviews.Trashed().AsNoTracking();
+
+        if (search is not null)
+        {
+            query = query.Where(r => EF.Functions.ILike(r.Name, $"%{search}%"));
+        }
+
+        var total = await query.CountAsync(cancellationToken);
+
+        var items = await query
+            .OrderByDescending(r => r.DeletedAt)
+            .ThenByDescending(r => r.UpdatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(r => new TrashedItemResponse
+            {
+                Id = r.Id,
+                Label = r.Name,
+                DeletedAt = r.DeletedAt,
+                DeletedBy = r.DeletedBy,
+                DeletedByEmail = _db.Users.Where(u => u.Id == r.DeletedBy).Select(u => u.Email).FirstOrDefault()
+            })
+            .ToListAsync(cancellationToken);
+
+        return new PagedResult<TrashedItemResponse>
+        {
+            Items = items,
+            Page = page,
+            PageSize = pageSize,
+            Total = total
+        };
+    }
+
+    public async Task<ServiceResult<AdminReviewResponse>> RestoreAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var review = await _db.Reviews.FindTrashedAsync(id, cancellationToken);
+        if (review is null)
+        {
+            return ServiceResult<AdminReviewResponse>.NotFound("not_found", $"No deleted review with id {id}.");
+        }
+
+        review.IsDeleted = false;
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return await GetByIdAsync(id, cancellationToken);
+    }
+
+    public async Task<ServiceResult<bool>> PurgeAsync(Guid id, CancellationToken cancellationToken)
+    {
+        if (_currentUser.RequireSuperAdmin<bool>() is { } denied)
+        {
+            return denied;
+        }
+
+        var review = await _db.Reviews.FindTrashedAsync(id, cancellationToken);
+        if (review is null)
+        {
+            return ServiceResult<bool>.NotFound("not_found", $"No deleted review with id {id}.");
+        }
+
+        _db.Reviews.Remove(review);
         await _db.SaveChangesAsync(cancellationToken);
 
         return ServiceResult<bool>.Success(true);

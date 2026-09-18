@@ -2,6 +2,7 @@ using System.Linq.Expressions;
 
 using Microsoft.EntityFrameworkCore;
 
+using FrostWoodTech.API.Auth;
 using FrostWoodTech.API.Common;
 using FrostWoodTech.API.Data;
 using FrostWoodTech.API.DTOs.Admin;
@@ -15,10 +16,17 @@ namespace FrostWoodTech.API.Services;
 public class ServiceCatalogService : IServiceCatalogService
 {
     private readonly FrostWoodTechDbContext _db;
+    private readonly IMediaService _mediaService;
+    private readonly CurrentUser _currentUser;
 
-    public ServiceCatalogService(FrostWoodTechDbContext db)
+    public ServiceCatalogService(
+        FrostWoodTechDbContext db,
+        IMediaService mediaService,
+        CurrentUser currentUser)
     {
         _db = db;
+        _mediaService = mediaService;
+        _currentUser = currentUser;
     }
 
     public async Task<PagedResult<ServiceResponse>> GetPublicServicesAsync(
@@ -334,7 +342,106 @@ public class ServiceCatalogService : IServiceCatalogService
 
         // Soft delete keeps pricing plans.
         service.IsDeleted = true;
+        service.DeletedBy = _currentUser.UserId;
         await _db.SaveChangesAsync(cancellationToken);
+
+        return ServiceResult<bool>.Success(true);
+    }
+
+    public async Task<PagedResult<TrashedItemResponse>> GetTrashAsync(
+        string? search,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        var query = _db.Services.Trashed().AsNoTracking();
+
+        if (search is not null)
+        {
+            query = query.Where(s => EF.Functions.ILike(s.Name, $"%{search}%"));
+        }
+
+        var total = await query.CountAsync(cancellationToken);
+
+        var items = await query
+            .OrderByDescending(s => s.DeletedAt)
+            .ThenByDescending(s => s.UpdatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(s => new TrashedItemResponse
+            {
+                Id = s.Id,
+                Label = s.Name,
+                DeletedAt = s.DeletedAt,
+                DeletedBy = s.DeletedBy,
+                DeletedByEmail = _db.Users.Where(u => u.Id == s.DeletedBy).Select(u => u.Email).FirstOrDefault()
+            })
+            .ToListAsync(cancellationToken);
+
+        return new PagedResult<TrashedItemResponse>
+        {
+            Items = items,
+            Page = page,
+            PageSize = pageSize,
+            Total = total
+        };
+    }
+
+    public async Task<ServiceResult<AdminServiceResponse>> RestoreAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var service = await _db.Services.FindTrashedAsync(id, cancellationToken);
+        if (service is null)
+        {
+            return ServiceResult<AdminServiceResponse>.NotFound("not_found", $"No deleted service with id {id}.");
+        }
+
+        service.IsDeleted = false;
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return await GetByIdAsync(id, cancellationToken);
+    }
+
+    public async Task<ServiceResult<bool>> PurgeAsync(Guid id, CancellationToken cancellationToken)
+    {
+        if (_currentUser.RequireSuperAdmin<bool>() is { } denied)
+        {
+            return denied;
+        }
+
+        var service = await _db.Services.FindTrashedAsync(id, cancellationToken);
+        if (service is null)
+        {
+            return ServiceResult<bool>.NotFound("not_found", $"No deleted service with id {id}.");
+        }
+
+        // Both foreign keys are Restrict, and deleted rows hold them just as firmly as live ones.
+        var faqCount = await _db.Faqs.IgnoreQueryFilters().CountAsync(f => f.ServiceId == id, cancellationToken);
+        var planCount = await _db.PricingPlans
+            .IgnoreQueryFilters()
+            .CountAsync(p => p.ServiceId == id, cancellationToken);
+
+        if (faqCount > 0 || planCount > 0)
+        {
+            return ServiceResult<bool>.Conflict(
+                "service_in_use",
+                $"{faqCount} FAQ(s) and {planCount} pricing plan(s) still belong to this service, including "
+                + "deleted ones. Move or delete them permanently first.");
+        }
+
+        // Case-study links cascade; enquiries keep their text and lose the service link.
+        var objectKeys = new[] { service.IconObjectKey, service.HeroImageObjectKey, service.DepthImageObjectKey }
+            .Where(key => !string.IsNullOrWhiteSpace(key))
+            .Select(key => key!)
+            .ToList();
+
+        _db.Services.Remove(service);
+        await _db.SaveChangesAsync(cancellationToken);
+
+        // After the commit: a failed delete only orphans a file, never keeps the row.
+        foreach (var objectKey in objectKeys)
+        {
+            await _mediaService.DeleteFileAsync(objectKey, cancellationToken);
+        }
 
         return ServiceResult<bool>.Success(true);
     }

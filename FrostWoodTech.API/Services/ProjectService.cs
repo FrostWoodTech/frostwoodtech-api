@@ -2,6 +2,7 @@ using System.Linq.Expressions;
 
 using Microsoft.EntityFrameworkCore;
 
+using FrostWoodTech.API.Auth;
 using FrostWoodTech.API.Common;
 using FrostWoodTech.API.Data;
 using FrostWoodTech.API.DTOs.Admin;
@@ -18,11 +19,13 @@ public class ProjectService : IProjectService
 
     private readonly FrostWoodTechDbContext _db;
     private readonly IMediaService _mediaService;
+    private readonly CurrentUser _currentUser;
 
-    public ProjectService(FrostWoodTechDbContext db, IMediaService mediaService)
+    public ProjectService(FrostWoodTechDbContext db, IMediaService mediaService, CurrentUser currentUser)
     {
         _db = db;
         _mediaService = mediaService;
+        _currentUser = currentUser;
     }
 
     public async Task<PagedResult<ProjectResponse>> GetPublicProjectsAsync(
@@ -324,7 +327,103 @@ public class ProjectService : IProjectService
 
         // Soft delete keeps tag links and images so a restore keeps them.
         project.IsDeleted = true;
+        project.DeletedBy = _currentUser.UserId;
         await _db.SaveChangesAsync(cancellationToken);
+
+        return ServiceResult<bool>.Success(true);
+    }
+
+    public async Task<PagedResult<TrashedItemResponse>> GetTrashAsync(
+        string? search,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        var query = _db.Projects.Trashed().AsNoTracking();
+
+        if (search is not null)
+        {
+            query = query.Where(p => EF.Functions.ILike(p.Title, $"%{search}%"));
+        }
+
+        var total = await query.CountAsync(cancellationToken);
+
+        var items = await query
+            .OrderByDescending(p => p.DeletedAt)
+            .ThenByDescending(p => p.UpdatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(p => new TrashedItemResponse
+            {
+                Id = p.Id,
+                Label = p.Title,
+                DeletedAt = p.DeletedAt,
+                DeletedBy = p.DeletedBy,
+                DeletedByEmail = _db.Users.Where(u => u.Id == p.DeletedBy).Select(u => u.Email).FirstOrDefault()
+            })
+            .ToListAsync(cancellationToken);
+
+        return new PagedResult<TrashedItemResponse>
+        {
+            Items = items,
+            Page = page,
+            PageSize = pageSize,
+            Total = total
+        };
+    }
+
+    public async Task<ServiceResult<AdminProjectResponse>> RestoreAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var project = await _db.Projects.FindTrashedAsync(id, cancellationToken);
+        if (project is null)
+        {
+            return ServiceResult<AdminProjectResponse>.NotFound("not_found", $"No deleted project with id {id}.");
+        }
+
+        project.IsDeleted = false;
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return await GetByIdAsync(id, cancellationToken);
+    }
+
+    public async Task<ServiceResult<bool>> PurgeAsync(Guid id, CancellationToken cancellationToken)
+    {
+        if (_currentUser.RequireSuperAdmin<bool>() is { } denied)
+        {
+            return denied;
+        }
+
+        var project = await _db.Projects
+            .IgnoreQueryFilters()
+            .Include(p => p.Images)
+            .FirstOrDefaultAsync(p => p.Id == id && p.IsDeleted, cancellationToken);
+
+        if (project is null)
+        {
+            return ServiceResult<bool>.NotFound("not_found", $"No deleted project with id {id}.");
+        }
+
+        // service_projects.project_id is Restrict, and a deleted service holds its link just as firmly.
+        var linkedServices = await _db.ServiceProjects.CountAsync(sp => sp.ProjectId == id, cancellationToken);
+        if (linkedServices > 0)
+        {
+            return ServiceResult<bool>.Conflict(
+                "project_in_use",
+                $"{linkedServices} service(s) still link this project as a case study, including deleted ones. "
+                + "Unlink it before deleting permanently.");
+        }
+
+        // Read the keys before the row goes; image and tag links follow it by cascade.
+        var objectKeys = project.Images.Select(i => i.ObjectKey).ToList();
+
+        _db.Projects.Remove(project);
+        await _db.SaveChangesAsync(cancellationToken);
+
+        // After the commit: a failed delete only orphans a file, never keeps the row.
+        foreach (var objectKey in objectKeys)
+        {
+            await _mediaService.DeleteFileAsync(objectKey, cancellationToken);
+        }
 
         return ServiceResult<bool>.Success(true);
     }

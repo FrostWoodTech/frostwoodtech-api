@@ -1,4 +1,5 @@
 using FrostWoodTech.API.Entities.Common;
+using FrostWoodTech.API.Enums;
 
 namespace FrostWoodTech.API.Entities;
 
@@ -8,6 +9,8 @@ public class Certificate : AuditableEntity
     public required string Name { get; set; }
 
     public required string IssuedBy { get; set; }
+
+    public CertificateCategory Category { get; set; }
 
     public DateOnly IssuedDate { get; set; }
 

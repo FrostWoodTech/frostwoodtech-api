@@ -13,16 +13,8 @@ using FrostWoodTech.API.Services;
 
 namespace FrostWoodTech.Tests;
 
-[Collection(nameof(PostgresCollection))]
-public class SuperAdminBootstrapTests
+public class SuperAdminBootstrapTests(PostgresFixture fixture) : DatabaseTest(fixture)
 {
-    private readonly PostgresFixture _fixture;
-
-    public SuperAdminBootstrapTests(PostgresFixture fixture)
-    {
-        _fixture = fixture;
-    }
-
     [Fact]
     public async Task Seeding_an_empty_database_creates_one_passwordless_super_admin_and_one_link()
     {

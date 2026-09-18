@@ -2164,6 +2164,635 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/MediaConfigResponse" }
+  # ------------------------------------------------------------------------------- trash
+  # Every content type has the same three routes: list what was soft-deleted, restore a row, delete it for good.
+  /cms/admin/projects/trash:
+    get:
+      tags: [admin]
+      operationId: getTrashedProjects
+      summary: List soft-deleted projects
+      description: Newest deletion first. `deletedAt` is null for rows deleted before the trash existed.
+      parameters:
+        - $ref: "#/components/parameters/Search"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: A page of deleted rows.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/TrashedItemResponse" }
+                  page: { type: integer }
+                  pageSize: { type: integer }
+                  total: { type: integer }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /cms/admin/projects/{id}/restore:
+    post:
+      tags: [admin]
+      operationId: restoreProjects
+      summary: Restore a soft-deleted row
+      description: "Restoring always works: a deleted row keeps its slug reserved. Permanent delete is blocked with `project_in_use` while a service still links it."
+      parameters: [{ $ref: "#/components/parameters/IdPath" }]
+      responses:
+        "200":
+          description: The restored row.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminProjectResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /cms/admin/projects/{id}/permanent:
+    delete:
+      tags: [admin]
+      operationId: purgeProjects
+      summary: Permanently delete a soft-deleted row
+      description: Super admin only. The row must already be in the trash. Stored files are removed after the row is gone.
+      parameters: [{ $ref: "#/components/parameters/IdPath" }]
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /cms/admin/products/trash:
+    get:
+      tags: [admin]
+      operationId: getTrashedProducts
+      summary: List soft-deleted products
+      description: Newest deletion first. `deletedAt` is null for rows deleted before the trash existed.
+      parameters:
+        - $ref: "#/components/parameters/Search"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: A page of deleted rows.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/TrashedItemResponse" }
+                  page: { type: integer }
+                  pageSize: { type: integer }
+                  total: { type: integer }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /cms/admin/products/{id}/restore:
+    post:
+      tags: [admin]
+      operationId: restoreProducts
+      summary: Restore a soft-deleted row
+      description: "Restoring always works: a deleted row keeps its slug reserved."
+      parameters: [{ $ref: "#/components/parameters/IdPath" }]
+      responses:
+        "200":
+          description: The restored row.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminProductResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /cms/admin/products/{id}/permanent:
+    delete:
+      tags: [admin]
+      operationId: purgeProducts
+      summary: Permanently delete a soft-deleted row
+      description: Super admin only. The row must already be in the trash. Stored files are removed after the row is gone.
+      parameters: [{ $ref: "#/components/parameters/IdPath" }]
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /cms/admin/articles/trash:
+    get:
+      tags: [admin]
+      operationId: getTrashedArticles
+      summary: List soft-deleted articles
+      description: Newest deletion first. `deletedAt` is null for rows deleted before the trash existed.
+      parameters:
+        - $ref: "#/components/parameters/Search"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: A page of deleted rows.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/TrashedItemResponse" }
+                  page: { type: integer }
+                  pageSize: { type: integer }
+                  total: { type: integer }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /cms/admin/articles/{id}/restore:
+    post:
+      tags: [admin]
+      operationId: restoreArticles
+      summary: Restore a soft-deleted row
+      description: "Restoring always works: a deleted row keeps its slug reserved. Permanent delete also removes the cover image and every `media://` file the Markdown references."
+      parameters: [{ $ref: "#/components/parameters/IdPath" }]
+      responses:
+        "200":
+          description: The restored row.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminArticleResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /cms/admin/articles/{id}/permanent:
+    delete:
+      tags: [admin]
+      operationId: purgeArticles
+      summary: Permanently delete a soft-deleted row
+      description: Super admin only. The row must already be in the trash. Stored files are removed after the row is gone.
+      parameters: [{ $ref: "#/components/parameters/IdPath" }]
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /cms/admin/services/trash:
+    get:
+      tags: [admin]
+      operationId: getTrashedServices
+      summary: List soft-deleted services
+      description: Newest deletion first. `deletedAt` is null for rows deleted before the trash existed.
+      parameters:
+        - $ref: "#/components/parameters/Search"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: A page of deleted rows.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/TrashedItemResponse" }
+                  page: { type: integer }
+                  pageSize: { type: integer }
+                  total: { type: integer }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /cms/admin/services/{id}/restore:
+    post:
+      tags: [admin]
+      operationId: restoreServices
+      summary: Restore a soft-deleted row
+      description: "Restoring always works: a deleted row keeps its slug reserved. Permanent delete is blocked with `service_in_use` while a FAQ or pricing plan still belongs to it, and it unlinks the service from any contact submission."
+      parameters: [{ $ref: "#/components/parameters/IdPath" }]
+      responses:
+        "200":
+          description: The restored row.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminServiceResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /cms/admin/services/{id}/permanent:
+    delete:
+      tags: [admin]
+      operationId: purgeServices
+      summary: Permanently delete a soft-deleted row
+      description: Super admin only. The row must already be in the trash. Stored files are removed after the row is gone.
+      parameters: [{ $ref: "#/components/parameters/IdPath" }]
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /cms/admin/pricing-plans/trash:
+    get:
+      tags: [admin]
+      operationId: getTrashedPricingPlans
+      summary: List soft-deleted pricing-plans
+      description: Newest deletion first. `deletedAt` is null for rows deleted before the trash existed.
+      parameters:
+        - $ref: "#/components/parameters/Search"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: A page of deleted rows.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/TrashedItemResponse" }
+                  page: { type: integer }
+                  pageSize: { type: integer }
+                  total: { type: integer }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /cms/admin/pricing-plans/{id}/restore:
+    post:
+      tags: [admin]
+      operationId: restorePricingPlans
+      summary: Restore a soft-deleted row
+      description: "Fails with `service_deleted` when its service is deleted and `currency_deleted` when its currency is gone."
+      parameters: [{ $ref: "#/components/parameters/IdPath" }]
+      responses:
+        "200":
+          description: The restored row.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminPricingPlanResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /cms/admin/pricing-plans/{id}/permanent:
+    delete:
+      tags: [admin]
+      operationId: purgePricingPlans
+      summary: Permanently delete a soft-deleted row
+      description: Super admin only. The row must already be in the trash. Stored files are removed after the row is gone.
+      parameters: [{ $ref: "#/components/parameters/IdPath" }]
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /cms/admin/faqs/trash:
+    get:
+      tags: [admin]
+      operationId: getTrashedFaqs
+      summary: List soft-deleted faqs
+      description: Newest deletion first. `deletedAt` is null for rows deleted before the trash existed.
+      parameters:
+        - $ref: "#/components/parameters/Search"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: A page of deleted rows.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/TrashedItemResponse" }
+                  page: { type: integer }
+                  pageSize: { type: integer }
+                  total: { type: integer }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /cms/admin/faqs/{id}/restore:
+    post:
+      tags: [admin]
+      operationId: restoreFaqs
+      summary: Restore a soft-deleted row
+      description: "Fails with `service_deleted` when the FAQ belongs to a deleted service."
+      parameters: [{ $ref: "#/components/parameters/IdPath" }]
+      responses:
+        "200":
+          description: The restored row.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminFaqResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /cms/admin/faqs/{id}/permanent:
+    delete:
+      tags: [admin]
+      operationId: purgeFaqs
+      summary: Permanently delete a soft-deleted row
+      description: Super admin only. The row must already be in the trash. Stored files are removed after the row is gone.
+      parameters: [{ $ref: "#/components/parameters/IdPath" }]
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /cms/admin/certificates/trash:
+    get:
+      tags: [admin]
+      operationId: getTrashedCertificates
+      summary: List soft-deleted certificates
+      description: Newest deletion first. `deletedAt` is null for rows deleted before the trash existed.
+      parameters:
+        - $ref: "#/components/parameters/Search"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: A page of deleted rows.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/TrashedItemResponse" }
+                  page: { type: integer }
+                  pageSize: { type: integer }
+                  total: { type: integer }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /cms/admin/certificates/{id}/restore:
+    post:
+      tags: [admin]
+      operationId: restoreCertificates
+      summary: Restore a soft-deleted row
+      description: "Restoring always works. Permanent delete also removes the stored file."
+      parameters: [{ $ref: "#/components/parameters/IdPath" }]
+      responses:
+        "200":
+          description: The restored row.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminCertificateResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /cms/admin/certificates/{id}/permanent:
+    delete:
+      tags: [admin]
+      operationId: purgeCertificates
+      summary: Permanently delete a soft-deleted row
+      description: Super admin only. The row must already be in the trash. Stored files are removed after the row is gone.
+      parameters: [{ $ref: "#/components/parameters/IdPath" }]
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /cms/admin/tags/trash:
+    get:
+      tags: [admin]
+      operationId: getTrashedTags
+      summary: List soft-deleted tags
+      description: Newest deletion first. `deletedAt` is null for rows deleted before the trash existed.
+      parameters:
+        - $ref: "#/components/parameters/Search"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: A page of deleted rows.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/TrashedItemResponse" }
+                  page: { type: integer }
+                  pageSize: { type: integer }
+                  total: { type: integer }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /cms/admin/tags/{id}/restore:
+    post:
+      tags: [admin]
+      operationId: restoreTags
+      summary: Restore a soft-deleted row
+      description: "Restoring always works. Permanent delete is blocked with `tag_in_use` while any project or article, deleted ones included, still links the tag."
+      parameters: [{ $ref: "#/components/parameters/IdPath" }]
+      responses:
+        "200":
+          description: The restored row.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminTagResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /cms/admin/tags/{id}/permanent:
+    delete:
+      tags: [admin]
+      operationId: purgeTags
+      summary: Permanently delete a soft-deleted row
+      description: Super admin only. The row must already be in the trash. Stored files are removed after the row is gone.
+      parameters: [{ $ref: "#/components/parameters/IdPath" }]
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /cms/admin/currencies/trash:
+    get:
+      tags: [admin]
+      operationId: getTrashedCurrencies
+      summary: List soft-deleted currencies
+      description: Newest deletion first. `deletedAt` is null for rows deleted before the trash existed.
+      parameters:
+        - $ref: "#/components/parameters/Search"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: A page of deleted rows.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/TrashedItemResponse" }
+                  page: { type: integer }
+                  pageSize: { type: integer }
+                  total: { type: integer }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /cms/admin/currencies/{id}/restore:
+    post:
+      tags: [admin]
+      operationId: restoreCurrencies
+      summary: Restore a soft-deleted row
+      description: "Restoring always works. Permanent delete is blocked with `currency_in_use` while any pricing plan, deleted ones included, prices in it."
+      parameters: [{ $ref: "#/components/parameters/IdPath" }]
+      responses:
+        "200":
+          description: The restored row.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminCurrencyResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /cms/admin/currencies/{id}/permanent:
+    delete:
+      tags: [admin]
+      operationId: purgeCurrencies
+      summary: Permanently delete a soft-deleted row
+      description: Super admin only. The row must already be in the trash. Stored files are removed after the row is gone.
+      parameters: [{ $ref: "#/components/parameters/IdPath" }]
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /cms/admin/reviews/trash:
+    get:
+      tags: [admin]
+      operationId: getTrashedReviews
+      summary: List soft-deleted reviews
+      description: Newest deletion first. `deletedAt` is null for rows deleted before the trash existed.
+      parameters:
+        - $ref: "#/components/parameters/Search"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: A page of deleted rows.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/TrashedItemResponse" }
+                  page: { type: integer }
+                  pageSize: { type: integer }
+                  total: { type: integer }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /cms/admin/reviews/{id}/restore:
+    post:
+      tags: [admin]
+      operationId: restoreReviews
+      summary: Restore a soft-deleted row
+      description: "Restoring always works."
+      parameters: [{ $ref: "#/components/parameters/IdPath" }]
+      responses:
+        "200":
+          description: The restored row.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminReviewResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /cms/admin/reviews/{id}/permanent:
+    delete:
+      tags: [admin]
+      operationId: purgeReviews
+      summary: Permanently delete a soft-deleted row
+      description: Super admin only. The row must already be in the trash. Stored files are removed after the row is gone.
+      parameters: [{ $ref: "#/components/parameters/IdPath" }]
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /cms/admin/contact-submissions/trash:
+    get:
+      tags: [admin]
+      operationId: getTrashedContactSubmissions
+      summary: List soft-deleted contact-submissions
+      description: Newest deletion first. `deletedAt` is null for rows deleted before the trash existed.
+      parameters:
+        - $ref: "#/components/parameters/Search"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PageSize"
+      responses:
+        "200":
+          description: A page of deleted rows.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/TrashedItemResponse" }
+                  page: { type: integer }
+                  pageSize: { type: integer }
+                  total: { type: integer }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /cms/admin/contact-submissions/{id}/restore:
+    post:
+      tags: [admin]
+      operationId: restoreContactSubmissions
+      summary: Restore a soft-deleted row
+      description: "Restoring always works."
+      parameters: [{ $ref: "#/components/parameters/IdPath" }]
+      responses:
+        "200":
+          description: The restored row.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminContactSubmissionResponse" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /cms/admin/contact-submissions/{id}/permanent:
+    delete:
+      tags: [admin]
+      operationId: purgeContactSubmissions
+      summary: Permanently delete a soft-deleted row
+      description: Super admin only. The row must already be in the trash. Stored files are removed after the row is gone.
+      parameters: [{ $ref: "#/components/parameters/IdPath" }]
+      responses:
+        "204": { $ref: "#/components/responses/NoContent" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
 
 components:
   securitySchemes:
@@ -2298,7 +2927,7 @@ components:
         application/problem+json:
           schema: { $ref: "#/components/schemas/Problem" }
     Conflict:
-      description: "The change collides with existing data — `slug_taken`, `tag_in_use`, `email_taken`."
+      description: "The change collides with existing data — `slug_taken`, `tag_in_use`, `email_taken`, and on the trash routes `service_deleted`, `currency_deleted`, `project_in_use`, `service_in_use`, `currency_in_use`."
       content:
         application/problem+json:
           schema: { $ref: "#/components/schemas/Problem" }
@@ -2507,6 +3136,21 @@ components:
     MediaTarget:
       type: string
       enum: [projects, products, services, tags, articles, certificates]
+
+    CertificateCategory:
+      type: string
+      enum: [course, exam]
+
+    TrashedItemResponse:
+      type: object
+      description: One row in a trash list. Enough to identify and restore it; fetch the full row after restoring.
+      properties:
+        id: { type: string, format: uuid }
+        label: { type: string, description: "The row's title, name, question or code." }
+        deletedAt: { type: [string, "null"], format: date-time, description: Null for rows deleted before the trash existed. }
+        deletedBy: { type: [string, "null"], format: uuid }
+        deletedByEmail: { type: [string, "null"] }
+      required: [id, label]
 
     # -------------------------------------------------------------------------- envelope
     Problem:
@@ -2806,6 +3450,7 @@ components:
         id: { type: string, format: uuid }
         name: { type: string }
         issuedBy: { type: string }
+        category: { $ref: "#/components/schemas/CertificateCategory" }
         issuedDate: { type: string, format: date }
         marks: { type: [string, "null"], description: "Free text — a score, grade, or \"Distinction\" style result." }
         url: { type: string }
@@ -2815,7 +3460,7 @@ components:
         altText: { type: string }
         featured: { type: boolean }
         sortOrder: { type: integer }
-      required: [id, name, issuedBy, issuedDate, url, mimeType, altText, featured, sortOrder]
+      required: [id, name, issuedBy, category, issuedDate, url, mimeType, altText, featured, sortOrder]
 
     ReviewResponse:
       type: object
@@ -3129,6 +3774,7 @@ components:
             id: { type: string, format: uuid }
             name: { type: string }
             issuedBy: { type: string }
+            category: { $ref: "#/components/schemas/CertificateCategory" }
             issuedDate: { type: string, format: date }
             marks: { type: [string, "null"] }
             objectKey: { type: string }
@@ -3514,6 +4160,7 @@ components:
       properties:
         name: { type: string }
         issuedBy: { type: string }
+        category: { $ref: "#/components/schemas/CertificateCategory", description: "Required. Exam or course; `marks` is optional for both." }
         issuedDate: { type: string, format: date }
         marks: { type: string, description: "Free text — a score, grade, or \"Distinction\" style result. Optional." }
         objectKey: { type: string, description: Neon Object Storage object key. }
@@ -3524,7 +4171,7 @@ components:
         altText: { type: string }
         isPublished: { type: boolean, default: false }
         featured: { type: boolean, default: false }
-      required: [name, issuedBy, issuedDate, objectKey, url, mimeType, altText]
+      required: [name, issuedBy, category, issuedDate, objectKey, url, mimeType, altText]
 
     SubmitReviewRequest:
       type: object

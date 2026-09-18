@@ -1,3 +1,5 @@
+using FrostWoodTech.API.Enums;
+
 namespace FrostWoodTech.API.DTOs.Public;
 
 public sealed class CertificateResponse
@@ -7,6 +9,8 @@ public sealed class CertificateResponse
     public required string Name { get; init; }
 
     public required string IssuedBy { get; init; }
+
+    public required CertificateCategory Category { get; init; }
 
     public required DateOnly IssuedDate { get; init; }
 

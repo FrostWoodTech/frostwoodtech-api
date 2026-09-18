@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 
+using FrostWoodTech.API.Auth;
 using FrostWoodTech.API.Common;
 using FrostWoodTech.API.Data;
 using FrostWoodTech.API.DTOs.Admin;
@@ -8,16 +9,8 @@ using FrostWoodTech.API.Services;
 
 namespace FrostWoodTech.Tests;
 
-[Collection(nameof(PostgresCollection))]
-public class ProjectTests
+public class ProjectTests(PostgresFixture fixture) : DatabaseTest(fixture)
 {
-    private readonly PostgresFixture _fixture;
-
-    public ProjectTests(PostgresFixture fixture)
-    {
-        _fixture = fixture;
-    }
-
     [Fact]
     public async Task Personal_only_project_is_not_returned_for_the_agency_site()
     {
@@ -247,7 +240,7 @@ public class ProjectTests
     {
         await using var db = _fixture.CreateContext();
         var service = NewService(db);
-        var tags = new TagService(db);
+        var tags = new TagService(db, new CurrentUser());
 
         var category = (await tags.CreateAsync(
             new CreateTagRequest { Name = $"Backend {Guid.NewGuid():N}" }, CancellationToken.None)).Value!;
@@ -336,7 +329,7 @@ public class ProjectTests
     {
         await using var db = _fixture.CreateContext();
         var media = new FakeMediaService();
-        var service = new ProjectService(db, media);
+        var service = new ProjectService(db, media, new CurrentUser());
         var project = await CreateAsync(service, NewProject());
 
         var primaryRequest = NewImage("primary", isPrimary: true);
@@ -391,7 +384,7 @@ public class ProjectTests
         Assert.Equal("not_found", result.Error!.Code);
     }
 
-    private static ProjectService NewService(FrostWoodTechDbContext db) => new(db, new FakeMediaService());
+    private static ProjectService NewService(FrostWoodTechDbContext db) => new(db, new FakeMediaService(), new CurrentUser());
 
     private static async Task<AdminProjectResponse> CreateAsync(ProjectService service, CreateProjectRequest request)
     {

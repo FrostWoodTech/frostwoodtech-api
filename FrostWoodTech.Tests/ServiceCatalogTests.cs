@@ -1,3 +1,4 @@
+using FrostWoodTech.API.Auth;
 using FrostWoodTech.API.Data;
 using FrostWoodTech.API.DTOs.Admin;
 using FrostWoodTech.API.Enums;
@@ -5,21 +6,13 @@ using FrostWoodTech.API.Services;
 
 namespace FrostWoodTech.Tests;
 
-[Collection(nameof(PostgresCollection))]
-public class ServiceCatalogTests
+public class ServiceCatalogTests(PostgresFixture fixture) : DatabaseTest(fixture)
 {
-    private readonly PostgresFixture _fixture;
-
-    public ServiceCatalogTests(PostgresFixture fixture)
-    {
-        _fixture = fixture;
-    }
-
     [Fact]
     public async Task Personal_only_and_draft_services_are_not_returned_for_the_agency_site()
     {
         await using var db = _fixture.CreateContext();
-        var service = new ServiceCatalogService(db);
+        var service = new ServiceCatalogService(db, new FakeMediaService(), new CurrentUser());
 
         var personalOnly = await CreateAsync(service, NewService(showOnAgency: false, showOnPersonal: true));
 
@@ -38,7 +31,7 @@ public class ServiceCatalogTests
     public async Task The_list_cards_carry_no_projects_or_faqs_but_the_detail_does()
     {
         await using var db = _fixture.CreateContext();
-        var service = new ServiceCatalogService(db);
+        var service = new ServiceCatalogService(db, new FakeMediaService(), new CurrentUser());
 
         var request = NewService();
         request.ProjectIds = [(await NewProjectAsync(db, published: true, showOnAgency: true)).Id];
@@ -58,8 +51,8 @@ public class ServiceCatalogTests
     public async Task The_detail_only_embeds_projects_and_faqs_that_are_public_on_that_site()
     {
         await using var db = _fixture.CreateContext();
-        var service = new ServiceCatalogService(db);
-        var faqs = new FaqService(db);
+        var service = new ServiceCatalogService(db, new FakeMediaService(), new CurrentUser());
+        var faqs = new FaqService(db, new CurrentUser());
 
         var visible = await NewProjectAsync(db, published: true, showOnAgency: true);
         var draft = await NewProjectAsync(db, published: false, showOnAgency: true);
@@ -87,7 +80,7 @@ public class ServiceCatalogTests
     public async Task Updating_project_links_adds_and_removes_only_what_changed()
     {
         await using var db = _fixture.CreateContext();
-        var service = new ServiceCatalogService(db);
+        var service = new ServiceCatalogService(db, new FakeMediaService(), new CurrentUser());
 
         var kept = await NewProjectAsync(db, published: true, showOnAgency: true);
         var dropped = await NewProjectAsync(db, published: true, showOnAgency: true);
@@ -112,7 +105,7 @@ public class ServiceCatalogTests
     public async Task An_unknown_project_id_is_rejected()
     {
         await using var db = _fixture.CreateContext();
-        var service = new ServiceCatalogService(db);
+        var service = new ServiceCatalogService(db, new FakeMediaService(), new CurrentUser());
 
         var request = NewService();
         request.ProjectIds = [Guid.NewGuid()];
@@ -124,7 +117,7 @@ public class ServiceCatalogTests
     public async Task Slugs_must_be_unique_including_soft_deleted_services()
     {
         await using var db = _fixture.CreateContext();
-        var service = new ServiceCatalogService(db);
+        var service = new ServiceCatalogService(db, new FakeMediaService(), new CurrentUser());
 
         var existing = await CreateAsync(service, NewService());
         var duplicate = NewService();
@@ -142,7 +135,7 @@ public class ServiceCatalogTests
     public async Task Incomplete_media_cta_or_featured_settings_are_rejected(string problem)
     {
         await using var db = _fixture.CreateContext();
-        var service = new ServiceCatalogService(db);
+        var service = new ServiceCatalogService(db, new FakeMediaService(), new CurrentUser());
 
         var request = NewService();
         switch (problem)
@@ -166,7 +159,7 @@ public class ServiceCatalogTests
     public async Task Reorder_is_per_site_and_requires_a_site()
     {
         await using var db = _fixture.CreateContext();
-        var service = new ServiceCatalogService(db);
+        var service = new ServiceCatalogService(db, new FakeMediaService(), new CurrentUser());
         var created = await CreateAsync(service, NewService(showOnPersonal: true));
 
         var noSite = await service.ReorderAsync(
@@ -193,7 +186,7 @@ public class ServiceCatalogTests
 
     private static async Task<AdminProjectResponse> NewProjectAsync(FrostWoodTechDbContext db, bool published, bool showOnAgency)
     {
-        var created = await new ProjectService(db, new FakeMediaService()).CreateAsync(
+        var created = await new ProjectService(db, new FakeMediaService(), new CurrentUser()).CreateAsync(
             new CreateProjectRequest
             {
                 Title = $"Case study {Guid.NewGuid():N}",

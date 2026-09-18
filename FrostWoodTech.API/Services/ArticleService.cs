@@ -2,6 +2,7 @@ using System.Linq.Expressions;
 
 using Microsoft.EntityFrameworkCore;
 
+using FrostWoodTech.API.Auth;
 using FrostWoodTech.API.Common;
 using FrostWoodTech.API.Data;
 using FrostWoodTech.API.DTOs.Admin;
@@ -14,13 +15,23 @@ namespace FrostWoodTech.API.Services;
 
 public class ArticleService : IArticleService
 {
+    private const string MediaScheme = "media://";
+
     private readonly FrostWoodTechDbContext _db;
     private readonly IArticleMediaResolver _mediaResolver;
+    private readonly IMediaService _mediaService;
+    private readonly CurrentUser _currentUser;
 
-    public ArticleService(FrostWoodTechDbContext db, IArticleMediaResolver mediaResolver)
+    public ArticleService(
+        FrostWoodTechDbContext db,
+        IArticleMediaResolver mediaResolver,
+        IMediaService mediaService,
+        CurrentUser currentUser)
     {
         _db = db;
         _mediaResolver = mediaResolver;
+        _mediaService = mediaService;
+        _currentUser = currentUser;
     }
 
     public async Task<PagedResult<ArticleResponse>> GetPublicArticlesAsync(
@@ -304,9 +315,106 @@ public class ArticleService : IArticleService
 
         // Soft delete keeps tag links so a restore keeps its tags.
         article.IsDeleted = true;
+        article.DeletedBy = _currentUser.UserId;
         await _db.SaveChangesAsync(cancellationToken);
 
         return ServiceResult<bool>.Success(true);
+    }
+
+    public async Task<PagedResult<TrashedItemResponse>> GetTrashAsync(
+        string? search,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        var query = _db.Articles.Trashed().AsNoTracking();
+
+        if (search is not null)
+        {
+            query = query.Where(a => EF.Functions.ILike(a.Title, $"%{search}%"));
+        }
+
+        var total = await query.CountAsync(cancellationToken);
+
+        var items = await query
+            .OrderByDescending(a => a.DeletedAt)
+            .ThenByDescending(a => a.UpdatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(a => new TrashedItemResponse
+            {
+                Id = a.Id,
+                Label = a.Title,
+                DeletedAt = a.DeletedAt,
+                DeletedBy = a.DeletedBy,
+                DeletedByEmail = _db.Users.Where(u => u.Id == a.DeletedBy).Select(u => u.Email).FirstOrDefault()
+            })
+            .ToListAsync(cancellationToken);
+
+        return new PagedResult<TrashedItemResponse>
+        {
+            Items = items,
+            Page = page,
+            PageSize = pageSize,
+            Total = total
+        };
+    }
+
+    public async Task<ServiceResult<AdminArticleResponse>> RestoreAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var article = await _db.Articles.FindTrashedAsync(id, cancellationToken);
+        if (article is null)
+        {
+            return ServiceResult<AdminArticleResponse>.NotFound("not_found", $"No deleted article with id {id}.");
+        }
+
+        article.IsDeleted = false;
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return await GetByIdAsync(id, cancellationToken);
+    }
+
+    public async Task<ServiceResult<bool>> PurgeAsync(Guid id, CancellationToken cancellationToken)
+    {
+        if (_currentUser.RequireSuperAdmin<bool>() is { } denied)
+        {
+            return denied;
+        }
+
+        var article = await _db.Articles.FindTrashedAsync(id, cancellationToken);
+        if (article is null)
+        {
+            return ServiceResult<bool>.NotFound("not_found", $"No deleted article with id {id}.");
+        }
+
+        // Read the keys before the row goes; tag links follow it by cascade.
+        var objectKeys = CollectObjectKeys(article);
+
+        _db.Articles.Remove(article);
+        await _db.SaveChangesAsync(cancellationToken);
+
+        // After the commit: a failed delete only orphans a file, never keeps the row.
+        foreach (var objectKey in objectKeys)
+        {
+            await _mediaService.DeleteFileAsync(objectKey, cancellationToken);
+        }
+
+        return ServiceResult<bool>.Success(true);
+    }
+
+    private IReadOnlyList<string> CollectObjectKeys(Article article)
+    {
+        var keys = new List<string>(_mediaResolver.ExtractMediaKeys(article.ContentMarkdown));
+
+        var cover = article.CoverImageKey;
+
+        // A legacy cover is a real URL, and nothing here maps a URL back to an object key.
+        if (!string.IsNullOrWhiteSpace(cover) && !cover.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+        {
+            keys.Add(cover.StartsWith(MediaScheme, StringComparison.Ordinal) ? cover[MediaScheme.Length..] : cover);
+        }
+
+        return keys.Distinct(StringComparer.Ordinal).ToList();
     }
 
     public async Task<ServiceResult<bool>> ReorderAsync(ReorderRequest request, CancellationToken cancellationToken)

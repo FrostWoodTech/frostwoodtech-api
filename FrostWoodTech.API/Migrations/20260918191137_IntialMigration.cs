@@ -6,13 +6,14 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace FrostWoodTech.API.Migrations
 {
     /// <inheritdoc />
-    public partial class InitialCreate : Migration
+    public partial class IntialMigration : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.AlterDatabase()
                 .Annotation("Npgsql:Enum:auth_attempt_action", "login,password_reset")
+                .Annotation("Npgsql:Enum:certificate_category", "course,exam")
                 .Annotation("Npgsql:Enum:contact_budget_range", "under_one_k,one_to_five_k,five_to_fifteen_k,over_fifteen_k,not_sure")
                 .Annotation("Npgsql:Enum:contact_submission_status", "new,read,replied,archived,spam")
                 .Annotation("Npgsql:Enum:password_token_purpose", "setup,reset")
@@ -38,6 +39,8 @@ namespace FrostWoodTech.API.Migrations
                     created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     is_deleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    deleted_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    deleted_by = table.Column<Guid>(type: "uuid", nullable: true),
                     show_on_agency = table.Column<bool>(type: "boolean", nullable: false),
                     featured_on_agency = table.Column<bool>(type: "boolean", nullable: false),
                     agency_sort_order = table.Column<int>(type: "integer", nullable: false),
@@ -57,6 +60,7 @@ namespace FrostWoodTech.API.Migrations
                     id = table.Column<Guid>(type: "uuid", nullable: false),
                     name = table.Column<string>(type: "text", nullable: false),
                     issued_by = table.Column<string>(type: "text", nullable: false),
+                    category = table.Column<int>(type: "certificate_category", nullable: false, defaultValueSql: "'course'"),
                     issued_date = table.Column<DateOnly>(type: "date", nullable: false),
                     marks = table.Column<string>(type: "text", nullable: true),
                     object_key = table.Column<string>(type: "text", nullable: false),
@@ -70,7 +74,9 @@ namespace FrostWoodTech.API.Migrations
                     sort_order = table.Column<int>(type: "integer", nullable: false),
                     created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    is_deleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false)
+                    is_deleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    deleted_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    deleted_by = table.Column<Guid>(type: "uuid", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -91,7 +97,9 @@ namespace FrostWoodTech.API.Migrations
                     is_active = table.Column<bool>(type: "boolean", nullable: false),
                     created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    is_deleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false)
+                    is_deleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    deleted_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    deleted_by = table.Column<Guid>(type: "uuid", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -131,6 +139,8 @@ namespace FrostWoodTech.API.Migrations
                     created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     is_deleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    deleted_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    deleted_by = table.Column<Guid>(type: "uuid", nullable: true),
                     show_on_agency = table.Column<bool>(type: "boolean", nullable: false),
                     featured_on_agency = table.Column<bool>(type: "boolean", nullable: false),
                     agency_sort_order = table.Column<int>(type: "integer", nullable: false),
@@ -166,6 +176,8 @@ namespace FrostWoodTech.API.Migrations
                     created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     is_deleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    deleted_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    deleted_by = table.Column<Guid>(type: "uuid", nullable: true),
                     show_on_agency = table.Column<bool>(type: "boolean", nullable: false),
                     featured_on_agency = table.Column<bool>(type: "boolean", nullable: false),
                     agency_sort_order = table.Column<int>(type: "integer", nullable: false),
@@ -195,7 +207,9 @@ namespace FrostWoodTech.API.Migrations
                     submitter_ip = table.Column<string>(type: "text", nullable: true),
                     created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    is_deleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false)
+                    is_deleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    deleted_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    deleted_by = table.Column<Guid>(type: "uuid", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -244,6 +258,8 @@ namespace FrostWoodTech.API.Migrations
                     created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     is_deleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    deleted_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    deleted_by = table.Column<Guid>(type: "uuid", nullable: true),
                     show_on_agency = table.Column<bool>(type: "boolean", nullable: false),
                     featured_on_agency = table.Column<bool>(type: "boolean", nullable: false),
                     agency_sort_order = table.Column<int>(type: "integer", nullable: false),
@@ -267,7 +283,9 @@ namespace FrostWoodTech.API.Migrations
                     technology_category = table.Column<int>(type: "tech_category", nullable: true),
                     created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    is_deleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false)
+                    is_deleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    deleted_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    deleted_by = table.Column<Guid>(type: "uuid", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -294,7 +312,9 @@ namespace FrostWoodTech.API.Migrations
                     email_verified_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
                     created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    is_deleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false)
+                    is_deleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    deleted_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    deleted_by = table.Column<Guid>(type: "uuid", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -371,7 +391,9 @@ namespace FrostWoodTech.API.Migrations
                     show_on_personal = table.Column<bool>(type: "boolean", nullable: false),
                     created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    is_deleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false)
+                    is_deleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    deleted_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    deleted_by = table.Column<Guid>(type: "uuid", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -405,7 +427,9 @@ namespace FrostWoodTech.API.Migrations
                     sort_order = table.Column<int>(type: "integer", nullable: false),
                     created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    is_deleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false)
+                    is_deleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    deleted_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    deleted_by = table.Column<Guid>(type: "uuid", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -511,7 +535,9 @@ namespace FrostWoodTech.API.Migrations
                     submitter_ip = table.Column<string>(type: "text", nullable: true),
                     created_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
                     updated_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: false),
-                    is_deleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false)
+                    is_deleted = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
+                    deleted_at = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
+                    deleted_by = table.Column<Guid>(type: "uuid", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -625,10 +651,28 @@ namespace FrostWoodTech.API.Migrations
                 column: "tag_id");
 
             migrationBuilder.CreateIndex(
+                name: "ix_articles_deleted_at",
+                table: "articles",
+                column: "deleted_at",
+                filter: "is_deleted");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_articles_slug",
                 table: "articles",
                 column: "slug",
                 unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_certificates_deleted_at",
+                table: "certificates",
+                column: "deleted_at",
+                filter: "is_deleted");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_contact_submissions_deleted_at",
+                table: "contact_submissions",
+                column: "deleted_at",
+                filter: "is_deleted");
 
             migrationBuilder.CreateIndex(
                 name: "IX_contact_submissions_replied_by",
@@ -657,6 +701,12 @@ namespace FrostWoodTech.API.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "ix_currencies_deleted_at",
+                table: "currencies",
+                column: "deleted_at",
+                filter: "is_deleted");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_email_verification_tokens_token_hash",
                 table: "email_verification_tokens",
                 column: "token_hash",
@@ -666,6 +716,12 @@ namespace FrostWoodTech.API.Migrations
                 name: "IX_email_verification_tokens_user_id_created_at",
                 table: "email_verification_tokens",
                 columns: new[] { "user_id", "created_at" });
+
+            migrationBuilder.CreateIndex(
+                name: "ix_faqs_deleted_at",
+                table: "faqs",
+                column: "deleted_at",
+                filter: "is_deleted");
 
             migrationBuilder.CreateIndex(
                 name: "IX_faqs_service_id",
@@ -699,6 +755,12 @@ namespace FrostWoodTech.API.Migrations
                 column: "pricing_plan_id");
 
             migrationBuilder.CreateIndex(
+                name: "ix_pricing_plans_deleted_at",
+                table: "pricing_plans",
+                column: "deleted_at",
+                filter: "is_deleted");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_pricing_plans_service_id",
                 table: "pricing_plans",
                 column: "service_id");
@@ -709,6 +771,12 @@ namespace FrostWoodTech.API.Migrations
                 column: "product_id",
                 unique: true,
                 filter: "is_primary");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_products_deleted_at",
+                table: "products",
+                column: "deleted_at",
+                filter: "is_deleted");
 
             migrationBuilder.CreateIndex(
                 name: "IX_products_slug",
@@ -729,6 +797,12 @@ namespace FrostWoodTech.API.Migrations
                 column: "tag_id");
 
             migrationBuilder.CreateIndex(
+                name: "ix_projects_deleted_at",
+                table: "projects",
+                column: "deleted_at",
+                filter: "is_deleted");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_projects_slug",
                 table: "projects",
                 column: "slug",
@@ -746,15 +820,33 @@ namespace FrostWoodTech.API.Migrations
                 column: "user_id");
 
             migrationBuilder.CreateIndex(
+                name: "ix_reviews_deleted_at",
+                table: "reviews",
+                column: "deleted_at",
+                filter: "is_deleted");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_service_projects_project_id",
                 table: "service_projects",
                 column: "project_id");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_services_deleted_at",
+                table: "services",
+                column: "deleted_at",
+                filter: "is_deleted");
 
             migrationBuilder.CreateIndex(
                 name: "IX_services_slug",
                 table: "services",
                 column: "slug",
                 unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_tags_deleted_at",
+                table: "tags",
+                column: "deleted_at",
+                filter: "is_deleted");
 
             migrationBuilder.CreateIndex(
                 name: "IX_tags_is_technology",
@@ -771,6 +863,12 @@ namespace FrostWoodTech.API.Migrations
                 name: "IX_users_approved_by",
                 table: "users",
                 column: "approved_by");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_users_deleted_at",
+                table: "users",
+                column: "deleted_at",
+                filter: "is_deleted");
 
             migrationBuilder.CreateIndex(
                 name: "IX_users_email",

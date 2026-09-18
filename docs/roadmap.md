@@ -18,11 +18,6 @@ Adding it needs a `warnings` field on admin write responses, the spec, and the a
 Service CTA URLs and image URLs are not checked for absolute http(s), unlike projects, products,
 images and certificates. Services also still accept sort orders on create/update.
 
-### Hard delete
-
-Content is soft-deleted everywhere. There is no super-admin hard delete (or restore) endpoint; one
-would need to delete the stored files after the rows commit.
-
 ### Scheduled exchange-rate refresh
 
 Live rates only change when an admin presses refresh. A timer-triggered Function calling
@@ -42,3 +37,8 @@ only end-to-end signal.
 ### Observability
 
 Service-layer failure paths don't log, so a rejected write leaves no trace beyond its response.
+
+### Trash auto-purge
+
+Deleted rows stay in the trash until a super admin purges them. `deleted_at` is indexed, so a timer
+Function could purge rows older than N days through the same `PurgeAsync` methods.

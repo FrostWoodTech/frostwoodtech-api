@@ -2,6 +2,7 @@ using System.Linq.Expressions;
 
 using Microsoft.EntityFrameworkCore;
 
+using FrostWoodTech.API.Auth;
 using FrostWoodTech.API.Common;
 using FrostWoodTech.API.Data;
 using FrostWoodTech.API.DTOs.Admin;
@@ -15,10 +16,12 @@ namespace FrostWoodTech.API.Services;
 public class TagService : ITagService
 {
     private readonly FrostWoodTechDbContext _db;
+    private readonly CurrentUser _currentUser;
 
-    public TagService(FrostWoodTechDbContext db)
+    public TagService(FrostWoodTechDbContext db, CurrentUser currentUser)
     {
         _db = db;
+        _currentUser = currentUser;
     }
 
     public async Task<IReadOnlyList<TagResponse>> GetPublicTagsAsync(
@@ -188,6 +191,92 @@ public class TagService : ITagService
         }
 
         tag.IsDeleted = true;
+        tag.DeletedBy = _currentUser.UserId;
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return ServiceResult<bool>.Success(true);
+    }
+
+    public async Task<PagedResult<TrashedItemResponse>> GetTrashAsync(
+        string? search,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        var query = _db.Tags.Trashed().AsNoTracking();
+
+        if (search is not null)
+        {
+            query = query.Where(t => EF.Functions.ILike(t.Name, $"%{search}%"));
+        }
+
+        var total = await query.CountAsync(cancellationToken);
+
+        var items = await query
+            .OrderByDescending(t => t.DeletedAt)
+            .ThenByDescending(t => t.UpdatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(t => new TrashedItemResponse
+            {
+                Id = t.Id,
+                Label = t.Name,
+                DeletedAt = t.DeletedAt,
+                DeletedBy = t.DeletedBy,
+                DeletedByEmail = _db.Users.Where(u => u.Id == t.DeletedBy).Select(u => u.Email).FirstOrDefault()
+            })
+            .ToListAsync(cancellationToken);
+
+        return new PagedResult<TrashedItemResponse>
+        {
+            Items = items,
+            Page = page,
+            PageSize = pageSize,
+            Total = total
+        };
+    }
+
+    public async Task<ServiceResult<AdminTagResponse>> RestoreAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var tag = await _db.Tags.FindTrashedAsync(id, cancellationToken);
+        if (tag is null)
+        {
+            return ServiceResult<AdminTagResponse>.NotFound("not_found", $"No deleted tag with id {id}.");
+        }
+
+        tag.IsDeleted = false;
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return await GetByIdAsync(id, cancellationToken);
+    }
+
+    public async Task<ServiceResult<bool>> PurgeAsync(Guid id, CancellationToken cancellationToken)
+    {
+        if (_currentUser.RequireSuperAdmin<bool>() is { } denied)
+        {
+            return denied;
+        }
+
+        var tag = await _db.Tags.FindTrashedAsync(id, cancellationToken);
+        if (tag is null)
+        {
+            return ServiceResult<bool>.NotFound("not_found", $"No deleted tag with id {id}.");
+        }
+
+        // Unlike the soft delete, deleted content counts: its links are Restrict, and dropping one would
+        // strip the tag on restore.
+        var projectCount = await _db.ProjectTags.CountAsync(pt => pt.TagId == id, cancellationToken);
+        var articleCount = await _db.ArticleTags.CountAsync(at => at.TagId == id, cancellationToken);
+
+        if (projectCount > 0 || articleCount > 0)
+        {
+            return ServiceResult<bool>.Conflict(
+                "tag_in_use",
+                $"Tag '{tag.Name}' is still linked to {projectCount} project(s) and {articleCount} article(s), "
+                + "including deleted ones. Remove it from them before deleting permanently.");
+        }
+
+        _db.Tags.Remove(tag);
         await _db.SaveChangesAsync(cancellationToken);
 
         return ServiceResult<bool>.Success(true);

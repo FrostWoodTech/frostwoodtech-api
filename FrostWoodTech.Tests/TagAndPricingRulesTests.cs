@@ -1,25 +1,18 @@
+using FrostWoodTech.API.Auth;
 using FrostWoodTech.API.DTOs.Admin;
 using FrostWoodTech.API.Enums;
 using FrostWoodTech.API.Services;
 
 namespace FrostWoodTech.Tests;
 
-[Collection(nameof(PostgresCollection))]
-public class TagAndPricingRulesTests
+public class TagAndPricingRulesTests(PostgresFixture fixture) : DatabaseTest(fixture)
 {
-    private readonly PostgresFixture _fixture;
-
-    public TagAndPricingRulesTests(PostgresFixture fixture)
-    {
-        _fixture = fixture;
-    }
-
     [Fact]
     public async Task A_tag_still_used_by_an_article_cannot_be_deleted()
     {
         await using var db = _fixture.CreateContext();
-        var tags = new TagService(db);
-        var articles = new ArticleService(db, new ArticleMediaResolver(new FakeMediaService()));
+        var tags = new TagService(db, new CurrentUser());
+        var articles = new ArticleService(db, new ArticleMediaResolver(new FakeMediaService()), new FakeMediaService(), new CurrentUser());
 
         var tag = await tags.CreateAsync(
             new CreateTagRequest { Name = $"Frontend {Guid.NewGuid():N}", IsTechnology = false },
@@ -50,7 +43,7 @@ public class TagAndPricingRulesTests
     public async Task A_technology_tag_requires_a_category()
     {
         await using var db = _fixture.CreateContext();
-        var tags = new TagService(db);
+        var tags = new TagService(db, new CurrentUser());
 
         var result = await tags.CreateAsync(
             new CreateTagRequest { Name = $"React {Guid.NewGuid():N}", IsTechnology = true },
@@ -64,7 +57,7 @@ public class TagAndPricingRulesTests
     public async Task A_null_price_amount_is_stored_as_null_and_not_defaulted_to_zero()
     {
         await using var db = _fixture.CreateContext();
-        var pricing = new PricingService(db);
+        var pricing = new PricingService(db, new CurrentUser());
 
         var created = await pricing.CreateAsync(
             new CreatePricingPlanRequest
@@ -92,7 +85,7 @@ public class TagAndPricingRulesTests
     public async Task A_combo_plan_is_returned_by_the_combo_route_and_not_by_a_services_tiers()
     {
         await using var db = _fixture.CreateContext();
-        var pricing = new PricingService(db);
+        var pricing = new PricingService(db, new CurrentUser());
 
         var combo = await pricing.CreateAsync(
             new CreatePricingPlanRequest
@@ -119,8 +112,8 @@ public class TagAndPricingRulesTests
     public async Task A_tag_still_used_by_a_project_cannot_be_deleted_until_the_project_is()
     {
         await using var db = _fixture.CreateContext();
-        var tags = new TagService(db);
-        var projects = new ProjectService(db, new FakeMediaService());
+        var tags = new TagService(db, new CurrentUser());
+        var projects = new ProjectService(db, new FakeMediaService(), new CurrentUser());
 
         var tag = (await tags.CreateAsync(
             new CreateTagRequest { Name = $"Backend {Guid.NewGuid():N}" }, CancellationToken.None)).Value!;
@@ -148,7 +141,7 @@ public class TagAndPricingRulesTests
     public async Task A_category_tag_may_not_carry_a_technology_category()
     {
         await using var db = _fixture.CreateContext();
-        var tags = new TagService(db);
+        var tags = new TagService(db, new CurrentUser());
 
         var result = await tags.CreateAsync(
             new CreateTagRequest
@@ -166,7 +159,7 @@ public class TagAndPricingRulesTests
     public async Task Tag_slugs_stay_unique_across_soft_deleted_tags()
     {
         await using var db = _fixture.CreateContext();
-        var tags = new TagService(db);
+        var tags = new TagService(db, new CurrentUser());
 
         var name = $"Rust {Guid.NewGuid():N}";
         var original = (await tags.CreateAsync(new CreateTagRequest { Name = name }, CancellationToken.None)).Value!;
@@ -181,7 +174,7 @@ public class TagAndPricingRulesTests
     public async Task The_public_tag_list_filters_by_technology_and_category()
     {
         await using var db = _fixture.CreateContext();
-        var tags = new TagService(db);
+        var tags = new TagService(db, new CurrentUser());
 
         var database = (await tags.CreateAsync(
             new CreateTagRequest { Name = $"Postgres {Guid.NewGuid():N}", IsTechnology = true, TechnologyCategory = TechCategory.Database },
@@ -202,7 +195,7 @@ public class TagAndPricingRulesTests
     public async Task Pricing_plans_and_their_features_can_be_reordered()
     {
         await using var db = _fixture.CreateContext();
-        var pricing = new PricingService(db);
+        var pricing = new PricingService(db, new CurrentUser());
 
         var plan = (await pricing.CreateAsync(NewComboPlan(), CancellationToken.None)).Value!;
 
@@ -230,7 +223,7 @@ public class TagAndPricingRulesTests
     public async Task A_feature_cannot_be_reached_through_another_plan()
     {
         await using var db = _fixture.CreateContext();
-        var pricing = new PricingService(db);
+        var pricing = new PricingService(db, new CurrentUser());
 
         var owner = (await pricing.CreateAsync(NewComboPlan(), CancellationToken.None)).Value!;
         var other = (await pricing.CreateAsync(NewComboPlan(), CancellationToken.None)).Value!;
@@ -253,7 +246,7 @@ public class TagAndPricingRulesTests
     public async Task A_draft_or_deleted_plan_is_not_public()
     {
         await using var db = _fixture.CreateContext();
-        var pricing = new PricingService(db);
+        var pricing = new PricingService(db, new CurrentUser());
 
         var draftRequest = NewComboPlan();
         draftRequest.IsPublished = false;

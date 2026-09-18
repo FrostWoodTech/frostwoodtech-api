@@ -30,6 +30,7 @@ public sealed class PostgresFixture : IAsyncLifetime
         builder.MapEnum<AuthAttemptAction>("auth_attempt_action");
         builder.MapEnum<ContactSubmissionStatus>("contact_submission_status");
         builder.MapEnum<ContactBudgetRange>("contact_budget_range");
+        builder.MapEnum<CertificateCategory>("certificate_category");
         builder.MapEnum<Site>("site");
         _dataSource = builder.Build();
 
@@ -49,9 +50,24 @@ public sealed class PostgresFixture : IAsyncLifetime
                 npgsql.MapEnum<AuthAttemptAction>("auth_attempt_action");
                 npgsql.MapEnum<ContactSubmissionStatus>("contact_submission_status");
                 npgsql.MapEnum<ContactBudgetRange>("contact_budget_range");
+                npgsql.MapEnum<CertificateCategory>("certificate_category");
                 npgsql.MapEnum<Site>("site");
             })
             .Options);
+
+    /// <summary>One TRUNCATE of every mapped table; the schema and migration history stay put.</summary>
+    public async Task ResetAsync()
+    {
+        await using var db = CreateContext();
+        var tables = db.Model.GetEntityTypes()
+            .Select(t => t.GetTableName())
+            .Where(name => name is not null)
+            .Distinct()
+            .Select(name => "\"" + name + "\"");
+
+        await db.Database.ExecuteSqlRawAsync(
+            $"TRUNCATE {string.Join(", ", tables)} RESTART IDENTITY CASCADE;");
+    }
 
     public async Task DisposeAsync()
     {

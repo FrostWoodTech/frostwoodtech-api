@@ -2,6 +2,7 @@ using System.Linq.Expressions;
 
 using Microsoft.EntityFrameworkCore;
 
+using FrostWoodTech.API.Auth;
 using FrostWoodTech.API.Common;
 using FrostWoodTech.API.Data;
 using FrostWoodTech.API.DTOs.Admin;
@@ -15,11 +16,13 @@ public class CertificateService : ICertificateService
 {
     private readonly FrostWoodTechDbContext _db;
     private readonly IMediaService _mediaService;
+    private readonly CurrentUser _currentUser;
 
-    public CertificateService(FrostWoodTechDbContext db, IMediaService mediaService)
+    public CertificateService(FrostWoodTechDbContext db, IMediaService mediaService, CurrentUser currentUser)
     {
         _db = db;
         _mediaService = mediaService;
+        _currentUser = currentUser;
     }
 
     public async Task<PagedResult<CertificateResponse>> GetPublicCertificatesAsync(
@@ -123,6 +126,7 @@ public class CertificateService : ICertificateService
             Id = Guid.NewGuid(),
             Name = request.Name!.Trim(),
             IssuedBy = request.IssuedBy!.Trim(),
+            Category = request.Category!.Value,
             IssuedDate = request.IssuedDate,
             Marks = Blank(request.Marks),
             ObjectKey = request.ObjectKey!.Trim(),
@@ -163,6 +167,7 @@ public class CertificateService : ICertificateService
 
         certificate.Name = request.Name!.Trim();
         certificate.IssuedBy = request.IssuedBy!.Trim();
+        certificate.Category = request.Category!.Value;
         certificate.IssuedDate = request.IssuedDate;
         certificate.Marks = Blank(request.Marks);
         certificate.ObjectKey = request.ObjectKey!.Trim();
@@ -194,7 +199,90 @@ public class CertificateService : ICertificateService
         }
 
         certificate.IsDeleted = true;
+        certificate.DeletedBy = _currentUser.UserId;
         await _db.SaveChangesAsync(cancellationToken);
+
+        return ServiceResult<bool>.Success(true);
+    }
+
+    public async Task<PagedResult<TrashedItemResponse>> GetTrashAsync(
+        string? search,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        var query = _db.Certificates.Trashed().AsNoTracking();
+
+        if (search is not null)
+        {
+            query = query.Where(c =>
+                EF.Functions.ILike(c.Name, $"%{search}%")
+                || EF.Functions.ILike(c.IssuedBy, $"%{search}%"));
+        }
+
+        var total = await query.CountAsync(cancellationToken);
+
+        var items = await query
+            .OrderByDescending(c => c.DeletedAt)
+            .ThenByDescending(c => c.UpdatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(c => new TrashedItemResponse
+            {
+                Id = c.Id,
+                Label = c.Name,
+                DeletedAt = c.DeletedAt,
+                DeletedBy = c.DeletedBy,
+                DeletedByEmail = _db.Users.Where(u => u.Id == c.DeletedBy).Select(u => u.Email).FirstOrDefault()
+            })
+            .ToListAsync(cancellationToken);
+
+        return new PagedResult<TrashedItemResponse>
+        {
+            Items = items,
+            Page = page,
+            PageSize = pageSize,
+            Total = total
+        };
+    }
+
+    public async Task<ServiceResult<AdminCertificateResponse>> RestoreAsync(
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        var certificate = await _db.Certificates.FindTrashedAsync(id, cancellationToken);
+        if (certificate is null)
+        {
+            return ServiceResult<AdminCertificateResponse>.NotFound(
+                "not_found", $"No deleted certificate with id {id}.");
+        }
+
+        certificate.IsDeleted = false;
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return await GetByIdAsync(id, cancellationToken);
+    }
+
+    public async Task<ServiceResult<bool>> PurgeAsync(Guid id, CancellationToken cancellationToken)
+    {
+        if (_currentUser.RequireSuperAdmin<bool>() is { } denied)
+        {
+            return denied;
+        }
+
+        var certificate = await _db.Certificates.FindTrashedAsync(id, cancellationToken);
+        if (certificate is null)
+        {
+            return ServiceResult<bool>.NotFound("not_found", $"No deleted certificate with id {id}.");
+        }
+
+        var objectKey = certificate.ObjectKey;
+
+        _db.Certificates.Remove(certificate);
+        await _db.SaveChangesAsync(cancellationToken);
+
+        // After the commit: a failed delete only orphans the file, never keeps the row.
+        await _mediaService.DeleteFileAsync(objectKey, cancellationToken);
 
         return ServiceResult<bool>.Success(true);
     }
@@ -250,6 +338,12 @@ public class CertificateService : ICertificateService
         if (string.IsNullOrWhiteSpace(request.ObjectKey))
         {
             return "Object key is required.";
+        }
+
+        // Required, not defaulted: an omitted category must never silently become a course.
+        if (request.Category is null)
+        {
+            return "category is required.";
         }
 
         if (request.IssuedDate == default)
@@ -313,6 +407,7 @@ public class CertificateService : ICertificateService
         Id = c.Id,
         Name = c.Name,
         IssuedBy = c.IssuedBy,
+        Category = c.Category,
         IssuedDate = c.IssuedDate,
         Marks = c.Marks,
         Url = c.Url,
@@ -329,6 +424,7 @@ public class CertificateService : ICertificateService
         Id = c.Id,
         Name = c.Name,
         IssuedBy = c.IssuedBy,
+        Category = c.Category,
         IssuedDate = c.IssuedDate,
         Marks = c.Marks,
         ObjectKey = c.ObjectKey,

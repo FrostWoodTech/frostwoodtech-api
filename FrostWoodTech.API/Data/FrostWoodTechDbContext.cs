@@ -74,6 +74,7 @@ public class FrostWoodTechDbContext : DbContext
         modelBuilder.HasPostgresEnum<AuthAttemptAction>(name: "auth_attempt_action");
         modelBuilder.HasPostgresEnum<ContactSubmissionStatus>(name: "contact_submission_status");
         modelBuilder.HasPostgresEnum<ContactBudgetRange>(name: "contact_budget_range");
+        modelBuilder.HasPostgresEnum<CertificateCategory>(name: "certificate_category");
         modelBuilder.HasPostgresEnum<Site>(name: "site");
 
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(FrostWoodTechDbContext).Assembly);
@@ -89,6 +90,12 @@ public class FrostWoodTechDbContext : DbContext
                 entity.Property(nameof(AuditableEntity.CreatedAt)).HasColumnName("created_at");
                 entity.Property(nameof(AuditableEntity.UpdatedAt)).HasColumnName("updated_at");
                 entity.Property(nameof(AuditableEntity.IsDeleted)).HasColumnName("is_deleted").HasDefaultValue(false);
+                entity.Property(nameof(AuditableEntity.DeletedAt)).HasColumnName("deleted_at");
+                entity.Property(nameof(AuditableEntity.DeletedBy)).HasColumnName("deleted_by");
+
+                entity.HasIndex(nameof(AuditableEntity.DeletedAt))
+                    .HasFilter("is_deleted")
+                    .HasDatabaseName($"ix_{entityType.GetTableName()}_deleted_at");
 
                 // Use IgnoreQueryFilters only where a deleted row must be found on purpose.
                 entity.HasQueryFilter(BuildNotDeletedFilter(clrType));
@@ -143,6 +150,19 @@ public class FrostWoodTechDbContext : DbContext
             {
                 entry.Entity.UpdatedAt = now;
                 entry.Property(e => e.CreatedAt).IsModified = false;
+
+                // OriginalValue is the value read from the database, so the delete/restore flip is detectable.
+                var wasDeleted = entry.Property(e => e.IsDeleted).OriginalValue;
+
+                if (!wasDeleted && entry.Entity.IsDeleted)
+                {
+                    entry.Entity.DeletedAt = now;
+                }
+                else if (wasDeleted && !entry.Entity.IsDeleted)
+                {
+                    entry.Entity.DeletedAt = null;
+                    entry.Entity.DeletedBy = null;
+                }
             }
         }
     }
