@@ -1,13 +1,6 @@
 <Project>
 
-  <!--
-    The repo has a large .editorconfig, but without these it is only ever advice the IDE gives
-    one developer. This is what makes CI fail on what it flags.
-
-    Scoped to $(MSBuildProjectName) == 'FrostWoodTech.API' on purpose: the Functions SDK generates a
-    WorkerExtensions project underneath obj/ at build time, and we do not control its source or
-    its warnings.
-  -->
+  <!-- Makes .editorconfig rules fail the build. API only: the generated WorkerExtensions project isn't ours. -->
   <PropertyGroup Condition="'$(MSBuildProjectName)' == 'FrostWoodTech.API'">
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>

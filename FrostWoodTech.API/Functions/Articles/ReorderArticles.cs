@@ -19,7 +19,6 @@ public class ReorderArticles
         _articleService = articleService;
     }
 
-    /// <summary>Bulk sort_order update for one site, in a single save.</summary>
     [Function("ReorderArticles")]
     public async Task<IActionResult> Run(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "cms/admin/articles/reorder")] HttpRequest req,

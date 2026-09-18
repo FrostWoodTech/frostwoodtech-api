@@ -1,9 +1,6 @@
 namespace FrostWoodTech.API.Auth;
 
-/// <summary>
-/// Bound from the <c>SuperAdmin</c> section. Identity only, never credentials — no password
-/// lives in configuration; the seeder emails a single-use setup link instead.
-/// </summary>
+/// <summary>Identity only: no password lives in configuration.</summary>
 public sealed class SuperAdminOptions
 {
     public string Email { get; set; } = string.Empty;

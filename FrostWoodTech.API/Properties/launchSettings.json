@@ -2,8 +2,9 @@
   "profiles": {
     "FrostWoodTech.API": {
       "commandName": "Project",
-      "commandLineArgs": "--port 7060",
-      "launchBrowser": false
+      "launchBrowser": true,
+      "launchUrl": "api/docs",
+      "applicationUrl": "https://localhost:7060"
     }
   }
 }

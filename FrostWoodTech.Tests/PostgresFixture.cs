@@ -9,11 +9,7 @@ using Testcontainers.PostgreSql;
 
 namespace FrostWoodTech.Tests;
 
-/// <summary>
-/// One throwaway Postgres container for the whole test run, with the real migrations applied.
-/// The schema uses native enums, citext and a partial unique index, so the in-memory provider
-/// would happily pass tests for behaviour that is actually broken.
-/// </summary>
+/// <summary>One Postgres container per run with real migrations; the in-memory provider can't model enums, citext or partial indexes.</summary>
 public sealed class PostgresFixture : IAsyncLifetime
 {
     private readonly PostgreSqlContainer _container = new PostgreSqlBuilder("postgres:16-alpine")
@@ -32,6 +28,9 @@ public sealed class PostgresFixture : IAsyncLifetime
         builder.MapEnum<UserStatus>("user_status");
         builder.MapEnum<PasswordTokenPurpose>("password_token_purpose");
         builder.MapEnum<AuthAttemptAction>("auth_attempt_action");
+        builder.MapEnum<ContactSubmissionStatus>("contact_submission_status");
+        builder.MapEnum<ContactBudgetRange>("contact_budget_range");
+        builder.MapEnum<Site>("site");
         _dataSource = builder.Build();
 
         await using var db = CreateContext();
@@ -48,6 +47,9 @@ public sealed class PostgresFixture : IAsyncLifetime
                 npgsql.MapEnum<UserStatus>("user_status");
                 npgsql.MapEnum<PasswordTokenPurpose>("password_token_purpose");
                 npgsql.MapEnum<AuthAttemptAction>("auth_attempt_action");
+                npgsql.MapEnum<ContactSubmissionStatus>("contact_submission_status");
+                npgsql.MapEnum<ContactBudgetRange>("contact_budget_range");
+                npgsql.MapEnum<Site>("site");
             })
             .Options);
 

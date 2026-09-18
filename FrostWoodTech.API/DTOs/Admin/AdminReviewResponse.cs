@@ -1,7 +1,5 @@
 namespace FrostWoodTech.API.DTOs.Admin;
 
-/// <summary>Admin view: draft state, featured flag, sort order, and the submitter's IP for spam
-/// moderation.</summary>
 public sealed class AdminReviewResponse
 {
     public required Guid Id { get; init; }

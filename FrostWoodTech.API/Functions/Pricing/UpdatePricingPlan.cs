@@ -19,7 +19,6 @@ public class UpdatePricingPlan
         _pricing = pricing;
     }
 
-    /// <summary>A full replacement — every field is written as given.</summary>
     [Function("UpdatePricingPlan")]
     public async Task<IActionResult> Run(
         [HttpTrigger(

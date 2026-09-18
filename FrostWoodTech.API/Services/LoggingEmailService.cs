@@ -7,12 +7,7 @@ using FrostWoodTech.API.Interfaces;
 
 namespace FrostWoodTech.API.Services;
 
-/// <summary>
-/// The default transport: it validates the message and writes it to the log instead of sending
-/// it. Local dev and CI get a working <see cref="IEmailService"/> with no account, no key and no
-/// network call, and a real provider inherits the same validation contract because the checks
-/// live before the send rather than inside it.
-/// </summary>
+/// <summary>Default transport: validates and logs the message instead of sending. For local dev and CI.</summary>
 public class LoggingEmailService : IEmailService
 {
     private readonly EmailOptions _options;
@@ -36,8 +31,7 @@ public class LoggingEmailService : IEmailService
             return Task.FromResult(validation);
         }
 
-        // Logged in full — a truncated verification or setup link is useless. Local dev/CI only;
-        // never select this transport in a deployment, or tokens end up in the log store.
+        // Logs full links, so never use this transport in a deployment.
         _logger.LogInformation(
             "Email not sent (provider 'log'). To: {To}, Subject: {Subject}\n{Body}",
             message.To,
@@ -50,10 +44,6 @@ public class LoggingEmailService : IEmailService
         }));
     }
 
-    /// <summary>
-    /// Returns the failure to report, or null when the message is sendable. A misconfigured
-    /// deployment is a bad request the operator can act on, not a 500.
-    /// </summary>
     private ServiceResult<EmailSendResult>? Validate(EmailMessage message)
     {
         if (!_options.IsConfigured)

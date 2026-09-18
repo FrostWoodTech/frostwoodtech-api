@@ -2,6 +2,6 @@ namespace FrostWoodTech.API.DTOs.Admin;
 
 public sealed class RejectUserRequest
 {
-    /// <summary>Required — the rejected user is told why, so it cannot be left blank.</summary>
+    /// <summary>Required: shown to the user at sign-in.</summary>
     public string? Reason { get; set; }
 }

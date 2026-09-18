@@ -19,7 +19,6 @@ public class CreatePresignedUpload
         _mediaService = mediaService;
     }
 
-    /// <summary>Hands out a presigned PUT URL so the SPA uploads straight to Neon Object Storage.</summary>
     [Function("CreatePresignedUpload")]
     public async Task<IActionResult> Run(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "cms/admin/media/presigned-upload")] HttpRequest req,

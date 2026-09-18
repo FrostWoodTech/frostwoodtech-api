@@ -4,15 +4,12 @@ using System.Text.RegularExpressions;
 
 namespace FrostWoodTech.API.Common;
 
-/// <summary>
-/// Slugs are lowercase and hyphenated. Uniqueness is the service layer's job — this only shapes
-/// the string.
-/// </summary>
+/// <summary>Lowercase and hyphenated; can return "" when nothing usable is left. Uniqueness is the caller's job.</summary>
 public static partial class SlugGenerator
 {
     public static string Generate(string input)
     {
-        // Strip accents so "Café" becomes "cafe" rather than losing the letter entirely.
+        // Strip accents so "Café" becomes "cafe".
         var normalized = input.Normalize(NormalizationForm.FormD);
         var builder = new StringBuilder(normalized.Length);
 

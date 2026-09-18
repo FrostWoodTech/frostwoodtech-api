@@ -9,18 +9,11 @@ using FrostWoodTech.API.Interfaces;
 
 namespace FrostWoodTech.API.Data;
 
-/// <summary>
-/// Creates the single <c>super_admin</c> from app settings on startup with <b>no password</b>,
-/// and emails a single-use setup link — so no password ever lives in app settings, and an
-/// existing account's password is never touched. Not an EF <c>HasData</c> seed: that would put
-/// the email in a committed migration and can't send mail.
-/// </summary>
+/// <summary>Seeds the single super admin with no password and emails a setup link. Never touches an existing account.</summary>
 public static class SuperAdminSeeder
 {
-    /// <summary>How long the emailed setup link stays usable — the same 24h as a verification link.</summary>
     private static readonly TimeSpan SetupTokenLifetime = TimeSpan.FromHours(24);
 
-    /// <summary>Any fixed number — serialises two cold starts that boot at once.</summary>
     private const long AdvisoryLockKey = 4_820_117_003L;
 
     public static async Task EnsureSeededAsync(
@@ -40,18 +33,16 @@ public static class SuperAdminSeeder
         var address = options.Email.Trim().ToLowerInvariant();
         string? rawToken = null;
 
-        // Retry-on-failure needs the strategy to own the whole retriable unit — EF Core rejects a
-        // user-started transaction otherwise.
+        // The execution strategy must own the transaction when retries are enabled.
         var strategy = db.Database.CreateExecutionStrategy();
         await strategy.ExecuteAsync(async () =>
         {
             await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
 
-            // Held until the transaction ends, making the lookups and insert below atomic.
+            // Advisory lock serialises concurrent cold starts until the transaction ends.
             await db.Database.ExecuteSqlRawAsync(
                 "SELECT pg_advisory_xact_lock({0})", [AdvisoryLockKey], cancellationToken);
 
-            // IgnoreQueryFilters: a deleted super admin still counts as existing.
             var existingSuperAdmin = await db.Users
                 .IgnoreQueryFilters()
                 .FirstOrDefaultAsync(u => u.Role == UserRole.SuperAdmin, cancellationToken);
@@ -60,7 +51,7 @@ public static class SuperAdminSeeder
             {
                 if (!string.Equals(existingSuperAdmin.Email, address, StringComparison.OrdinalIgnoreCase))
                 {
-                    // auth.md: exactly one super admin — never promote a second from config.
+                    // Exactly one super admin: never promote a second from config.
                     logger.LogWarning(
                         "A super admin already exists as {ExistingEmail} but SuperAdmin__Email is {ConfiguredEmail}. Leaving the existing account alone.",
                         existingSuperAdmin.Email,
@@ -71,7 +62,7 @@ public static class SuperAdminSeeder
                 return;
             }
 
-            // Seed-if-missing only — an address owned by someone else is a job for a human.
+            // An address owned by another account needs a human.
             var addressTaken = await db.Users
                 .IgnoreQueryFilters()
                 .AnyAsync(u => u.Email == address, cancellationToken);
@@ -94,11 +85,10 @@ public static class SuperAdminSeeder
                 Email = address,
                 FirstName = options.FirstName,
                 LastName = options.LastName,
-                // Unreachable by password login until the link is redeemed — LoginAsync rejects a null hash.
                 PasswordHash = null,
                 Role = UserRole.SuperAdmin,
                 Status = UserStatus.Approved,
-                // Trusted config, nothing to verify — and unset would leave Status blocking login post-setup.
+                // Trusted config, nothing to verify.
                 EmailVerifiedAt = now
             };
 
@@ -119,8 +109,7 @@ public static class SuperAdminSeeder
             }
             catch (DbUpdateException ex)
             {
-                // The advisory lock covers the common race, the unique indexes catch the rest. Either
-                // way the account now exists, so don't send a link for a token that rolled back.
+                // Lost a race; the account exists, so don't send a link for a rolled-back token.
                 logger.LogWarning(
                     ex, "Super admin seeding lost a race — the account already exists. No mail sent.");
 
@@ -129,12 +118,10 @@ public static class SuperAdminSeeder
                 return;
             }
 
-            // Warning, not Information: should happen exactly once per deployment.
             logger.LogWarning(
                 "Seeded the super admin account {Email} with no password. Sending a setup link.", address);
         });
 
-        // Null means the body returned early (already seeded, address taken, race lost) — no mail.
         if (rawToken is not null)
         {
             await SendSetupLinkAsync(
@@ -142,7 +129,7 @@ public static class SuperAdminSeeder
         }
     }
 
-    /// <summary>Called after the commit, so a slow mail provider can't hold the transaction open.</summary>
+    // Called after the commit so a slow mail provider can't hold the transaction open.
     private static async Task SendSetupLinkAsync(
         IEmailService email,
         EmailOptions emailOptions,
@@ -172,7 +159,7 @@ public static class SuperAdminSeeder
 
         if (!sent.IsSuccess)
         {
-            // Error, not Warning: unlike verification mail there's no self-service resend here.
+            // Error level: there is no self-service resend for this link.
             logger.LogError(
                 "The super admin setup link for {Email} could not be sent: {Code}. Issue a fresh one before the 24 hours are up.",
                 address,

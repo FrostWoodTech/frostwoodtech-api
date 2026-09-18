@@ -6,18 +6,10 @@ public sealed class CreateTagRequest
 {
     public string? Name { get; set; }
 
-    /// <summary>Optional — generated from the name when omitted.</summary>
+    /// <summary>Generated from the name when omitted.</summary>
     public string? Slug { get; set; }
 
     public bool IsTechnology { get; set; }
 
     public TechCategory? TechnologyCategory { get; set; }
-
-    public string? IconObjectKey { get; set; }
-
-    public string? IconUrl { get; set; }
-
-    public string? ColorHex { get; set; }
-
-    public int SortOrder { get; set; }
 }

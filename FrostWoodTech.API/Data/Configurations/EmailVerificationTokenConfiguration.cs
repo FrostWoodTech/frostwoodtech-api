@@ -19,7 +19,6 @@ public class EmailVerificationTokenConfiguration : IEntityTypeConfiguration<Emai
         builder.Property(t => t.CreatedAt).HasColumnName("created_at");
         builder.Property(t => t.UsedAt).HasColumnName("used_at");
 
-        // The hash is the lookup key on verify; (UserId, CreatedAt) backs the resend rate limit.
         builder.HasIndex(t => t.TokenHash).IsUnique();
         builder.HasIndex(t => new { t.UserId, t.CreatedAt });
 

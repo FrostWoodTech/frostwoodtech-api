@@ -19,7 +19,6 @@ public class ReorderServices
         _serviceCatalog = serviceCatalog;
     }
 
-    /// <summary>Bulk sort_order update. The body names the site — sort order is kept per site.</summary>
     [Function("ReorderServices")]
     public async Task<IActionResult> Run(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "cms/admin/services/reorder")] HttpRequest req,

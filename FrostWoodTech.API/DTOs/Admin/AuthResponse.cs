@@ -1,20 +1,20 @@
+using System.Text.Json.Serialization;
+
 namespace FrostWoodTech.API.DTOs.Admin;
 
-/// <summary>
-/// A short-lived access token plus the rotating refresh token that renews it. The refresh token
-/// is returned in the body rather than an httpOnly cookie because the admin SPA is a different
-/// origin from the Functions app.
-/// </summary>
+/// <summary>Refresh token is set as an httpOnly cookie by the Function and never serialized.</summary>
 public sealed class AuthResponse
 {
     public required string AccessToken { get; init; }
 
     public required DateTimeOffset ExpiresAt { get; init; }
 
-    /// <summary>Raw value — it is never stored, only its hash is.</summary>
-    public required string RefreshToken { get; init; }
+    /// <summary>Raw token for the cookie; only its hash is stored.</summary>
+    [JsonIgnore]
+    public string RefreshToken { get; init; } = "";
 
-    public required DateTimeOffset RefreshTokenExpiresAt { get; init; }
+    [JsonIgnore]
+    public DateTimeOffset RefreshTokenExpiresAt { get; init; }
 
     public required AdminUserResponse User { get; init; }
 }

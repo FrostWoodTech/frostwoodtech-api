@@ -1,21 +1,18 @@
 namespace FrostWoodTech.API.Entities.Common;
 
-/// <summary>
-/// The site visibility block shared by projects, articles, services, pricing plans and FAQs.
-/// A row is never duplicated per site — it carries a flag for each one.
-/// </summary>
+/// <summary>Per-site visibility flags; a row is never duplicated per site.</summary>
 public abstract class SiteVisibleEntity : AuditableEntity
 {
     public bool ShowOnAgency { get; set; }
 
-    /// <summary>Only valid when <see cref="ShowOnAgency"/> is true.</summary>
+    /// <summary>Requires ShowOnAgency.</summary>
     public bool FeaturedOnAgency { get; set; }
 
     public int AgencySortOrder { get; set; }
 
     public bool ShowOnPersonal { get; set; }
 
-    /// <summary>Only valid when <see cref="ShowOnPersonal"/> is true.</summary>
+    /// <summary>Requires ShowOnPersonal.</summary>
     public bool FeaturedOnPersonal { get; set; }
 
     public int PersonalSortOrder { get; set; }

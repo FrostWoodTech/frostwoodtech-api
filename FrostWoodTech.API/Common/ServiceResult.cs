@@ -1,6 +1,5 @@
 namespace FrostWoodTech.API.Common;
 
-/// <summary>What went wrong, so a Function can pick the right HTTP status.</summary>
 public enum ServiceErrorKind
 {
     NotFound,
@@ -10,12 +9,9 @@ public enum ServiceErrorKind
     Forbidden
 }
 
-/// <param name="Code">Stable machine-readable code, e.g. <c>slug_taken</c>.</param>
+/// <param name="Code">Stable machine-readable code, e.g. slug_taken.</param>
 public sealed record ServiceError(ServiceErrorKind Kind, string Code, string Message);
 
-/// <summary>
-/// Lets a service report a business failure without throwing, keeping the Functions thin.
-/// </summary>
 public sealed class ServiceResult<T>
 {
     private ServiceResult(T? value, ServiceError? error)
@@ -32,7 +28,6 @@ public sealed class ServiceResult<T>
 
     public static ServiceResult<T> Success(T value) => new(value, null);
 
-    /// <summary>Carries a failure from an inner call outward without flattening its kind.</summary>
     public static ServiceResult<T> Failure(ServiceError error) => new(default, error);
 
     public static ServiceResult<T> NotFound(string code, string message) =>

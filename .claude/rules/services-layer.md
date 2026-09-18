@@ -8,40 +8,42 @@ paths:
 
 # Service layer
 
-The service layer is the **only** layer between the Functions and EF Core. It owns business
-logic *and* data access. Do not introduce repositories, a unit-of-work wrapper, CQRS handlers,
-or MediatR — the project is deliberately shallow so a junior developer can follow a request end
-to end.
+The only layer between Functions and EF Core; it owns business logic **and** data access. No
+repositories, unit-of-work wrappers, CQRS or MediatR.
 
-Shape: one service per aggregate (`ProjectService`, `ArticleService`, `TagService`,
-`ServiceCatalogService`, `PricingService`, `FaqService`, `UserService`, `MediaService`).
-Registered in DI in `Program.cs`, scoped.
+One service per aggregate, registered scoped in `Program.cs`. Services return
+`ServiceResult<T>` for business failures instead of throwing; Functions map them with
+`ProblemResults.FromError`.
 
-The Function is thin: parse and bind input → call the service → map the result to a response
-DTO → return. No EF Core queries in a Function.
+## Validation rules
 
-## Validation rules the service layer must enforce
-
-- `featured_on_agency` requires `show_on_agency`; same for personal.
-- `is_technology = false` ⇒ `technology_category` and icon fields must be null.
-- `is_technology = true` ⇒ `technology_category` and an icon are required.
-- Exactly one `project_images.is_primary` per project. Setting a new primary clears the old one
-  in the same transaction.
+- `featured_on_X` requires `show_on_X`. FAQs have no featured flag; pricing plans and certificates
+  have a plain `featured` flag.
+- Tags: `is_technology` ⇔ `technology_category` is set.
+- Exactly one primary image per project/product. The first image is always primary; setting a new
+  primary clears the old one (two saves in one transaction, because the partial unique index is
+  checked per statement); un-setting the current primary is ignored; deleting it promotes the next.
 - `alt_text` is required on every image.
-- Slug uniqueness, checked on create and on update. Warn (don't block) when a published entity's
-  slug changes.
-- `medium_url` is required on articles and must be an absolute URL.
-- `price_amount = null` is valid and means "Custom / Contact us" — don't default it to 0.
-- A tag may not be deleted while a project or article still references it — `tag_in_use`.
-- Public read paths always apply `is_published`, `is_deleted`, and the site flag. Never expose a
-  service method that lets a caller skip those filters on the public surface.
+- Slugs: generated with `SlugGenerator`, rejected when empty, unique **including soft-deleted rows**
+  (use `IgnoreQueryFilters()` for the check, since the unique index covers them). The same applies
+  to currency codes.
+- Project/product URLs, image URLs and certificate URLs must be absolute http(s).
+- `price_amount = null` means "Custom / Contact us" — never default it to 0.
+- A tag can't be deleted while a live project or article uses it (`tag_in_use`).
+- Unknown foreign ids (tags, projects, services) are validation errors, not 500s.
+- Sort orders never come from create/update (services excepted); new rows are appended.
+
+## Publishing
+
+`published_at` is stamped on the first publish and never cleared. `SetPublishedAsync` shows the row
+on both sites **only on the first publish** (`published_at is null`); republishing keeps the
+editor's site choice.
 
 ## Queries
 
-- Use `AsNoTracking()` on every read path.
-- Project straight to the DTO in the query (`Select(...)`) rather than loading full entities and
-  mapping afterwards — it keeps the SQL narrow.
-- Load tags and images with explicit `Include`/projection. Watch for N+1 on list endpoints; a
-  project list page must not issue one query per project for its tags.
-- Soft delete is a `where is_deleted = false` filter — consider a global query filter on the
-  DbContext so it can't be forgotten.
+- Public reads always apply `is_published`, the site flag, and (via the global filter) `is_deleted`.
+  Never add a method that lets a public caller skip them.
+- `AsNoTracking()` on reads; project straight to DTOs with `Select`; avoid N+1 on lists.
+- Use `IgnoreQueryFilters()` only where a deleted row must be found on purpose (slug checks,
+  user lookups, seeders).
+- File deletes run after the database commit.

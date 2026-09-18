@@ -7,10 +7,7 @@ using FrostWoodTech.API.Common;
 
 namespace FrostWoodTech.API.Middleware;
 
-/// <summary>
-/// Backstop that keeps the RFC 7807 contract honest for unexpected throws (a bare 500 otherwise
-/// has no body to switch on). Registered first so it wraps the auth middleware too.
-/// </summary>
+/// <summary>Turns unhandled exceptions into a generic problem+json 500.</summary>
 public sealed class ExceptionHandlingMiddleware : IFunctionsWorkerMiddleware
 {
     private readonly ILogger<ExceptionHandlingMiddleware> _logger;
@@ -28,7 +25,6 @@ public sealed class ExceptionHandlingMiddleware : IFunctionsWorkerMiddleware
         }
         catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested)
         {
-            // The caller hung up. Nothing failed and there is nobody left to answer.
             _logger.LogInformation(
                 "{FunctionName} was cancelled by the caller.",
                 context.FunctionDefinition.Name);
@@ -44,18 +40,16 @@ public sealed class ExceptionHandlingMiddleware : IFunctionsWorkerMiddleware
             var httpContext = context.GetHttpContext();
             if (httpContext is null)
             {
-                // Not an HTTP trigger — there is no problem+json to write, so let the host see it.
+                // Not an HTTP trigger: let the host handle it.
                 throw;
             }
 
             if (httpContext.Response.HasStarted)
             {
-                // Too late to replace the body; the log above is the only useful record.
                 throw;
             }
 
-            // Deliberately generic: an exception message can leak a connection string or row data.
-            // The invocation id ties this to the log entry.
+            // Generic on purpose: exception messages can leak secrets. The invocation id links to the log.
             await ProblemResults.WriteAsync(
                 httpContext.Response,
                 StatusCodes.Status500InternalServerError,

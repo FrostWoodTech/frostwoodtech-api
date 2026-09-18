@@ -17,7 +17,6 @@ public class GetPublicReviews
         _reviewService = reviewService;
     }
 
-    /// <summary>The dedicated public reviews page.</summary>
     [Function("GetPublicReviews")]
     public async Task<IActionResult> Run(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "public/reviews")] HttpRequest req,

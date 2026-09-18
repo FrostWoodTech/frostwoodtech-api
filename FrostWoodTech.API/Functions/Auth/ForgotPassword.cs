@@ -19,10 +19,7 @@ public class ForgotPassword
         _users = users;
     }
 
-    /// <summary>
-    /// Anonymous by design. No <c>!result.IsSuccess</c> branch below — the service never fails
-    /// this call, since a failure would itself reveal something. See <c>UserService.ForgotPasswordAsync</c>.
-    /// </summary>
+    /// <summary>No failure branch: the service always succeeds so the response reveals nothing.</summary>
     [Function("ForgotPassword")]
     public async Task<IActionResult> Run(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "cms/admin/auth/forgot-password")] HttpRequest req,

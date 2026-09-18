@@ -4,7 +4,6 @@ using FrostWoodTech.API.Interfaces;
 
 namespace FrostWoodTech.API.Services;
 
-/// <inheritdoc cref="IArticleMediaResolver"/>
 public partial class ArticleMediaResolver : IArticleMediaResolver
 {
     private readonly IMediaService _mediaService;
@@ -19,8 +18,7 @@ public partial class ArticleMediaResolver : IArticleMediaResolver
             ? markdown
             : MediaReferencePattern().Replace(markdown, m => _mediaService.GetPublicUrl(m.Groups[1].Value));
 
-    // The object key is exactly what follows "media://" — the reference and the storage key
-    // share the same "articles/images/..." shape by convention, so no lookup is needed.
+    // media://<key> maps straight to the storage object key; no lookup needed.
     [GeneratedRegex(@"media://([\w\-./]+)")]
     private static partial Regex MediaReferencePattern();
 }

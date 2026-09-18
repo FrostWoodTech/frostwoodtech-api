@@ -19,10 +19,6 @@ public class SetArticlePublished
         _articleService = articleService;
     }
 
-    /// <summary>
-    /// Flips the draft flag on its own so the admin SPA can take an article live without
-    /// resubmitting the whole form.
-    /// </summary>
     [Function("SetArticlePublished")]
     public async Task<IActionResult> Run(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "cms/admin/articles/{id:guid}/publish")] HttpRequest req,

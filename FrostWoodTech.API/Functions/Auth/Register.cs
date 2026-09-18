@@ -19,11 +19,6 @@ public class Register
         _users = users;
     }
 
-    /// <summary>
-    /// Anonymous by design — see the allow-list in <c>JwtAuthenticationMiddleware</c>. Creates an
-    /// <c>email_verification_required</c> account and deliberately returns no token: the address
-    /// must be verified and the super admin must approve before sign-in works.
-    /// </summary>
     [Function("Register")]
     public async Task<IActionResult> Run(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "cms/admin/auth/register")] HttpRequest req,

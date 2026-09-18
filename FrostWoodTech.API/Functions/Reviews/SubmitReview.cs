@@ -19,10 +19,6 @@ public class SubmitReview
         _reviewService = reviewService;
     }
 
-    /// <summary>
-    /// The one anonymous public write in the API. Lands unpublished — nothing here makes a
-    /// review visible without an admin publishing it.
-    /// </summary>
     [Function("SubmitReview")]
     public async Task<IActionResult> Run(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "public/reviews")] HttpRequest req,

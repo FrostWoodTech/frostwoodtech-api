@@ -3,10 +3,7 @@ using System.Text.Json.Serialization;
 
 namespace FrostWoodTech.API.Common;
 
-/// <summary>
-/// One set of JSON options for the whole API: camelCase properties, enums as their snake_case
-/// string names so responses read the same way the Postgres enums do.
-/// </summary>
+/// <summary>camelCase properties; enums as snake_case strings, matching the Postgres enums.</summary>
 public static class JsonDefaults
 {
     public static readonly JsonSerializerOptions Options = Create();

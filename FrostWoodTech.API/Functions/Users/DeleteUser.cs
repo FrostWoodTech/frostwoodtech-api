@@ -16,10 +16,6 @@ public class DeleteUser
         _users = users;
     }
 
-    /// <summary>
-    /// Super admin only, soft delete. Deleting yourself or the super admin row is refused so the
-    /// CMS cannot be locked out.
-    /// </summary>
     [Function("DeleteUser")]
     public async Task<IActionResult> Run(
         [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "cms/admin/users/{id:guid}")] HttpRequest req,

@@ -16,7 +16,6 @@ public class DeleteProject
         _projectService = projectService;
     }
 
-    /// <summary>Soft delete — hard delete stays a super-admin-only concern.</summary>
     [Function("DeleteProject")]
     public async Task<IActionResult> Run(
         [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "cms/admin/projects/{id:guid}")] HttpRequest req,

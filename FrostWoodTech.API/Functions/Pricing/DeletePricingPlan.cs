@@ -16,7 +16,6 @@ public class DeletePricingPlan
         _pricing = pricing;
     }
 
-    /// <summary>Soft delete — the row stays in Postgres with is_deleted set.</summary>
     [Function("DeletePricingPlan")]
     public async Task<IActionResult> Run(
         [HttpTrigger(

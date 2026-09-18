@@ -1,7 +1,5 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
-using Microsoft.IdentityModel.Tokens;
 
 using FrostWoodTech.API.Auth;
 using FrostWoodTech.API.Common;
@@ -15,7 +13,6 @@ using FrostWoodTech.API.Services;
 
 namespace FrostWoodTech.Tests;
 
-/// <summary>Passwordless super admin bootstrap: seed, email a link, redeem it — cares most about what the seeder does *not* write.</summary>
 [Collection(nameof(PostgresCollection))]
 public class SuperAdminBootstrapTests
 {
@@ -40,7 +37,6 @@ public class SuperAdminBootstrapTests
 
         Assert.Null(user.PasswordHash);
         Assert.Equal(UserRole.SuperAdmin, user.Role);
-        // Approved, not pending: trusted config, nothing to verify.
         Assert.Equal(UserStatus.Approved, user.Status);
         Assert.NotNull(user.EmailVerifiedAt);
 
@@ -118,7 +114,7 @@ public class SuperAdminBootstrapTests
             new LoginRequest { Email = email, Password = NewPassword }, "127.0.0.1", CancellationToken.None);
 
         Assert.False(login.IsSuccess);
-        // Not "account_pending": a null hash looks like a wrong password from outside.
+        // A null hash looks like a wrong password, not account_pending.
         Assert.Equal("invalid_credentials", login.Error!.Code);
     }
 
@@ -226,7 +222,6 @@ public class SuperAdminBootstrapTests
         await using var db = _fixture.CreateContext();
         var service = NewService(db, out _);
 
-        // Nullable for Google-only accounts — must not make passwordless signup reachable here.
         var request = new RegisterRequest
         {
             FirstName = "Ada",
@@ -251,7 +246,7 @@ public class SuperAdminBootstrapTests
         ConfirmPassword = NewPassword
     };
 
-    /// <summary>Only one super admin may exist DB-wide, so each test clears the slot first.</summary>
+    // Only one super admin may exist, so each test clears the slot.
     private async Task<string> ResetSuperAdminAsync()
     {
         await using var db = _fixture.CreateContext();
@@ -273,13 +268,12 @@ public class SuperAdminBootstrapTests
             db,
             new SuperAdminOptions { Email = email, FirstName = "Root", LastName = "Admin" },
             emails,
-            new EmailOptions { BaseUrl = "https://admin.frostwoodtech.test" },
+            new EmailOptions { BaseUrl = TestServices.AdminBaseUrl },
             NullLogger.Instance);
 
         return emails;
     }
 
-    /// <summary>Mints a token the same way the seeder does and overwrites the stored hash to match.</summary>
     private async Task<string> RawSetupTokenForAsync(string email)
     {
         await using var db = _fixture.CreateContext();
@@ -301,55 +295,6 @@ public class SuperAdminBootstrapTests
     {
         emails = new FakeEmailService();
 
-        return new UserService(
-            db,
-            new FakeJwtTokenService(),
-            new FakeGoogleTokenValidator(),
-            new FakeLoginRateLimiter(),
-            new CurrentUser { UserId = Guid.NewGuid(), Role = UserRole.Admin },
-            Options.Create(new JwtOptions()),
-            emails,
-            Options.Create(new EmailOptions { BaseUrl = "https://admin.frostwoodtech.test" }),
-            NullLogger<UserService>.Instance);
-    }
-
-    private sealed class FakeEmailService : IEmailService
-    {
-        public int SentCount { get; private set; }
-
-        public EmailMessage? LastMessage { get; private set; }
-
-        public Task<ServiceResult<EmailSendResult>> SendAsync(EmailMessage message, CancellationToken cancellationToken)
-        {
-            SentCount++;
-            LastMessage = message;
-
-            return Task.FromResult(ServiceResult<EmailSendResult>.Success(new EmailSendResult { Provider = "fake" }));
-        }
-    }
-
-    private sealed class FakeJwtTokenService : IJwtTokenService
-    {
-        public (string Token, DateTimeOffset ExpiresAt) CreateAccessToken(User user) =>
-            ("fake-token", DateTimeOffset.UtcNow.AddMinutes(15));
-
-        public TokenValidationParameters CreateValidationParameters() => new();
-    }
-
-    private sealed class FakeGoogleTokenValidator : IGoogleTokenValidator
-    {
-        public Task<ServiceResult<GoogleIdentity>> ValidateAsync(string idToken, CancellationToken cancellationToken) =>
-            throw new NotSupportedException("Not exercised by these tests.");
-    }
-
-    private sealed class FakeLoginRateLimiter : ILoginRateLimiter
-    {
-        public Task<bool> IsBlockedAsync(string email, string? ipAddress, AuthAttemptAction action, CancellationToken cancellationToken) =>
-            Task.FromResult(false);
-
-        public Task RecordAttemptAsync(string email, string? ipAddress, AuthAttemptAction action, CancellationToken cancellationToken) =>
-            Task.CompletedTask;
-
-        public Task ClearAsync(string email, AuthAttemptAction action, CancellationToken cancellationToken) => Task.CompletedTask;
+        return TestServices.CreateUserService(db, emails);
     }
 }

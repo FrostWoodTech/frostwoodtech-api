@@ -19,7 +19,6 @@ public class ReorderReviews
         _reviewService = reviewService;
     }
 
-    /// <summary>Bulk sort_order update, in a single save.</summary>
     [Function("ReorderReviews")]
     public async Task<IActionResult> Run(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "cms/admin/reviews/reorder")] HttpRequest req,

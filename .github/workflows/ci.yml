@@ -2,9 +2,12 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
+
+permissions:
+  contents: read
 
 env:
   DOTNET_VERSION: '10.0.x'
@@ -38,8 +41,7 @@ jobs:
       - name: Build
         run: dotnet build FrostWoodTech.sln --configuration Release --no-restore
 
-      # No test project exists yet (see Gap 9). Once FrostWoodTech.Tests is added this step
-      # starts running automatically; --no-build keeps it on the artifacts built above.
+      # Integration tests start Postgres via Testcontainers; ubuntu runners ship with Docker.
       - name: Test
         run: dotnet test FrostWoodTech.sln --configuration Release --no-build --verbosity normal
 
@@ -58,7 +60,8 @@ jobs:
       - name: Install dotnet-ef
         run: dotnet tool install --global dotnet-ef
 
-      # Catches an entity or configuration change that was committed without a matching
-      # migration — the failure mode that otherwise only shows up against a real database.
+      # Fails when an entity changed without a migration. Never connects; the design-time factory just needs a value.
       - name: Check for pending model changes
+        env:
+          ConnectionStrings__Default: Host=localhost;Database=unused;Username=unused;Password=unused
         run: dotnet ef migrations has-pending-model-changes --project FrostWoodTech.API

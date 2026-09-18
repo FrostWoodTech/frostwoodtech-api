@@ -23,22 +23,24 @@ public class GetAdminFaqs
     {
         HttpResponses.MarkNoStore(req);
 
-        // Site is an optional filter here — the admin list defaults to everything.
+        // Optional on admin lists, unlike the public surface.
         if (!QueryParameters.TryReadSite(req, out var site))
         {
             return ProblemResults.BadRequest("validation_failed", "Unknown site.");
         }
 
         var isPublished = QueryParameters.ReadBool(req, "isPublished");
-        var category = QueryParameters.ReadString(req, "category");
         var search = QueryParameters.ReadString(req, "search");
+        var serviceId = QueryParameters.ReadGuid(req, "serviceId");
+        var globalOnly = QueryParameters.ReadBool(req, "globalOnly") ?? false;
         var (page, pageSize) = QueryParameters.ReadPaging(req);
 
         var result = await _faqService.GetAdminFaqsAsync(
             site,
             isPublished,
-            category,
             search,
+            serviceId,
+            globalOnly,
             page,
             pageSize,
             cancellationToken);

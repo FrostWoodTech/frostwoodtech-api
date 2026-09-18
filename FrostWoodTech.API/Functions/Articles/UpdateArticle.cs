@@ -19,7 +19,6 @@ public class UpdateArticle
         _articleService = articleService;
     }
 
-    /// <summary>A full replacement — every field is written as given, tags included.</summary>
     [Function("UpdateArticle")]
     public async Task<IActionResult> Run(
         [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "cms/admin/articles/{id:guid}")] HttpRequest req,

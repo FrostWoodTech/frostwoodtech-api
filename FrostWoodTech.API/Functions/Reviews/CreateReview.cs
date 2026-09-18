@@ -10,7 +10,6 @@ using FrostWoodTech.API.Interfaces;
 
 namespace FrostWoodTech.API.Functions.Reviews;
 
-/// <summary>For an admin manually adding a testimonial collected elsewhere.</summary>
 public class CreateReview
 {
     private readonly IReviewService _reviewService;

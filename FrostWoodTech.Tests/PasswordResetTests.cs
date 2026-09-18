@@ -1,7 +1,5 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
-using Microsoft.Extensions.Options;
-using Microsoft.IdentityModel.Tokens;
 
 using FrostWoodTech.API.Auth;
 using FrostWoodTech.API.Common;
@@ -15,7 +13,7 @@ using FrostWoodTech.API.Services;
 
 namespace FrostWoodTech.Tests;
 
-/// <summary>Forgot-password. Uses the <b>real</b> <see cref="LoginRateLimiter"/> — a fake would prove nothing about the Postgres-backed, per-action limit.</summary>
+/// <summary>Uses the real Postgres-backed LoginRateLimiter.</summary>
 [Collection(nameof(PostgresCollection))]
 public class PasswordResetTests
 {
@@ -35,7 +33,6 @@ public class PasswordResetTests
 
         Assert.Equal(1, emails.SentCount);
         Assert.Contains("/set-password?token=", emails.LastMessage!.HtmlBody);
-        // Distinct from the bootstrap mail, which says "Set your ... super admin password".
         Assert.Contains("Reset your FrostWoodTech password", emails.LastMessage.Subject);
 
         await using var db = _fixture.CreateContext();
@@ -43,7 +40,6 @@ public class PasswordResetTests
 
         Assert.Equal(PasswordTokenPurpose.Reset, token.Purpose);
         Assert.Null(token.UsedAt);
-        // One hour, not the setup link's twenty-four.
         Assert.InRange(token.ExpiresAt - token.CreatedAt, TimeSpan.FromMinutes(59), TimeSpan.FromMinutes(61));
     }
 
@@ -55,7 +51,7 @@ public class PasswordResetTests
 
         Assert.True(known.Result!.IsSuccess);
         Assert.True(unknown.Result!.IsSuccess);
-        // Byte-identical bodies: this is the property that stops the endpoint being an oracle.
+        // Identical bodies are what stop the endpoint being an enumeration oracle.
         Assert.Equal(known.Result.Value!.Message, unknown.Result.Value!.Message);
         Assert.Equal(0, unknown.SentCount);
     }
@@ -79,7 +75,6 @@ public class PasswordResetTests
             Assert.Equal("setup_token_already_used", stale.Error!.Code);
         }
 
-        // The newest link still works.
         var secondRawToken = await RawResetTokenForAsync(email);
 
         await using var fresh = _fixture.CreateContext();
@@ -94,7 +89,6 @@ public class PasswordResetTests
     {
         var email = await NewApprovedUserAsync();
 
-        // Sign in first, so there is a live refresh token for the reset to kill.
         await using (var db = _fixture.CreateContext())
         {
             var signIn = await NewService(db, out _).LoginAsync(
@@ -130,7 +124,6 @@ public class PasswordResetTests
     [Fact]
     public async Task An_unverified_account_gets_the_generic_response_and_no_reset_link()
     {
-        // It has its own resend-verification flow; a reset link would be a way around verifying.
         var email = await NewUserAsync(UserStatus.EmailVerificationRequired);
 
         var emails = await ForgotAsync(email);
@@ -183,7 +176,7 @@ public class PasswordResetTests
             Assert.Equal(1, (await ForgotAsync(email, ip: $"10.0.0.{i}")).SentCount);
         }
 
-        // Still a 200 with the same body — a throttled caller must not be able to tell either.
+        // Throttled callers get the same 200 body.
         var fourth = await ForgotAsync(email, ip: "10.0.0.9");
 
         Assert.True(fourth.Result!.IsSuccess);
@@ -212,14 +205,12 @@ public class PasswordResetTests
         var email = await NewApprovedUserAsync();
         const string ip = "198.51.100.4";
 
-        // Exhaust the reset budget.
         for (var i = 0; i < 3; i++)
         {
             await ForgotAsync(email, ip);
         }
         Assert.Equal(0, (await ForgotAsync(email, ip)).SentCount);
 
-        // Login has its own, untouched budget.
         await using var db = _fixture.CreateContext();
         var signIn = await NewService(db, out _).LoginAsync(
             new LoginRequest { Email = email, Password = OriginalPassword }, ip, CancellationToken.None);
@@ -253,7 +244,7 @@ public class PasswordResetTests
             Email = email,
             FirstName = "Ada",
             LastName = "Lovelace",
-            // "" is the sentinel for "give it the standard test password"; null means Google-only.
+            // "" means the standard test password; null means Google-only.
             PasswordHash = passwordHash == string.Empty ? PasswordHasher.Hash(OriginalPassword) : passwordHash,
             GoogleSubjectId = googleSubjectId,
             Role = UserRole.Admin,
@@ -266,8 +257,11 @@ public class PasswordResetTests
         return email;
     }
 
-    private async Task<ForgotOutcome> ForgotAsync(string email, string? ip = "192.0.2.1")
+    private async Task<ForgotOutcome> ForgotAsync(string email, string? ip = null)
     {
+        // Unique per call: the per-IP reset budget is shared across tests.
+        ip ??= $"192.0.2.{Guid.NewGuid():N}";
+
         await using var db = _fixture.CreateContext();
         var service = NewService(db, out var emails);
 
@@ -282,7 +276,6 @@ public class PasswordResetTests
         EmailMessage? LastMessage,
         ServiceResult<ForgotPasswordResponse>? Result);
 
-    /// <summary>Mints a token the same way the service does and overwrites the stored hash to match.</summary>
     private async Task<string> RawResetTokenForAsync(string email)
     {
         await using var db = _fixture.CreateContext();
@@ -304,45 +297,6 @@ public class PasswordResetTests
     {
         emails = new FakeEmailService();
 
-        return new UserService(
-            db,
-            new FakeJwtTokenService(),
-            new FakeGoogleTokenValidator(),
-            // The real one, on the real table — see the class summary.
-            new LoginRateLimiter(db),
-            new CurrentUser { UserId = Guid.NewGuid(), Role = UserRole.Admin },
-            Options.Create(new JwtOptions()),
-            emails,
-            Options.Create(new EmailOptions { BaseUrl = "https://admin.frostwoodtech.test" }),
-            NullLogger<UserService>.Instance);
-    }
-
-    private sealed class FakeEmailService : IEmailService
-    {
-        public int SentCount { get; private set; }
-
-        public EmailMessage? LastMessage { get; private set; }
-
-        public Task<ServiceResult<EmailSendResult>> SendAsync(EmailMessage message, CancellationToken cancellationToken)
-        {
-            SentCount++;
-            LastMessage = message;
-
-            return Task.FromResult(ServiceResult<EmailSendResult>.Success(new EmailSendResult { Provider = "fake" }));
-        }
-    }
-
-    private sealed class FakeJwtTokenService : IJwtTokenService
-    {
-        public (string Token, DateTimeOffset ExpiresAt) CreateAccessToken(User user) =>
-            ("fake-token", DateTimeOffset.UtcNow.AddMinutes(15));
-
-        public TokenValidationParameters CreateValidationParameters() => new();
-    }
-
-    private sealed class FakeGoogleTokenValidator : IGoogleTokenValidator
-    {
-        public Task<ServiceResult<GoogleIdentity>> ValidateAsync(string idToken, CancellationToken cancellationToken) =>
-            throw new NotSupportedException("Not exercised by these tests.");
+        return TestServices.CreateUserService(db, emails, rateLimiter: new LoginRateLimiter(db));
     }
 }

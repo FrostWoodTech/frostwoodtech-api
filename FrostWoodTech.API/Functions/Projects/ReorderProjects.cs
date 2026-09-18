@@ -19,7 +19,6 @@ public class ReorderProjects
         _projectService = projectService;
     }
 
-    /// <summary>Bulk sort_order update for one site, in a single save.</summary>
     [Function("ReorderProjects")]
     public async Task<IActionResult> Run(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "cms/admin/projects/reorder")] HttpRequest req,

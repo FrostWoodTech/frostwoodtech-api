@@ -16,7 +16,6 @@ public class ApproveUser
         _users = users;
     }
 
-    /// <summary>Super admin only. Lets a pending or rejected account sign in.</summary>
     [Function("ApproveUser")]
     public async Task<IActionResult> Run(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "cms/admin/users/{id:guid}/approve")] HttpRequest req,

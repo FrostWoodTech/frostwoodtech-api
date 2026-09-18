@@ -7,19 +7,12 @@ using FrostWoodTech.API.Interfaces;
 
 namespace FrostWoodTech.API.Auth;
 
-/// <summary>
-/// A fixed window counted in Postgres. Functions scale out, so an in-process counter would be
-/// per-instance and would reset on every cold start — which is no limit at all.
-/// </summary>
+/// <summary>Fixed window counted in Postgres, so the limit holds across scaled-out instances.</summary>
 public sealed class LoginRateLimiter : ILoginRateLimiter
 {
     private static readonly TimeSpan Window = TimeSpan.FromMinutes(15);
 
-    /// <summary>
-    /// Per-window ceilings, per action. Login: generous for a misremembered password, higher
-    /// per-IP since offices share addresses. Reset: tight — a person needs one link, and a loose
-    /// limit here is a way to flood somebody else's inbox.
-    /// </summary>
+    // Reset is tight: a loose limit lets someone flood another person's inbox.
     private static (int PerEmail, int PerIp) LimitsFor(AuthAttemptAction action) => action switch
     {
         AuthAttemptAction.PasswordReset => (3, 3),
@@ -77,7 +70,7 @@ public sealed class LoginRateLimiter : ILoginRateLimiter
             AttemptedAt = now
         });
 
-        // Swept here rather than on a timer — this is the only path that needs the table small.
+        // Old rows are swept here; no timer needed.
         var cutoff = now - Window;
         await _db.LoginAttempts
             .Where(a => a.AttemptedAt < cutoff)

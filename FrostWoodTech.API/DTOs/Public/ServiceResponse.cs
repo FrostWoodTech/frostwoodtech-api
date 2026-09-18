@@ -1,10 +1,6 @@
 namespace FrostWoodTech.API.DTOs.Public;
 
-/// <summary>
-/// What the public frontends see. The site's own visibility flags are already resolved into
-/// <see cref="Featured"/> and <see cref="SortOrder"/> — the other site's flags, the draft state
-/// and the audit metadata never cross this boundary.
-/// </summary>
+/// <summary>Public shape: Featured and SortOrder are for the requested site; no admin fields.</summary>
 public sealed class ServiceResponse
 {
     public required Guid Id { get; init; }
@@ -13,27 +9,68 @@ public sealed class ServiceResponse
 
     public required string Name { get; init; }
 
-    /// <summary>Card text.</summary>
     public required string ShortDescription { get; init; }
 
-    /// <summary>Markdown — sanitised on render, not on write.</summary>
-    public required string Description { get; init; }
+    public string? Eyebrow { get; init; }
 
-    /// <summary>e.g. a Lucide icon key.</summary>
-    public string? IconName { get; init; }
+    /// <summary>Null means fall back to Name.</summary>
+    public string? Headline { get; init; }
 
-    /// <summary>Or an uploaded SVG/PNG — a Neon object key.</summary>
-    public string? IconObjectKey { get; init; }
+    public string? Deck { get; init; }
 
-    public string? HeroImageId { get; init; }
+    public string? WhoThisIsFor { get; init; }
+
+    public string? Outcomes { get; init; }
+
+    public string? Capabilities { get; init; }
+
+    public string? InDepth { get; init; }
+
+    public string? PrimaryCtaLabel { get; init; }
+
+    public string? PrimaryCtaUrl { get; init; }
+
+    public string? SecondaryCtaLabel { get; init; }
+
+    public string? SecondaryCtaUrl { get; init; }
+
+    public string? IconUrl { get; init; }
+
+    public int? IconWidth { get; init; }
+
+    public int? IconHeight { get; init; }
+
+    public string? IconAltText { get; init; }
+
+    public string? HeroImageUrl { get; init; }
+
+    public int? HeroImageWidth { get; init; }
+
+    public int? HeroImageHeight { get; init; }
+
+    public string? HeroImageAltText { get; init; }
+
+    public string? DepthImageUrl { get; init; }
+
+    public int? DepthImageWidth { get; init; }
+
+    public int? DepthImageHeight { get; init; }
+
+    public string? DepthImageAltText { get; init; }
+
+    public string? SeoTitle { get; init; }
+
+    public string? SeoDescription { get; init; }
+
+    /// <summary>Detail endpoint only; null on the list.</summary>
+    public List<ServiceProjectResponse>? Projects { get; init; }
+
+    /// <summary>Detail endpoint only; null on the list.</summary>
+    public List<FaqResponse>? Faqs { get; init; }
 
     public DateTimeOffset? PublishedAt { get; init; }
 
-    /// <summary>Featured on the requested site.</summary>
     public required bool Featured { get; init; }
 
-    /// <summary>Sort order for the requested site.</summary>
     public required int SortOrder { get; init; }
-
-    public required IReadOnlyList<ServiceFeatureResponse> Features { get; init; }
 }

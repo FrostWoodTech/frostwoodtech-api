@@ -8,7 +8,7 @@ using FrostWoodTech.API.Interfaces;
 
 namespace FrostWoodTech.API.Functions.Users;
 
-/// <summary>Super admin only — the role check lives in <c>UserService</c>.</summary>
+/// <summary>Super admin check lives in UserService.</summary>
 public class GetUsers
 {
     private readonly IUserService _users;

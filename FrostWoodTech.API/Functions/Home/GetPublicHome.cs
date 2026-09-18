@@ -4,16 +4,13 @@ using Microsoft.Azure.Functions.Worker;
 
 using FrostWoodTech.API.Common;
 using FrostWoodTech.API.DTOs.Public;
+using FrostWoodTech.API.Enums;
 using FrostWoodTech.API.Interfaces;
 
 namespace FrostWoodTech.API.Functions.Home;
 
 public class GetPublicHome
 {
-    /// <summary>
-    /// A home page shows a handful of cards per slice, not a page of them. Capping here keeps
-    /// the response small and bounds the work regardless of how much content exists.
-    /// </summary>
     private const int SliceSize = 6;
 
     private const int FaqSliceSize = 20;
@@ -41,9 +38,6 @@ public class GetPublicHome
         _reviewService = reviewService;
     }
 
-    /// <summary>
-    /// The single call each public home page makes, instead of one per section.
-    /// </summary>
     [Function("GetPublicHome")]
     public async Task<IActionResult> Run(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "public/home")] HttpRequest req,
@@ -59,9 +53,7 @@ public class GetPublicHome
             return ProblemResults.SiteRequired();
         }
 
-        // Awaited one at a time on purpose: all five services share the same scoped DbContext,
-        // which does not support concurrent operations. This is one round trip for the caller,
-        // not one query.
+        // Sequential on purpose: the services share one scoped DbContext, which isn't thread-safe.
         var projects = await _projectService.GetPublicProjectsAsync(
             site.Value,
             tagSlug: null,
@@ -86,14 +78,22 @@ public class GetPublicHome
             pageSize: SliceSize,
             cancellationToken);
 
-        var pricingPlans = await _pricingService.GetPublicComboPlansAsync(
-            site.Value,
-            featured: true,
-            page: 1,
-            pageSize: SliceSize,
-            cancellationToken);
+        // Pricing is agency-only.
+        var pricingPlans = site.Value == Site.Agency
+            ? await _pricingService.GetPublicComboPlansAsync(
+                featured: true,
+                page: 1,
+                pageSize: SliceSize,
+                cancellationToken)
+            : new PagedResult<PricingPlanResponse>
+            {
+                Items = [],
+                Page = 1,
+                PageSize = SliceSize,
+                Total = 0
+            };
 
-        var faqs = await _faqService.GetPublicFaqsAsync(site.Value, category: null, cancellationToken);
+        var faqs = await _faqService.GetPublicFaqsAsync(site.Value, cancellationToken);
 
         var reviews = await _reviewService.GetFeaturedForHomeAsync(SliceSize, cancellationToken);
 

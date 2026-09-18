@@ -19,10 +19,6 @@ public class SetServicePublished
         _serviceCatalog = serviceCatalog;
     }
 
-    /// <summary>
-    /// Flips the draft flag alone, without resubmitting the whole form. Going live the first
-    /// time stamps published_at.
-    /// </summary>
     [Function("SetServicePublished")]
     public async Task<IActionResult> Run(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "cms/admin/services/{id:guid}/publish")] HttpRequest req,

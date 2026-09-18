@@ -19,10 +19,6 @@ public class VerifyEmail
         _users = users;
     }
 
-    /// <summary>
-    /// Anonymous by design — see the allow-list in <c>JwtAuthenticationMiddleware</c>. Called by
-    /// the admin SPA's <c>/verify-email</c> page with the token from the emailed link.
-    /// </summary>
     [Function("VerifyEmail")]
     public async Task<IActionResult> Run(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "cms/admin/auth/verify-email")] HttpRequest req,

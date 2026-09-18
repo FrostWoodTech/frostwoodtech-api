@@ -5,10 +5,7 @@ using Konscious.Security.Cryptography;
 
 namespace FrostWoodTech.API.Auth;
 
-/// <summary>
-/// Argon2id, as <c>.claude/rules/auth.md</c> requires. The salt and the parameters travel inside
-/// the stored string, so the cost can be raised later without invalidating existing hashes.
-/// </summary>
+/// <summary>Argon2id; salt and cost parameters live in the stored string, so costs can rise later.</summary>
 public static class PasswordHasher
 {
     private const string Prefix = "$argon2id$";
@@ -26,7 +23,7 @@ public static class PasswordHasher
         return $"{Prefix}v=19$m={MemoryKib},t={Iterations},p={Parallelism}${Convert.ToBase64String(salt)}${Convert.ToBase64String(hash)}";
     }
 
-    /// <summary>Constant-time. Returns false for a malformed or missing hash rather than throwing.</summary>
+    /// <summary>Constant-time; false for a missing or malformed hash.</summary>
     public static bool Verify(string? storedHash, string password)
     {
         if (string.IsNullOrWhiteSpace(storedHash) || !storedHash.StartsWith(Prefix, StringComparison.Ordinal))
@@ -67,10 +64,7 @@ public static class PasswordHasher
         return CryptographicOperations.FixedTimeEquals(actual, expected);
     }
 
-    /// <summary>
-    /// Burns the same work as a real verify so an unknown email cannot be told apart from a wrong
-    /// password by how long the login took.
-    /// </summary>
+    /// <summary>Same work as a real verify, so unknown emails can't be detected by timing.</summary>
     public static void BurnVerifyTime(string password) =>
         Derive(password, RandomNumberGenerator.GetBytes(SaltBytes), MemoryKib, Iterations, Parallelism, HashBytes);
 

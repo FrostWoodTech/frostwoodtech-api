@@ -1,58 +1,49 @@
 # frostwoodtech-backend
 
-One headless CMS API and one database, powering three frontends: the FrostWoodTech agency
-site, the FrostWoodTech personal site, and the admin SPA.
+One headless CMS API and one database for three frontends: the FrostWoodTech agency site, the
+personal site, and the admin SPA.
 
 .NET 10 Azure Functions (isolated worker) · PostgreSQL on Neon via EF Core + Npgsql ·
-Cloudinary for media · custom JWT + Google Sign-In for admin auth.
+Neon Object Storage (S3-compatible) for media · JWT + Google Sign-In for admin auth.
 
-See [`CLAUDE.md`](CLAUDE.md) for the architecture and the rules that govern changes; the detail
-lives in [`.claude/rules/`](.claude/rules).
+Architecture and the rules for changing the code live in [`CLAUDE.md`](CLAUDE.md) and
+[`.claude/rules/`](.claude/rules).
 
-## Running it locally
+## Running locally
 
-Prerequisites: .NET 10 SDK, [Azure Functions Core Tools v4][func], a Neon database (or any
-Postgres), a Cloudinary account. Docker is needed only for the tests.
+Prerequisites: .NET 10 SDK, [Azure Functions Core Tools v4][func], a Postgres database (Neon or
+local), and Docker for the tests.
 
 ```bash
 cp FrostWoodTech.API/local.settings.example.json FrostWoodTech.API/local.settings.json
-# then fill in the placeholders — connection string, Jwt__Signer, SuperAdmin__*, Cloudinary__*
+# fill in ConnectionStrings:Default, Jwt:Signer, SuperAdmin:*, NeonS3:*, Email:*, Cors:AllowedOrigins
 ```
 
-`local.settings.json` is gitignored and must stay that way. Use Neon's **pooled** connection
-string: Functions scale out, and a direct endpoint will exhaust connections.
+Settings load from `local.settings.json`, then `local.settings.{DOTNET_ENVIRONMENT}.json`
+(default `Development`), then environment variables. All of these files are gitignored and are
+never included in a publish.
 
-Apply the schema, then start the host:
+Apply the schema and start the host:
 
 ```bash
 dotnet tool install --global dotnet-ef
-ConnectionStrings__Default="<your-connection-string>" dotnet ef database update --project FrostWoodTech.API
-
+dotnet ef database update --project FrostWoodTech.API
 cd FrostWoodTech.API && func start
 ```
 
-The API comes up on `http://localhost:7060`. The super admin account is seeded from
-`SuperAdmin__*` on first start.
-
-Quick check:
+The API runs on `http://localhost:7060`. The super admin is seeded from `SuperAdmin:*` on first
+start and emailed a setup link (no password lives in config).
 
 ```bash
 curl http://localhost:7060/api/health
 curl "http://localhost:7060/api/public/home?site=agency"
 ```
 
-`?site=` is required on every public endpoint with site visibility — omitting it is a `400`
-with code `site_required`, never "return everything".
-
 ## API reference
 
-With `Docs__Enabled` set, the browsable reference is at `http://localhost:7060/api/docs` and the
-spec it renders at `http://localhost:7060/api/openapi.yaml`. Both return `404` when the setting
-is off, which is the default — the spec maps the whole admin surface, so a deployment opts in
-rather than out.
-
-The spec is hand-authored at `FrostWoodTech.API/Docs/openapi.yaml` and embedded in the assembly.
-Nothing generates it, so **a route change is a spec change**. Validate an edit with:
+Set `Docs:Enabled` to `true` to serve the reference at `/api/docs` and the spec at
+`/api/openapi.yaml` (both `404` otherwise). The spec is hand-written at
+`FrostWoodTech.API/Docs/openapi.yaml`, so **a route change is a spec change**. Lint it with:
 
 ```bash
 npx @redocly/cli lint FrostWoodTech.API/Docs/openapi.yaml
@@ -64,9 +55,13 @@ npx @redocly/cli lint FrostWoodTech.API/Docs/openapi.yaml
 dotnet test
 ```
 
-The tests run against **real Postgres** in a throwaway container (Testcontainers), because the
-schema uses native enums, `citext` and a partial unique index that the EF in-memory provider
-does not model. Docker must be running.
+Docker must be running. The suite has three layers:
+
+- **Unit tests:** slugs, query parsing, caching headers, client IPs, password hashing, JWTs.
+- **Integration tests:** every service against a real Postgres container (Testcontainers) with
+  the real migrations, since native enums, `citext` and partial unique indexes can't be faked.
+- **API guard tests:** the JWT middleware, the `?site=` check in public Functions, and a
+  route scan that keeps every trigger anonymous and under a known prefix.
 
 ## Migrations
 
@@ -74,24 +69,36 @@ does not model. Docker must be running.
 dotnet ef migrations add <Name> --project FrostWoodTech.API
 ```
 
-Migrations are applied **from CI**, never on function startup — concurrent instances would race
-each other. CI also fails the build if an entity changed without a matching migration.
+Always generate migrations with the CLI; never hand-edit them. They are applied by the deploy
+workflow, never at startup. CI fails if the model changed without a migration.
 
 ## Deployment
 
-`.github/workflows/ci.yml` builds and tests every push and PR.
-`.github/workflows/deploy.yml` applies migrations and publishes to Azure on a push to `main`.
+- `ci.yml` builds, runs the tests and checks for missing migrations on every push and PR to `main`.
+- `deploy.yml` runs on push to `main`: build → test → migrate → publish → deploy → health check.
+  A failing test stops the job before the database is touched.
 
-Deployment needs these configured on the repository:
+Repository configuration:
 
 | Kind | Name | Notes |
 |---|---|---|
-| Secret | `NEON_MIGRATION_CONNECTION_STRING` | Neon's **direct** (non-pooled) string — migrations issue DDL |
-| Secret | `AZURE_FUNCTIONAPP_PUBLISH_PROFILE` | From the Function App's publish profile |
-| Variable | `AZURE_FUNCTIONAPP_NAME` | The Function App's name |
+| Secret | `NEON_MIGRATION_CONNECTION_STRING` | Neon's **direct** (non-pooled) string, for DDL |
+| Secret | `AZURE_FUNCTIONAPP_PUBLISH_PROFILE` | From the Function App |
+| Variable | `AZURE_FUNCTIONAPP_NAME` | The Function App name |
+| Variable | `AZURE_FUNCTIONAPP_URL` | e.g. `https://<app>.azurewebsites.net`; enables the post-deploy health check |
 
-App settings on the Function App mirror `local.settings.example.json` — `ConnectionStrings__Default`
-(pooled), `Jwt__Signer`, `Google__ClientId`, `Cloudinary__*`, and `Cors__AllowedOrigins__0..n`
-for the three frontend origins.
+Function App settings (use `__` for nesting):
+
+| Setting | Notes |
+|---|---|
+| `ConnectionStrings__Default` | Neon **pooled** string |
+| `Jwt__Signer`, `Jwt__Issuer`, `Jwt__Audience` | Signer is a long random secret |
+| `Google__ClientId` | Admin SPA OAuth client id |
+| `SuperAdmin__Email`, `SuperAdmin__FirstName`, `SuperAdmin__LastName` | Identity only |
+| `NeonS3__Endpoint`, `NeonS3__AccessKey`, `NeonS3__SecretKey`, `NeonS3__Region`, `NeonS3__BucketName` | Media storage |
+| `Email__Provider` (`brevo`), `Email__ApiKey`, `Email__FromAddress`, `Email__FromName`, `Email__BaseUrl` | `BaseUrl` is the admin SPA URL |
+| `Cors__AllowedOrigins` | Comma-separated exact origins of the three frontends |
+| `Contact__NotifyAddress` | Optional; defaults to the super admin |
+| `Docs__Enabled` | Optional; `true` to expose `/api/docs` |
 
 [func]: https://learn.microsoft.com/azure/azure-functions/functions-run-local

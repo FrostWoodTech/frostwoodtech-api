@@ -19,15 +19,7 @@ public class GetHealth
         _logger = logger;
     }
 
-    /// <summary>
-    /// Readiness, not liveness: it round-trips to Neon, because a worker that cannot reach the
-    /// database is no use to the three frontends even though the host is up.
-    ///
-    /// The one place a raw DbContext outside the service layer is the right call — there is no
-    /// aggregate here, and routing it through a service would only obscure what it checks.
-    /// Expect roughly a second on the first request after Neon has been idle; that is the
-    /// documented cold start, not a failure.
-    /// </summary>
+    /// <summary>Readiness check that queries the database; the first call after Neon idles takes about a second.</summary>
     [Function("GetHealth")]
     public async Task<IActionResult> Run(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "health")] HttpRequest req,
