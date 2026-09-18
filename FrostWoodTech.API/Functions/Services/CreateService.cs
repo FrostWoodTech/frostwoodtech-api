@@ -21,7 +21,7 @@ public class CreateService
 
     [Function("CreateService")]
     public async Task<IActionResult> Run(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "admin/services")] HttpRequest req,
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "cms/admin/services")] HttpRequest req,
         CancellationToken cancellationToken)
     {
         HttpResponses.MarkNoStore(req);

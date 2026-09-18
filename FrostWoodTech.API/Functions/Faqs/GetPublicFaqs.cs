@@ -31,9 +31,7 @@ public class GetPublicFaqs
             return ProblemResults.SiteRequired();
         }
 
-        var category = QueryParameters.ReadString(req, "category");
-
-        var result = await _faqService.GetPublicFaqsAsync(site.Value, category, cancellationToken);
+        var result = await _faqService.GetPublicFaqsAsync(site.Value, cancellationToken);
 
         return HttpResponses.PublicJson(req, result);
     }

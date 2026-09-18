@@ -18,7 +18,7 @@ public class GetAdminReviewById
 
     [Function("GetAdminReviewById")]
     public async Task<IActionResult> Run(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "admin/reviews/{id:guid}")] HttpRequest req,
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "cms/admin/reviews/{id:guid}")] HttpRequest req,
         Guid id,
         CancellationToken cancellationToken)
     {

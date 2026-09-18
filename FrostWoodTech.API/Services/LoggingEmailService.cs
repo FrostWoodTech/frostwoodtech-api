@@ -7,17 +7,9 @@ using FrostWoodTech.API.Interfaces;
 
 namespace FrostWoodTech.API.Services;
 
-/// <summary>
-/// The default transport: it validates the message and writes it to the log instead of sending
-/// it. Local dev and CI get a working <see cref="IEmailService"/> with no account, no key and no
-/// network call, and a real provider inherits the same validation contract because the checks
-/// live before the send rather than inside it.
-/// </summary>
+/// <summary>Default transport: validates and logs the message instead of sending. For local dev and CI.</summary>
 public class LoggingEmailService : IEmailService
 {
-    /// <summary>Enough of the body to recognise the mail in a log, not enough to fill it.</summary>
-    private const int BodyPreviewLength = 200;
-
     private readonly EmailOptions _options;
     private readonly ILogger<LoggingEmailService> _logger;
 
@@ -39,11 +31,12 @@ public class LoggingEmailService : IEmailService
             return Task.FromResult(validation);
         }
 
+        // Logs full links, so never use this transport in a deployment.
         _logger.LogInformation(
-            "Email not sent (provider 'log'). To: {To}, Subject: {Subject}, Body: {BodyPreview}",
+            "Email not sent (provider 'log'). To: {To}, Subject: {Subject}\n{Body}",
             message.To,
             message.Subject,
-            Preview(message.TextBody ?? message.HtmlBody));
+            message.TextBody ?? message.HtmlBody);
 
         return Task.FromResult(ServiceResult<EmailSendResult>.Success(new EmailSendResult
         {
@@ -51,10 +44,6 @@ public class LoggingEmailService : IEmailService
         }));
     }
 
-    /// <summary>
-    /// Returns the failure to report, or null when the message is sendable. A misconfigured
-    /// deployment is a bad request the operator can act on, not a 500.
-    /// </summary>
     private ServiceResult<EmailSendResult>? Validate(EmailMessage message)
     {
         if (!_options.IsConfigured)
@@ -77,7 +66,4 @@ public class LoggingEmailService : IEmailService
             ? ServiceResult<EmailSendResult>.Validation("htmlBody is required.")
             : null;
     }
-
-    private static string Preview(string body) =>
-        body.Length <= BodyPreviewLength ? body : body[..BodyPreviewLength] + "…";
 }

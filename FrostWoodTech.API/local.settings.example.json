@@ -2,32 +2,52 @@
   "IsEncrypted": false,
   "Values": {
     "AzureWebJobsStorage": "<azure-web-jobs-storage>",
-    "FUNCTIONS_WORKER_RUNTIME": "<functions-worker-runtime>",
-    "Jwt__Signer": "<a-long-random-secret-at-least-32-chars>",
-    "Jwt__Issuer": "<jwt-issuer>",
-    "Jwt__Audience": "<jwt-audience>",
-    "Jwt__AccessTokenMinutes": "<jwt-access-token-minutes>",
-    "Jwt__RefreshTokenDays": "<jwt-refresh-token-days>",
-    "SuperAdmin__Email": "<super-admin-email>",
-    "SuperAdmin__Password": "<super-admin-password-at-least-8-chars>",
-    "SuperAdmin__FirstName": "<super-admin-first-name>",
-    "SuperAdmin__LastName": "<super-admin-last-name>",
-    "NeonS3__Endpoint": "<neon-s3-endpoint>",
-    "NeonS3__AccessKey": "<neon-s3-access-key>",
-    "NeonS3__SecretKey": "<neon-s3-secret-key>",
-    "NeonS3__Region": "<neon-s3-region>",
-    "NeonS3__BucketName": "<neon-s3-bucket-name>",
-    "NeonS3__BaseFolder": "<neon-s3-base-folder>",
-    "Google__ClientId": "<google-oauth-client-id>.apps.googleusercontent.com",
-    "Email__Provider": "<email-provider>",
-    "Email__FromAddress": "<no-reply@your-domain>",
-    "Email__FromName": "<email-from-name>",
-    "Email__ApiKey": "<provider-api-key>",
-    "Email__BaseUrl": "<email-base-url>",
-    "Docs__Enabled": "<docs-enabled>",
-    "Cors__AllowedOrigins__0": "<cors-allowed-origin-0>",
-    "Cors__AllowedOrigins__1": "<cors-allowed-origin-1>",
-    "Cors__AllowedOrigins__2": "<cors-allowed-origin-2>"
+    "FUNCTIONS_WORKER_RUNTIME": "<functions-worker-runtime>"
+  },
+  "Host": {
+    "CORS": "<comma-separated-cors-allowed-origins, must match Cors:AllowedOrigins below - only func.exe reads this, for local preflight handling>",
+    "CORSCredentials": true
+  },
+  "Jwt": {
+    "Signer": "<a-long-random-secret-at-least-32-chars>",
+    "Issuer": "<jwt-issuer>",
+    "Audience": "<jwt-audience>",
+    "AccessTokenMinutes": "<jwt-access-token-minutes>",
+    "RefreshTokenDays": "<jwt-refresh-token-days>"
+  },
+  "SuperAdmin": {
+    "Email": "<super-admin-email>",
+    "FirstName": "<super-admin-first-name>",
+    "LastName": "<super-admin-last-name>"
+  },
+  "NeonS3": {
+    "Endpoint": "<neon-s3-endpoint>",
+    "AccessKey": "<neon-s3-access-key>",
+    "SecretKey": "<neon-s3-secret-key>",
+    "Region": "<neon-s3-region>",
+    "BucketName": "<neon-s3-bucket-name>"
+  },
+  "Google": {
+    "ClientId": "<google-oauth-client-id>.apps.googleusercontent.com"
+  },
+  "Email": {
+    "Provider": "brevo",
+    "FromAddress": "<no-reply@your-domain>",
+    "FromName": "<email-from-name>",
+    "ApiKey": "<brevo-api-key>",
+    "BaseUrl": "<email-base-url>"
+  },
+  "Docs": {
+    "Enabled": "<docs-enabled>"
+  },
+  "Contact": {
+    "NotifyAddress": "<address for new contact-form submissions; falls back to SuperAdmin:Email>"
+  },
+  "ExchangeRate": {
+    "BaseUrl": "<optional; defaults to the free open.er-api.com endpoint, override only to point at a different FX provider>"
+  },
+  "Cors": {
+    "AllowedOrigins": "<comma-separated-cors-allowed-origins>"
   },
   "ConnectionStrings": {
     "Default": "<connection-string>"

@@ -7,10 +7,7 @@ namespace FrostWoodTech.API.Interfaces;
 
 public interface IProjectService
 {
-    /// <summary>
-    /// Public read: always scoped to one site and to published, non-deleted rows. There is no
-    /// overload that lets a caller skip those filters.
-    /// </summary>
+    /// <summary>Always filtered to one site and published, non-deleted rows.</summary>
     Task<PagedResult<ProjectResponse>> GetPublicProjectsAsync(
         Site site,
         string? tagSlug,
@@ -29,6 +26,7 @@ public interface IProjectService
         Site? site,
         bool? isPublished,
         string? search,
+        bool includeHidden,
         int page,
         int pageSize,
         CancellationToken cancellationToken);
@@ -44,16 +42,26 @@ public interface IProjectService
         UpdateProjectRequest request,
         CancellationToken cancellationToken);
 
-    /// <summary>Flips the draft flag on its own, stamping published_at the first time it goes live.</summary>
+    /// <summary>First publish stamps published_at and shows the project on both sites.</summary>
     Task<ServiceResult<AdminProjectResponse>> SetPublishedAsync(
         Guid id,
         SetPublishedRequest request,
         CancellationToken cancellationToken);
 
-    /// <summary>Soft delete.</summary>
     Task<ServiceResult<bool>> DeleteAsync(Guid id, CancellationToken cancellationToken);
 
-    /// <summary>Bulk sort_order update for one site.</summary>
+    Task<PagedResult<TrashedItemResponse>> GetTrashAsync(
+        string? search,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken);
+
+    /// <summary>404 unless the row is in the trash.</summary>
+    Task<ServiceResult<AdminProjectResponse>> RestoreAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <summary>Super admin only; stored files are deleted after the commit.</summary>
+    Task<ServiceResult<bool>> PurgeAsync(Guid id, CancellationToken cancellationToken);
+
     Task<ServiceResult<bool>> ReorderAsync(ReorderRequest request, CancellationToken cancellationToken);
 
     Task<ServiceResult<ProjectImageResponse>> AddImageAsync(
@@ -67,12 +75,9 @@ public interface IProjectService
         UpdateProjectImageRequest request,
         CancellationToken cancellationToken);
 
-    /// <summary>
-    /// Hard delete — image rows carry no soft-delete flag. The Neon Object Storage asset is left alone.
-    /// </summary>
+    /// <summary>Hard delete; also deletes the stored file.</summary>
     Task<ServiceResult<bool>> DeleteImageAsync(Guid projectId, Guid imageId, CancellationToken cancellationToken);
 
-    /// <summary>Bulk sort_order update for one project's gallery.</summary>
     Task<ServiceResult<bool>> ReorderImagesAsync(
         Guid projectId,
         ImageReorderRequest request,

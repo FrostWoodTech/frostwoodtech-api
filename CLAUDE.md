@@ -6,83 +6,89 @@ One headless CMS API + one database, powering **three** frontends:
 
 | Consumer | Content it reads |
 |---|---|
-| FrostWoodTech agency site (React) | Agency projects, articles, services, pricing, FAQs |
-| FrostWoodTech personal site (React) | Personal projects, articles, FAQs |
-| Admin SPA (React) | Everything, incl. drafts + user approvals |
+| Agency site (React) | Projects, products, articles, services, pricing, FAQs, reviews; posts contact + reviews |
+| Personal site (React) | Projects, products, articles, certificates, FAQs, reviews; posts contact + reviews |
+| Admin SPA (React) | Everything, incl. drafts, contact inbox and user approvals |
 
-No duplicated rows per site — every visible entity carries per-site visibility flags and the
-frontend asks for the site it wants. A project can appear on both sites at once.
+No duplicated rows per site — entities carry per-site visibility flags and the frontend asks for
+the site it wants. One row can appear on both sites.
 
 ## Stack
 
-.NET 10 **Azure Functions** (not ASP.NET Web API) · **PostgreSQL on Neon** via EF Core + Npgsql ·
-**Cloudinary** for media · custom **JWT** + **Google Sign-In** for admin auth.
+.NET 10 **Azure Functions** isolated worker (not ASP.NET Web API) · **PostgreSQL on Neon** via
+EF Core + Npgsql · **Neon Object Storage** (S3-compatible) for media · custom **JWT** +
+**Google Sign-In** for admin auth.
 
 ## Layering
 
 ```
-Azure Functions layer  →  Service layer  →  EF Core  →  Postgres
+Azure Functions  →  Service layer  →  EF Core  →  Postgres
 ```
 
-There is **no separate repository layer**. The service layer holds business logic *and* data
-access. This is deliberate — the project must stay readable for a junior developer. Do not
-propose adding repositories, CQRS, or a mediator.
+**No repository layer.** Services hold business logic *and* data access so a junior developer can
+follow a request end to end. Do not propose repositories, CQRS, or a mediator.
 
 ## Two API surfaces — keep them physically separate
 
-- **`/api/public/*`** — anonymous, read-only, cache-friendly. Returns only published,
-  non-deleted rows.
-- **`/api/admin/*`** — JWT required, full CRUD, returns drafts and metadata.
+- **`/api/public/*`** — anonymous, read-only (except `POST` reviews and contact), cacheable.
+  Published, non-deleted rows only.
+- **`/api/cms/admin/*`** — JWT required, full CRUD, drafts and metadata.
 
-Separate folders, separate response DTOs. A public DTO must never carry admin fields
-(internal notes, audit info, unpublished relations).
+Separate folders, separate DTOs. A public DTO never carries admin fields.
 
 ## Non-negotiables
 
-- **Never store image bytes in Postgres.** Store the Cloudinary `public_id` + dimensions + alt text.
+- **Never store file bytes in Postgres.** Store the storage `object_key`, URL, dimensions and alt text.
 - **Never let the client control `is_published` filtering.** Public endpoints filter server-side.
-- **`?site=` is required** on every public endpoint with site visibility. Missing site ⇒ `400`,
-  never "return everything". This is the guard that stops personal content leaking onto the
-  agency site.
-- All timestamps `timestamptz`, stored UTC.
-- Every content table gets `created_at`, `updated_at`, `is_deleted` (soft delete).
-- `alt_text` is required on every image — enforce in validation.
-- Secrets live in app settings / Key Vault, never in committed `local.settings.json`.
+- **`?site=` is required** on every public endpoint with site visibility. Missing ⇒ `400 site_required`,
+  never "return everything".
+- Timestamps are `timestamptz`, UTC.
+- Every content table has `created_at`, `updated_at`, `is_deleted` (soft delete).
+- `alt_text` is required on every image.
+- Secrets live in app settings / Key Vault, never in committed files. `local.settings*.json` is
+  gitignored and never published.
+- Never log connection strings or tokens.
 
 ## Conventions
 
-- snake_case tables/columns in Postgres, PascalCase entities in C#.
-- Slugs: generated from title, lowercase, hyphenated, uniqueness-checked, and **stable once
-  published** (changing one breaks live links).
-- Markdown stored raw; sanitize on render in React, not on write.
-- Soft delete everywhere; hard delete only via a super-admin-only endpoint.
-- Enums as C# enums mapped to Postgres native enums or text — **never int**, so migrations
-  stay readable.
+- snake_case in Postgres, PascalCase in C#.
+- Slugs: generated from the title, lowercase, hyphenated, unique (soft-deleted rows included),
+  never empty, and **stable once published**.
+- Markdown stored raw; sanitized on render in React.
+- Soft delete for content; child rows (images, pricing features) are hard-deleted.
+- Enums map to Postgres native enums — **never int**.
 - Lists return `{ items, page, pageSize, total }`.
-- Errors return RFC 7807 `application/problem+json` with a stable `code` string.
+- Errors are RFC 7807 `application/problem+json` with a stable `code`.
+- Comments: only facts the code can't show, one or two lines.
+- Migrations: generated with `dotnet ef` only, never hand-edited.
+
+## Tests
+
+`FrostWoodTech.Tests` — unit tests, service integration tests against a real Postgres container,
+and API guard tests (JWT middleware, `?site=` checks, route scan). Every bug fix gets a regression
+test. Docker must be running.
 
 ## Where the detail lives
 
-These load automatically when you touch the matching files — don't go read them preemptively:
+These load automatically when you touch matching files — don't read them preemptively:
 
 | Rule | Covers |
 |---|---|
-| `.claude/rules/schema.md` | Every table, column, index, enum |
-| `.claude/rules/api-surface.md` | Endpoint list, query params, caching |
-| `.claude/rules/services-layer.md` | Service layer shape, validation rules |
-| `.claude/rules/auth.md` | JWT + Google flow, user states, approval rules |
-| `.claude/rules/media.md` | Cloudinary signed-upload flow, folder convention |
-| `.claude/rules/functions-hosting.md` | DI, Neon pooling, migrations, cold start |
+| `.claude/rules/schema.md` | Tables, columns, indexes, enums |
+| `.claude/rules/api-surface.md` | Endpoints, query params, caching |
+| `.claude/rules/services-layer.md` | Service shape, validation rules |
+| `.claude/rules/auth.md` | JWT + Google flow, user states, rate limits |
+| `.claude/rules/media.md` | Presigned uploads, folders, deletes |
+| `.claude/rules/functions-hosting.md` | DI, Neon pooling, config, CI/CD |
 
-`docs/roadmap.md` is for humans — planned additions, not current state. Don't implement from it
-unless asked.
+`docs/roadmap.md` lists known gaps, not current state. Don't implement from it unless asked.
 
 ## Glossary
 
 | Term | Meaning |
 |---|---|
-| Site | `agency` or `personal` — the two public frontends |
+| Site | `agency` or `personal` |
 | Featured | Appears on that site's home page |
 | Combo pack | A `pricing_plan` with `service_id = null` |
-| Technology tag | `tags.is_technology = true`; has an icon and a category |
-| Category tag | `tags.is_technology = false`; e.g. Frontend, Backend, Agentic AI |
+| Technology tag | `tags.is_technology = true`; has a `technology_category` |
+| Category tag | `tags.is_technology = false`; e.g. Frontend, Backend |

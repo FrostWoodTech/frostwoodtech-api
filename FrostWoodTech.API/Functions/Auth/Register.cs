@@ -19,13 +19,9 @@ public class Register
         _users = users;
     }
 
-    /// <summary>
-    /// Anonymous by design — see the allow-list in <c>JwtAuthenticationMiddleware</c>. Creates a
-    /// <c>pending</c> account and deliberately returns no token: the super admin approves first.
-    /// </summary>
     [Function("Register")]
     public async Task<IActionResult> Run(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "admin/auth/register")] HttpRequest req,
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "cms/admin/auth/register")] HttpRequest req,
         CancellationToken cancellationToken)
     {
         HttpResponses.MarkNoStore(req);

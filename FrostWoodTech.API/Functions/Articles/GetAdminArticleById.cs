@@ -18,7 +18,7 @@ public class GetAdminArticleById
 
     [Function("GetAdminArticleById")]
     public async Task<IActionResult> Run(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "admin/articles/{id:guid}")] HttpRequest req,
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "cms/admin/articles/{id:guid}")] HttpRequest req,
         Guid id,
         CancellationToken cancellationToken)
     {

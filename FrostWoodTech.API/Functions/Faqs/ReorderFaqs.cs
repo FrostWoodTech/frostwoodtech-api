@@ -19,18 +19,17 @@ public class ReorderFaqs
         _faqService = faqService;
     }
 
-    /// <summary>Bulk sort_order update for one site, in a single save.</summary>
     [Function("ReorderFaqs")]
     public async Task<IActionResult> Run(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "admin/faqs/reorder")] HttpRequest req,
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "cms/admin/faqs/reorder")] HttpRequest req,
         CancellationToken cancellationToken)
     {
         HttpResponses.MarkNoStore(req);
 
-        ReorderRequest? body;
+        FaqReorderRequest? body;
         try
         {
-            body = await JsonSerializer.DeserializeAsync<ReorderRequest>(
+            body = await JsonSerializer.DeserializeAsync<FaqReorderRequest>(
                 req.Body,
                 JsonDefaults.Options,
                 cancellationToken);

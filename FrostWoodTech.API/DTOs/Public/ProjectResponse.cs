@@ -1,10 +1,6 @@
 namespace FrostWoodTech.API.DTOs.Public;
 
-/// <summary>
-/// What the two public frontends see. The site's own visibility flags are already resolved into
-/// <see cref="Featured"/> and <see cref="SortOrder"/> — the other site's flags, the draft state
-/// and the audit metadata never cross this boundary.
-/// </summary>
+/// <summary>Public shape: Featured and SortOrder are for the requested site; no admin fields.</summary>
 public sealed class ProjectResponse
 {
     public required Guid Id { get; init; }
@@ -15,10 +11,8 @@ public sealed class ProjectResponse
 
     public required int Year { get; init; }
 
-    /// <summary>Card / list blurb.</summary>
     public required string ShortDescription { get; init; }
 
-    /// <summary>Markdown — sanitised on render, not on write.</summary>
     public required string Description { get; init; }
 
     public string? WebsiteUrl { get; init; }
@@ -39,10 +33,8 @@ public sealed class ProjectResponse
 
     public string? SeoDescription { get; init; }
 
-    /// <summary>Featured on the requested site.</summary>
     public required bool Featured { get; init; }
 
-    /// <summary>Sort order for the requested site.</summary>
     public required int SortOrder { get; init; }
 
     public required IReadOnlyList<TagResponse> Tags { get; init; }

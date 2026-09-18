@@ -16,10 +16,9 @@ public class DeleteReview
         _reviewService = reviewService;
     }
 
-    /// <summary>Soft delete — hard delete stays a super-admin-only concern.</summary>
     [Function("DeleteReview")]
     public async Task<IActionResult> Run(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "admin/reviews/{id:guid}")] HttpRequest req,
+        [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "cms/admin/reviews/{id:guid}")] HttpRequest req,
         Guid id,
         CancellationToken cancellationToken)
     {

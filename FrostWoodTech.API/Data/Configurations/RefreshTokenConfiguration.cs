@@ -16,12 +16,11 @@ public class RefreshTokenConfiguration : IEntityTypeConfiguration<RefreshToken>
         builder.Property(t => t.UserId).HasColumnName("user_id");
         builder.Property(t => t.TokenHash).HasColumnName("token_hash").IsRequired();
         builder.Property(t => t.ExpiresAt).HasColumnName("expires_at");
-        // RefreshToken is not an AuditableEntity, so the DbContext loop does not map this for us.
+        // Not an AuditableEntity, so the DbContext loop doesn't map this.
         builder.Property(t => t.CreatedAt).HasColumnName("created_at");
         builder.Property(t => t.RevokedAt).HasColumnName("revoked_at");
         builder.Property(t => t.ReplacedByTokenId).HasColumnName("replaced_by_token_id");
 
-        // The hash is the lookup key on every refresh.
         builder.HasIndex(t => t.TokenHash).IsUnique();
         builder.HasIndex(t => t.UserId);
 

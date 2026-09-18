@@ -19,10 +19,9 @@ public class UpdateProject
         _projectService = projectService;
     }
 
-    /// <summary>A full replacement — every field is written as given, tags included.</summary>
     [Function("UpdateProject")]
     public async Task<IActionResult> Run(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "admin/projects/{id:guid}")] HttpRequest req,
+        [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "cms/admin/projects/{id:guid}")] HttpRequest req,
         Guid id,
         CancellationToken cancellationToken)
     {

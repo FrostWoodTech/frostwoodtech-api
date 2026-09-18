@@ -19,21 +19,20 @@ public class ReorderPricingPlans
         _pricing = pricing;
     }
 
-    /// <summary>Bulk sort_order update for one site.</summary>
     [Function("ReorderPricingPlans")]
     public async Task<IActionResult> Run(
         [HttpTrigger(
             AuthorizationLevel.Anonymous,
             "post",
-            Route = "admin/pricing-plans/reorder")] HttpRequest req,
+            Route = "cms/admin/pricing-plans/reorder")] HttpRequest req,
         CancellationToken cancellationToken)
     {
         HttpResponses.MarkNoStore(req);
 
-        ReorderRequest? body;
+        PricingReorderRequest? body;
         try
         {
-            body = await JsonSerializer.DeserializeAsync<ReorderRequest>(
+            body = await JsonSerializer.DeserializeAsync<PricingReorderRequest>(
                 req.Body,
                 JsonDefaults.Options,
                 cancellationToken);

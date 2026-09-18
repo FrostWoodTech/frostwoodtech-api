@@ -8,57 +8,49 @@ paths:
 
 # Media (Neon Object Storage)
 
-Image bytes never touch the API. The client uploads straight to Neon Object Storage (S3-compatible)
-using a presigned PUT URL the API generates.
+File bytes never touch the API. The admin SPA uploads straight to Neon Object Storage
+(S3-compatible) with a presigned PUT URL.
 
 ```
-Admin SPA → POST /api/admin/media/presigned-upload { target, slug?, objectKey? }
-          ← { uploadUrl, objectKey, expiresAt }
-Admin SPA → PUT direct to Neon Object Storage using uploadUrl
-Admin SPA → POST /api/admin/projects/{id}/images { objectKey, url, width, height, altText }
+POST /api/cms/admin/media/presigned-upload { target, slug?, objectKey? }
+  ← { uploadUrl, objectKey, publicUrl, expiresAt }      (15 min)
+PUT  uploadUrl   (browser → storage)
+POST /api/cms/admin/{projects|products}/{id}/images { objectKey, url, width, height, altText, isPrimary }
 ```
 
-The presigned-upload endpoint requires a valid admin JWT — an open bucket policy would let
-anyone fill the account.
-
-`IMediaService` (`NeonStorageService`) is the only place that talks to Neon Object Storage —
-an `AmazonS3Client` configured with `ServiceURL` pointed at Neon's endpoint and
-`ForcePathStyle = true` (Neon's S3-compatible API is path-style, not virtual-hosted-style).
+`IMediaService` (`NeonStorageService`) is the only code that talks to storage: an `AmazonS3Client`
+with `ServiceURL` = Neon's endpoint and `ForcePathStyle = true`.
 
 ## What the DB stores
 
-`object_key`, `url`, `width`, `height`, `alt_text`. Never per-size URLs — the frontends are
-responsible for whatever responsive delivery the bucket/CDN in front of it supports.
+`object_key`, `url`, `width`, `height`, `alt_text` — never bytes or per-size URLs. `alt_text` is
+required. Certificates also store `mime_type` (`application/pdf` or `image/*`); PDFs may omit
+dimensions.
 
-`alt_text` is required. Reject the request if it's missing or blank.
+Articles store `media://{objectKey}` tokens instead of URLs, in both `content_markdown` and
+`cover_image_key`. The public path resolves them server-side (`IArticleMediaResolver`); the admin SPA
+resolves them client-side using `GET /api/cms/admin/media/config` (`{ publicBaseUrl }`).
 
 ## Folder convention
 
 ```
-frostwoodtech/projects/{slug}/
-frostwoodtech/services/
-frostwoodtech/tags/
-frostwoodtech/articles/{slug}/
+{BaseFolder}/projects/{slug}/    {BaseFolder}/products/{slug}/    {BaseFolder}/articles/{slug}/
+{BaseFolder}/services/           {BaseFolder}/tags/               {BaseFolder}/certificates/
 ```
 
-The client never sends a folder path — it sends `target` (`projects | services | tags |
-articles`) plus a `slug` when the target is `projects` or `articles`, and the API builds the
-folder (used as the S3 key prefix). The slug is re-run through `SlugGenerator`, so nothing
-outside the base folder is reachable even with a stolen admin token. The root comes from
-`NeonS3__BaseFolder`.
+The client sends a `target`, never a folder. `slug` is required for projects, products and
+articles and is re-run through `SlugGenerator`, so nothing outside the base folder is reachable.
 
 ## Deletes
 
-Soft-deleting a row does not delete the object in storage. Hard delete also destroys the object
-by `object_key`, and must tolerate the object already being gone.
-
-The object delete runs **after** the row is committed, never before — and a failed delete is
-logged, not surfaced. Losing an orphan object is cheap; failing the delete because Neon Object
-Storage was unreachable is not. `project_images` rows are the one hard delete that exists today
-(see `ProjectService.DeleteImageAsync`).
+- Soft-deleting a row never deletes its file, so a restore keeps it.
+- Purging a row (super admin, from the trash) deletes every file it owns after the commit: project and
+  product images, a certificate file, a service's icon/hero/depth images, and an article's cover image plus
+  every `media://` key in its Markdown. Legacy `http(s)` cover URLs are skipped: nothing maps a URL back to a key.
+- Hard-deleting an image row, or replacing a certificate's file, deletes the object **after** the
+  row is committed. A failed delete is logged, never surfaced; a missing object counts as success.
 
 ## Config
 
-`NeonS3__Endpoint`, `NeonS3__AccessKey`, `NeonS3__SecretKey`, `NeonS3__Region`,
-`NeonS3__BucketName`, `NeonS3__BaseFolder` — bound to `NeonStorageOptions`. Secrets live in app
-settings / Key Vault, never in a committed `local.settings.json`.
+`NeonS3:Endpoint`, `AccessKey`, `SecretKey`, `Region`, `BucketName`, `BaseFolder` (default
+`frostwoodtech`), bound to `NeonStorageOptions`. Keys live in app settings / Key Vault.

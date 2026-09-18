@@ -7,11 +7,7 @@ using FrostWoodTech.API.Interfaces;
 
 namespace FrostWoodTech.API.Functions.Pricing;
 
-/// <summary>
-/// The general pricing page: plans that belong to no single service. Combo packs get their own
-/// route rather than being "the pricing list with serviceId left off" — an absent parameter
-/// silently changing the query is invisible in the URL.
-/// </summary>
+/// <summary>Own route rather than an omitted serviceId, so the query is visible in the URL.</summary>
 public class GetPublicComboPricingPlans
 {
     private readonly IPricingService _pricing;
@@ -26,21 +22,10 @@ public class GetPublicComboPricingPlans
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "public/pricing/combos")] HttpRequest req,
         CancellationToken cancellationToken)
     {
-        if (!QueryParameters.TryReadSite(req, out var site))
-        {
-            return ProblemResults.BadRequest("validation_failed", "Unknown site.");
-        }
-
-        if (site is null)
-        {
-            return ProblemResults.SiteRequired();
-        }
-
         var featured = QueryParameters.ReadBool(req, "featured");
         var (page, pageSize) = QueryParameters.ReadPaging(req);
 
         var result = await _pricing.GetPublicComboPlansAsync(
-            site.Value,
             featured,
             page,
             pageSize,

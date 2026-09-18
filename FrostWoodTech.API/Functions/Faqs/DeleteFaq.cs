@@ -16,10 +16,9 @@ public class DeleteFaq
         _faqService = faqService;
     }
 
-    /// <summary>Soft delete — hard delete stays a super-admin-only concern.</summary>
     [Function("DeleteFaq")]
     public async Task<IActionResult> Run(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "admin/faqs/{id:guid}")] HttpRequest req,
+        [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "cms/admin/faqs/{id:guid}")] HttpRequest req,
         Guid id,
         CancellationToken cancellationToken)
     {

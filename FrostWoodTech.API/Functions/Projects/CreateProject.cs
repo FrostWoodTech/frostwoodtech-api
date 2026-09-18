@@ -21,7 +21,7 @@ public class CreateProject
 
     [Function("CreateProject")]
     public async Task<IActionResult> Run(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "admin/projects")] HttpRequest req,
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "cms/admin/projects")] HttpRequest req,
         CancellationToken cancellationToken)
     {
         HttpResponses.MarkNoStore(req);

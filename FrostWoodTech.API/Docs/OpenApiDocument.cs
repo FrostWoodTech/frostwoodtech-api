@@ -2,11 +2,7 @@ using System.Reflection;
 
 namespace FrostWoodTech.API.Docs;
 
-/// <summary>
-/// The hand-authored <c>openapi.yaml</c>, embedded in the assembly and read once. There is no
-/// generator behind it: three frontends need a contract, and a checked-in file keeps that
-/// contract reviewable in a pull request instead of scattered across attributes.
-/// </summary>
+/// <summary>The hand-written openapi.yaml embedded in the assembly.</summary>
 public static class OpenApiDocument
 {
     private const string ResourceName = "FrostWoodTech.API.Docs.openapi.yaml";
@@ -15,7 +11,6 @@ public static class OpenApiDocument
 
     public const string ContentType = "application/yaml";
 
-    /// <summary>The spec as YAML.</summary>
     public static string Yaml => Document.Value;
 
     private static string Read()

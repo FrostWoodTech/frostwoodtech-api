@@ -7,10 +7,7 @@ namespace FrostWoodTech.API.Interfaces;
 
 public interface IArticleService
 {
-    /// <summary>
-    /// Public read: always scoped to one site and to published, non-deleted rows. There is no
-    /// overload that lets a caller skip those filters.
-    /// </summary>
+    /// <summary>Always filtered to one site and published, non-deleted rows.</summary>
     Task<PagedResult<ArticleResponse>> GetPublicArticlesAsync(
         Site site,
         string? tagSlug,
@@ -28,6 +25,7 @@ public interface IArticleService
         Site? site,
         bool? isPublished,
         string? search,
+        bool includeHidden,
         int page,
         int pageSize,
         CancellationToken cancellationToken);
@@ -43,18 +41,25 @@ public interface IArticleService
         UpdateArticleRequest request,
         CancellationToken cancellationToken);
 
-    /// <summary>
-    /// Flips the draft flag on its own. Unlike projects and services there is no published_at to
-    /// stamp — an article's PublishedDate is the author's own date, not the go-live moment.
-    /// </summary>
+    /// <summary>Stamps published_at on first publish only.</summary>
     Task<ServiceResult<AdminArticleResponse>> SetPublishedAsync(
         Guid id,
         SetPublishedRequest request,
         CancellationToken cancellationToken);
 
-    /// <summary>Soft delete.</summary>
     Task<ServiceResult<bool>> DeleteAsync(Guid id, CancellationToken cancellationToken);
 
-    /// <summary>Bulk sort_order update for one site.</summary>
+    Task<PagedResult<TrashedItemResponse>> GetTrashAsync(
+        string? search,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken);
+
+    /// <summary>404 unless the row is in the trash.</summary>
+    Task<ServiceResult<AdminArticleResponse>> RestoreAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <summary>Super admin only; stored files are deleted after the commit.</summary>
+    Task<ServiceResult<bool>> PurgeAsync(Guid id, CancellationToken cancellationToken);
+
     Task<ServiceResult<bool>> ReorderAsync(ReorderRequest request, CancellationToken cancellationToken);
 }

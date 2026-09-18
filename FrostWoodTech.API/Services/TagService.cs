@@ -1,8 +1,8 @@
 using System.Linq.Expressions;
-using System.Text.RegularExpressions;
 
 using Microsoft.EntityFrameworkCore;
 
+using FrostWoodTech.API.Auth;
 using FrostWoodTech.API.Common;
 using FrostWoodTech.API.Data;
 using FrostWoodTech.API.DTOs.Admin;
@@ -13,13 +13,15 @@ using FrostWoodTech.API.Interfaces;
 
 namespace FrostWoodTech.API.Services;
 
-public partial class TagService : ITagService
+public class TagService : ITagService
 {
     private readonly FrostWoodTechDbContext _db;
+    private readonly CurrentUser _currentUser;
 
-    public TagService(FrostWoodTechDbContext db)
+    public TagService(FrostWoodTechDbContext db, CurrentUser currentUser)
     {
         _db = db;
+        _currentUser = currentUser;
     }
 
     public async Task<IReadOnlyList<TagResponse>> GetPublicTagsAsync(
@@ -27,20 +29,16 @@ public partial class TagService : ITagService
         TechCategory? category,
         CancellationToken cancellationToken)
     {
-        // Not paged: tags are a small lookup set the frontend groups client-side.
+        // Not paged: a small lookup set grouped client-side.
         return await FilterTags(_db.Tags.AsNoTracking(), isTechnology, category)
-            .OrderBy(t => t.SortOrder)
-            .ThenBy(t => t.Name)
+            .OrderBy(t => t.Name)
             .Select(t => new TagResponse
             {
                 Id = t.Id,
                 Name = t.Name,
                 Slug = t.Slug,
                 IsTechnology = t.IsTechnology,
-                TechnologyCategory = t.TechnologyCategory,
-                IconUrl = t.IconUrl,
-                ColorHex = t.ColorHex,
-                SortOrder = t.SortOrder
+                TechnologyCategory = t.TechnologyCategory
             })
             .ToListAsync(cancellationToken);
     }
@@ -63,8 +61,7 @@ public partial class TagService : ITagService
         var total = await query.CountAsync(cancellationToken);
 
         var items = await query
-            .OrderBy(t => t.SortOrder)
-            .ThenBy(t => t.Name)
+            .OrderBy(t => t.Name)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .Select(AdminProjection)
@@ -96,13 +93,7 @@ public partial class TagService : ITagService
     {
         var name = request.Name?.Trim();
 
-        var validationError = Validate(
-            name,
-            request.IsTechnology,
-            request.TechnologyCategory,
-            request.IconObjectKey,
-            request.IconUrl,
-            request.ColorHex);
+        var validationError = Validate(name, request.IsTechnology, request.TechnologyCategory);
 
         if (validationError is not null)
         {
@@ -110,6 +101,11 @@ public partial class TagService : ITagService
         }
 
         var slug = ResolveSlug(request.Slug, name!);
+        if (slug.Length == 0)
+        {
+            return ServiceResult<AdminTagResponse>.Validation("A slug could not be generated; provide one with letters or digits.");
+        }
+
         if (await SlugExistsAsync(slug, excludingId: null, cancellationToken))
         {
             return SlugTaken(slug);
@@ -121,11 +117,7 @@ public partial class TagService : ITagService
             Name = name!,
             Slug = slug,
             IsTechnology = request.IsTechnology,
-            TechnologyCategory = request.TechnologyCategory,
-            IconObjectKey = Blank(request.IconObjectKey),
-            IconUrl = Blank(request.IconUrl),
-            ColorHex = Blank(request.ColorHex)?.ToLowerInvariant(),
-            SortOrder = request.SortOrder
+            TechnologyCategory = request.TechnologyCategory
         };
 
         _db.Tags.Add(tag);
@@ -147,13 +139,7 @@ public partial class TagService : ITagService
 
         var name = request.Name?.Trim();
 
-        var validationError = Validate(
-            name,
-            request.IsTechnology,
-            request.TechnologyCategory,
-            request.IconObjectKey,
-            request.IconUrl,
-            request.ColorHex);
+        var validationError = Validate(name, request.IsTechnology, request.TechnologyCategory);
 
         if (validationError is not null)
         {
@@ -161,6 +147,11 @@ public partial class TagService : ITagService
         }
 
         var slug = ResolveSlug(request.Slug, name!);
+        if (slug.Length == 0)
+        {
+            return ServiceResult<AdminTagResponse>.Validation("A slug could not be generated; provide one with letters or digits.");
+        }
+
         if (await SlugExistsAsync(slug, excludingId: id, cancellationToken))
         {
             return SlugTaken(slug);
@@ -170,10 +161,6 @@ public partial class TagService : ITagService
         tag.Slug = slug;
         tag.IsTechnology = request.IsTechnology;
         tag.TechnologyCategory = request.TechnologyCategory;
-        tag.IconObjectKey = Blank(request.IconObjectKey);
-        tag.IconUrl = Blank(request.IconUrl);
-        tag.ColorHex = Blank(request.ColorHex)?.ToLowerInvariant();
-        tag.SortOrder = request.SortOrder;
 
         await _db.SaveChangesAsync(cancellationToken);
 
@@ -188,8 +175,7 @@ public partial class TagService : ITagService
             return ServiceResult<bool>.NotFound("not_found", $"No tag with id {id}.");
         }
 
-        // Counted through Projects/Articles so the global soft-delete filter applies — a tag held
-        // only by deleted content is free to go.
+        // Counted through Projects/Articles so soft-deleted content doesn't block deletion.
         var projectCount = await _db.Projects
             .CountAsync(p => p.ProjectTags.Any(pt => pt.TagId == id), cancellationToken);
 
@@ -205,6 +191,92 @@ public partial class TagService : ITagService
         }
 
         tag.IsDeleted = true;
+        tag.DeletedBy = _currentUser.UserId;
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return ServiceResult<bool>.Success(true);
+    }
+
+    public async Task<PagedResult<TrashedItemResponse>> GetTrashAsync(
+        string? search,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        var query = _db.Tags.Trashed().AsNoTracking();
+
+        if (search is not null)
+        {
+            query = query.Where(t => EF.Functions.ILike(t.Name, $"%{search}%"));
+        }
+
+        var total = await query.CountAsync(cancellationToken);
+
+        var items = await query
+            .OrderByDescending(t => t.DeletedAt)
+            .ThenByDescending(t => t.UpdatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(t => new TrashedItemResponse
+            {
+                Id = t.Id,
+                Label = t.Name,
+                DeletedAt = t.DeletedAt,
+                DeletedBy = t.DeletedBy,
+                DeletedByEmail = _db.Users.Where(u => u.Id == t.DeletedBy).Select(u => u.Email).FirstOrDefault()
+            })
+            .ToListAsync(cancellationToken);
+
+        return new PagedResult<TrashedItemResponse>
+        {
+            Items = items,
+            Page = page,
+            PageSize = pageSize,
+            Total = total
+        };
+    }
+
+    public async Task<ServiceResult<AdminTagResponse>> RestoreAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var tag = await _db.Tags.FindTrashedAsync(id, cancellationToken);
+        if (tag is null)
+        {
+            return ServiceResult<AdminTagResponse>.NotFound("not_found", $"No deleted tag with id {id}.");
+        }
+
+        tag.IsDeleted = false;
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return await GetByIdAsync(id, cancellationToken);
+    }
+
+    public async Task<ServiceResult<bool>> PurgeAsync(Guid id, CancellationToken cancellationToken)
+    {
+        if (_currentUser.RequireSuperAdmin<bool>() is { } denied)
+        {
+            return denied;
+        }
+
+        var tag = await _db.Tags.FindTrashedAsync(id, cancellationToken);
+        if (tag is null)
+        {
+            return ServiceResult<bool>.NotFound("not_found", $"No deleted tag with id {id}.");
+        }
+
+        // Unlike the soft delete, deleted content counts: its links are Restrict, and dropping one would
+        // strip the tag on restore.
+        var projectCount = await _db.ProjectTags.CountAsync(pt => pt.TagId == id, cancellationToken);
+        var articleCount = await _db.ArticleTags.CountAsync(at => at.TagId == id, cancellationToken);
+
+        if (projectCount > 0 || articleCount > 0)
+        {
+            return ServiceResult<bool>.Conflict(
+                "tag_in_use",
+                $"Tag '{tag.Name}' is still linked to {projectCount} project(s) and {articleCount} article(s), "
+                + "including deleted ones. Remove it from them before deleting permanently.");
+        }
+
+        _db.Tags.Remove(tag);
         await _db.SaveChangesAsync(cancellationToken);
 
         return ServiceResult<bool>.Success(true);
@@ -225,14 +297,7 @@ public partial class TagService : ITagService
         return query;
     }
 
-    /// <summary>Null when the tag is valid, otherwise the message to hand back.</summary>
-    private static string? Validate(
-        string? name,
-        bool isTechnology,
-        TechCategory? technologyCategory,
-        string? iconObjectKey,
-        string? iconUrl,
-        string? colorHex)
+    private static string? Validate(string? name, bool isTechnology, TechCategory? technologyCategory)
     {
         if (string.IsNullOrWhiteSpace(name))
         {
@@ -245,28 +310,10 @@ public partial class TagService : ITagService
             {
                 return "technologyCategory is required when isTechnology is true.";
             }
-
-            if (string.IsNullOrWhiteSpace(iconObjectKey))
-            {
-                return "iconObjectKey is required when isTechnology is true.";
-            }
         }
-        else
+        else if (technologyCategory is not null)
         {
-            if (technologyCategory is not null)
-            {
-                return "technologyCategory must be null when isTechnology is false.";
-            }
-
-            if (!string.IsNullOrWhiteSpace(iconObjectKey) || !string.IsNullOrWhiteSpace(iconUrl))
-            {
-                return "Icon fields must be null when isTechnology is false.";
-            }
-        }
-
-        if (!string.IsNullOrWhiteSpace(colorHex) && !HexColour().IsMatch(colorHex))
-        {
-            return "colorHex must look like #rrggbb.";
+            return "technologyCategory must be null when isTechnology is false.";
         }
 
         return null;
@@ -276,7 +323,7 @@ public partial class TagService : ITagService
         SlugGenerator.Generate(string.IsNullOrWhiteSpace(requestedSlug) ? name : requestedSlug);
 
     private Task<bool> SlugExistsAsync(string slug, Guid? excludingId, CancellationToken cancellationToken) =>
-        _db.Tags.AnyAsync(t => t.Slug == slug && (excludingId == null || t.Id != excludingId), cancellationToken);
+        _db.Tags.IgnoreQueryFilters().AnyAsync(t => t.Slug == slug && (excludingId == null || t.Id != excludingId), cancellationToken);
 
     private static ServiceResult<AdminTagResponse> NotFound(Guid id) =>
         ServiceResult<AdminTagResponse>.NotFound("not_found", $"No tag with id {id}.");
@@ -284,9 +331,6 @@ public partial class TagService : ITagService
     private static ServiceResult<AdminTagResponse> SlugTaken(string slug) =>
         ServiceResult<AdminTagResponse>.Conflict("slug_taken", $"Slug '{slug}' is already in use.");
 
-    private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
-
-    /// <summary>Projected inside the query so the SQL stays narrow.</summary>
     private static readonly Expression<Func<Tag, AdminTagResponse>> AdminProjection = tag => new AdminTagResponse
     {
         Id = tag.Id,
@@ -294,17 +338,9 @@ public partial class TagService : ITagService
         Slug = tag.Slug,
         IsTechnology = tag.IsTechnology,
         TechnologyCategory = tag.TechnologyCategory,
-        IconObjectKey = tag.IconObjectKey,
-        IconUrl = tag.IconUrl,
-        ColorHex = tag.ColorHex,
-        SortOrder = tag.SortOrder,
         CreatedAt = tag.CreatedAt,
         UpdatedAt = tag.UpdatedAt
     };
 
-    /// <summary>The same shape for an entity already in memory after a write.</summary>
     private static readonly Func<Tag, AdminTagResponse> ToAdminResponse = AdminProjection.Compile();
-
-    [GeneratedRegex("^#[0-9a-fA-F]{6}$")]
-    private static partial Regex HexColour();
 }

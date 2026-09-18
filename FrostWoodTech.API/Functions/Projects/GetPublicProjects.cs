@@ -33,7 +33,7 @@ public class GetPublicProjects
 
         var tagSlug = QueryParameters.ReadString(req, "tag");
 
-        // The slug of a category tag — technology tags are filtered with ?tag= instead.
+        // A category tag slug; technology tags use ?tag=.
         var categorySlug = QueryParameters.ReadString(req, "category");
         var featured = QueryParameters.ReadBool(req, "featured");
         var (page, pageSize) = QueryParameters.ReadPaging(req);

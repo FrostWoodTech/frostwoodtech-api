@@ -6,10 +6,6 @@ using FrostWoodTech.API.Services;
 
 namespace FrostWoodTech.Tests;
 
-/// <summary>
-/// The logging transport sends nothing, so what is worth testing is the contract a real provider
-/// will inherit: a message is validated before anyone tries to deliver it.
-/// </summary>
 public class EmailTests
 {
     [Fact]

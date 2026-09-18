@@ -5,16 +5,9 @@ using FrostWoodTech.API.Enums;
 
 namespace FrostWoodTech.API.Interfaces;
 
-/// <summary>
-/// The <c>services</c> aggregate — a service offering and its feature bullets. Named
-/// <c>ServiceCatalog</c> so it does not read as "the service service".
-/// </summary>
 public interface IServiceCatalogService
 {
-    /// <summary>
-    /// Public read: always scoped to one site and to published, non-deleted rows. There is no
-    /// overload that lets a caller skip those filters.
-    /// </summary>
+    /// <summary>Always filtered to one site and published, non-deleted rows.</summary>
     Task<PagedResult<ServiceResponse>> GetPublicServicesAsync(
         Site site,
         bool? featured,
@@ -31,6 +24,7 @@ public interface IServiceCatalogService
         Site? site,
         bool? isPublished,
         string? search,
+        bool includeHidden,
         int page,
         int pageSize,
         CancellationToken cancellationToken);
@@ -46,38 +40,25 @@ public interface IServiceCatalogService
         UpdateServiceRequest request,
         CancellationToken cancellationToken);
 
-    /// <summary>Flips the draft flag on its own, stamping published_at the first time it goes live.</summary>
+    /// <summary>First publish stamps published_at and shows the service on both sites.</summary>
     Task<ServiceResult<AdminServiceResponse>> SetPublishedAsync(
         Guid id,
         SetPublishedRequest request,
         CancellationToken cancellationToken);
 
-    /// <summary>Soft delete.</summary>
     Task<ServiceResult<bool>> DeleteAsync(Guid id, CancellationToken cancellationToken);
 
-    /// <summary>Bulk sort_order update for one site.</summary>
+    Task<PagedResult<TrashedItemResponse>> GetTrashAsync(
+        string? search,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken);
+
+    /// <summary>404 unless the row is in the trash.</summary>
+    Task<ServiceResult<AdminServiceResponse>> RestoreAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <summary>Super admin only; stored files are deleted after the commit.</summary>
+    Task<ServiceResult<bool>> PurgeAsync(Guid id, CancellationToken cancellationToken);
+
     Task<ServiceResult<bool>> ReorderAsync(ReorderRequest request, CancellationToken cancellationToken);
-
-    Task<ServiceResult<ServiceFeatureResponse>> AddFeatureAsync(
-        Guid serviceId,
-        AddServiceFeatureRequest request,
-        CancellationToken cancellationToken);
-
-    Task<ServiceResult<ServiceFeatureResponse>> UpdateFeatureAsync(
-        Guid serviceId,
-        Guid featureId,
-        UpdateServiceFeatureRequest request,
-        CancellationToken cancellationToken);
-
-    /// <summary>Hard delete — feature rows carry no soft-delete flag.</summary>
-    Task<ServiceResult<bool>> DeleteFeatureAsync(
-        Guid serviceId,
-        Guid featureId,
-        CancellationToken cancellationToken);
-
-    /// <summary>Bulk sort_order update for one service's feature list.</summary>
-    Task<ServiceResult<bool>> ReorderFeaturesAsync(
-        Guid serviceId,
-        FeatureReorderRequest request,
-        CancellationToken cancellationToken);
 }

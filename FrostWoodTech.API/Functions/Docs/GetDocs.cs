@@ -11,11 +11,7 @@ namespace FrostWoodTech.API.Functions.Docs;
 
 public class GetDocs
 {
-    /// <summary>
-    /// Scalar renders the spec client-side, so the page itself is this shell and nothing more.
-    /// The spec URL is absolute because <c>host.json</c> sets no <c>routePrefix</c> — the default
-    /// <c>api/</c> applies. Change one and you must change the other.
-    /// </summary>
+    /// <summary>Absolute URL because host.json sets no routePrefix; keep them in sync.</summary>
     private const string Template = """
         <!doctype html>
         <html lang="en">
@@ -38,11 +34,7 @@ public class GetDocs
         _options = options.Value;
     }
 
-    /// <summary>
-    /// Browsable API reference for the three frontends. Anonymous, and gated on the same
-    /// <c>Docs__Enabled</c> switch as the spec — a browser tab never carries a bearer token, so
-    /// the setting is what keeps this off a production deployment.
-    /// </summary>
+    /// <summary>Gated on Docs__Enabled, like the spec.</summary>
     [Function("GetDocs")]
     public IActionResult Run(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "docs")] HttpRequest req)

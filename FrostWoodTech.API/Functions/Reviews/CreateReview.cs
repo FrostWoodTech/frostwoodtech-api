@@ -10,7 +10,6 @@ using FrostWoodTech.API.Interfaces;
 
 namespace FrostWoodTech.API.Functions.Reviews;
 
-/// <summary>For an admin manually adding a testimonial collected elsewhere.</summary>
 public class CreateReview
 {
     private readonly IReviewService _reviewService;
@@ -22,7 +21,7 @@ public class CreateReview
 
     [Function("CreateReview")]
     public async Task<IActionResult> Run(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "admin/reviews")] HttpRequest req,
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "cms/admin/reviews")] HttpRequest req,
         CancellationToken cancellationToken)
     {
         HttpResponses.MarkNoStore(req);

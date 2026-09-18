@@ -16,13 +16,9 @@ public class DeleteTag
         _tagService = tagService;
     }
 
-    /// <summary>
-    /// Soft delete. Refused with <c>tag_in_use</c> while any project or article still carries
-    /// the tag — hard delete stays a super-admin-only concern.
-    /// </summary>
     [Function("DeleteTag")]
     public async Task<IActionResult> Run(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "admin/tags/{id:guid}")] HttpRequest req,
+        [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "cms/admin/tags/{id:guid}")] HttpRequest req,
         Guid id,
         CancellationToken cancellationToken)
     {

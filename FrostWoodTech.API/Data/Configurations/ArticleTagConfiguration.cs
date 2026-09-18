@@ -20,7 +20,6 @@ public class ArticleTagConfiguration : IEntityTypeConfiguration<ArticleTag>
             .HasForeignKey(at => at.ArticleId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        // Restrict, not cascade: a tag still in use must not be removable.
         builder.HasOne(at => at.Tag)
             .WithMany(t => t.ArticleTags)
             .HasForeignKey(at => at.TagId)

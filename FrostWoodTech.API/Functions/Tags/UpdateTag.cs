@@ -21,7 +21,7 @@ public class UpdateTag
 
     [Function("UpdateTag")]
     public async Task<IActionResult> Run(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "admin/tags/{id:guid}")] HttpRequest req,
+        [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "cms/admin/tags/{id:guid}")] HttpRequest req,
         Guid id,
         CancellationToken cancellationToken)
     {

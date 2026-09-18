@@ -19,13 +19,9 @@ public class CreatePresignedUpload
         _mediaService = mediaService;
     }
 
-    /// <summary>
-    /// Step one of the upload flow: hands the admin SPA a presigned PUT URL so it can upload the
-    /// file straight to Neon Object Storage. Admin-only by virtue of the route.
-    /// </summary>
     [Function("CreatePresignedUpload")]
     public async Task<IActionResult> Run(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "admin/media/presigned-upload")] HttpRequest req,
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "cms/admin/media/presigned-upload")] HttpRequest req,
         CancellationToken cancellationToken)
     {
         HttpResponses.MarkNoStore(req);

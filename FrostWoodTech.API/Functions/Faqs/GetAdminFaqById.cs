@@ -18,7 +18,7 @@ public class GetAdminFaqById
 
     [Function("GetAdminFaqById")]
     public async Task<IActionResult> Run(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "admin/faqs/{id:guid}")] HttpRequest req,
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "cms/admin/faqs/{id:guid}")] HttpRequest req,
         Guid id,
         CancellationToken cancellationToken)
     {

@@ -19,16 +19,12 @@ public class SetPricingPlanPublished
         _pricing = pricing;
     }
 
-    /// <summary>
-    /// Flips the draft flag on its own so the admin SPA can take a plan live without resubmitting
-    /// the whole form. A pricing plan has no published_at, so nothing is stamped.
-    /// </summary>
     [Function("SetPricingPlanPublished")]
     public async Task<IActionResult> Run(
         [HttpTrigger(
             AuthorizationLevel.Anonymous,
             "post",
-            Route = "admin/pricing-plans/{id:guid}/publish")] HttpRequest req,
+            Route = "cms/admin/pricing-plans/{id:guid}/publish")] HttpRequest req,
         Guid id,
         CancellationToken cancellationToken)
     {

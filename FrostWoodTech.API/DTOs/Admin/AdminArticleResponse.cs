@@ -1,6 +1,5 @@
 namespace FrostWoodTech.API.DTOs.Admin;
 
-/// <summary>Admin view: both sites' visibility, the draft flag and audit metadata.</summary>
 public sealed class AdminArticleResponse
 {
     public required Guid Id { get; init; }
@@ -11,13 +10,11 @@ public sealed class AdminArticleResponse
 
     public string? Slug { get; init; }
 
-    public required DateOnly PublishedDate { get; init; }
-
-    public string? MediumUrl { get; init; }
+    public DateTimeOffset? PublishedAt { get; init; }
 
     public string? CoverImageKey { get; init; }
 
-    /// <summary>Raw Markdown, <c>media://</c> tokens unresolved — this is what the editor edits.</summary>
+    /// <summary>Raw Markdown with media:// tokens unresolved, for the editor.</summary>
     public string? ContentMarkdown { get; init; }
 
     public required bool IsPublished { get; init; }

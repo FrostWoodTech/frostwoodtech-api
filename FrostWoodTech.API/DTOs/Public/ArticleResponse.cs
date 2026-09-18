@@ -1,10 +1,6 @@
 namespace FrostWoodTech.API.DTOs.Public;
 
-/// <summary>
-/// What the two public frontends see. The site's own visibility flags are already resolved into
-/// <see cref="Featured"/> and <see cref="SortOrder"/> — the other site's flags, the draft state
-/// and the audit metadata never cross this boundary.
-/// </summary>
+/// <summary>Public shape: Featured and SortOrder are for the requested site; no admin fields.</summary>
 public sealed record ArticleResponse
 {
     public required Guid Id { get; init; }
@@ -15,23 +11,18 @@ public sealed record ArticleResponse
 
     public string? Slug { get; init; }
 
-    public required DateOnly PublishedDate { get; init; }
+    public DateTimeOffset? PublishedAt { get; init; }
 
-    public string? MediumUrl { get; init; }
+    /// <summary>Fallback date when PublishedAt is null.</summary>
+    public required DateTimeOffset UpdatedAt { get; init; }
 
-    /// <summary>Neon object key — the frontend builds the delivery URL.</summary>
     public string? CoverImageKey { get; init; }
 
-    /// <summary>
-    /// Markdown body with every <c>media://...</c> reference already resolved to a real URL —
-    /// ready to hand to a Markdown renderer as-is.
-    /// </summary>
+    /// <summary>Markdown with media:// tokens already resolved to URLs.</summary>
     public string? ContentMarkdown { get; init; }
 
-    /// <summary>Featured on the requested site.</summary>
     public required bool Featured { get; init; }
 
-    /// <summary>Sort order for the requested site.</summary>
     public required int SortOrder { get; init; }
 
     public required IReadOnlyList<TagResponse> Tags { get; init; }

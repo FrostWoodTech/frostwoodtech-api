@@ -5,9 +5,16 @@
 
 # Azure Functions
 local.settings.json
+local.settings.Development.json
+local.settings.Production.json
+local.settings.Testing.json
 
 # Environment variables
 .env
+
+# Optional future environments
+local.settings.*.json
+!local.settings.example.json
 
 # Azurite
 __blobstorage__/

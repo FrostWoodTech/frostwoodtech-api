@@ -7,14 +7,7 @@ using FrostWoodTech.API.Common;
 
 namespace FrostWoodTech.API.Middleware;
 
-/// <summary>
-/// The backstop that keeps the RFC 7807 contract honest. Functions handle the failures they can
-/// name — a bad body, a missing row — but an unexpected throw (a Neon timeout, a Neon Object Storage
-/// call that fell over) would otherwise reach the host and come back as a bare 500 with no body,
-/// which the frontends cannot switch on.
-///
-/// Registered first so it wraps the auth middleware as well as the functions themselves.
-/// </summary>
+/// <summary>Turns unhandled exceptions into a generic problem+json 500.</summary>
 public sealed class ExceptionHandlingMiddleware : IFunctionsWorkerMiddleware
 {
     private readonly ILogger<ExceptionHandlingMiddleware> _logger;
@@ -32,7 +25,6 @@ public sealed class ExceptionHandlingMiddleware : IFunctionsWorkerMiddleware
         }
         catch (OperationCanceledException) when (context.CancellationToken.IsCancellationRequested)
         {
-            // The caller hung up. Nothing failed and there is nobody left to answer.
             _logger.LogInformation(
                 "{FunctionName} was cancelled by the caller.",
                 context.FunctionDefinition.Name);
@@ -48,18 +40,16 @@ public sealed class ExceptionHandlingMiddleware : IFunctionsWorkerMiddleware
             var httpContext = context.GetHttpContext();
             if (httpContext is null)
             {
-                // Not an HTTP trigger — there is no problem+json to write, so let the host see it.
+                // Not an HTTP trigger: let the host handle it.
                 throw;
             }
 
             if (httpContext.Response.HasStarted)
             {
-                // Too late to replace the body; the log above is the only useful record.
                 throw;
             }
 
-            // The detail is deliberately generic: an exception message can carry a connection
-            // string or a row's contents. The invocation id is what ties this to the log entry.
+            // Generic on purpose: exception messages can leak secrets. The invocation id links to the log.
             await ProblemResults.WriteAsync(
                 httpContext.Response,
                 StatusCodes.Status500InternalServerError,

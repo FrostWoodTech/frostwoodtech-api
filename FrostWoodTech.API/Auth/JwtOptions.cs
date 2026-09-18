@@ -1,19 +1,14 @@
 namespace FrostWoodTech.API.Auth;
 
-/// <summary>Bound from the <c>Jwt</c> configuration section (<c>Jwt__Signer</c> and friends).</summary>
 public sealed class JwtOptions
 {
-    /// <summary>HMAC signing key. Lives in app settings / Key Vault, never in a committed file.</summary>
     public string Signer { get; set; } = string.Empty;
 
     public string Issuer { get; set; } = "frostwoodtech-api";
 
     public string Audience { get; set; } = "frostwoodtech-admin";
 
-    /// <summary>
-    /// Short on purpose: this is the window in which a disabled or deleted user can still act,
-    /// because a JWT cannot be recalled once issued. The SPA renews silently via the refresh token.
-    /// </summary>
+    /// <summary>Short on purpose: a JWT can't be recalled, so this bounds a revoked user's access.</summary>
     public int AccessTokenMinutes { get; set; } = 15;
 
     public int RefreshTokenDays { get; set; } = 30;

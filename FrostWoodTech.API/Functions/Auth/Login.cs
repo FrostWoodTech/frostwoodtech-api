@@ -21,7 +21,7 @@ public class Login
 
     [Function("Login")]
     public async Task<IActionResult> Run(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "admin/auth/login")] HttpRequest req,
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "cms/admin/auth/login")] HttpRequest req,
         CancellationToken cancellationToken)
     {
         HttpResponses.MarkNoStore(req);
@@ -42,8 +42,10 @@ public class Login
 
         var result = await _users.LoginAsync(body, ClientAddress.Read(req), cancellationToken);
 
-        return result.IsSuccess
-            ? new OkObjectResult(result.Value)
-            : ProblemResults.FromError(result.Error!);
+        if (!result.IsSuccess)
+            return ProblemResults.FromError(result.Error!);
+
+        HttpResponses.SetRefreshTokenCookie(req, result.Value!.RefreshToken, result.Value.RefreshTokenExpiresAt);
+        return new OkObjectResult(result.Value);
     }
 }

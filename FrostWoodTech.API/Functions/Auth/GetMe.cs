@@ -16,10 +16,9 @@ public class GetMe
         _users = users;
     }
 
-    /// <summary>Who the current access token belongs to — the SPA calls this on every reload.</summary>
     [Function("GetMe")]
     public async Task<IActionResult> Run(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "admin/auth/me")] HttpRequest req,
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "cms/admin/auth/me")] HttpRequest req,
         CancellationToken cancellationToken)
     {
         HttpResponses.MarkNoStore(req);

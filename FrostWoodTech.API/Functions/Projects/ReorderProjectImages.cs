@@ -19,15 +19,12 @@ public class ReorderProjectImages
         _projectService = projectService;
     }
 
-    /// <summary>
-    /// Bulk sort_order update for one gallery. No site here — a project has a single image order.
-    /// </summary>
     [Function("ReorderProjectImages")]
     public async Task<IActionResult> Run(
         [HttpTrigger(
             AuthorizationLevel.Anonymous,
             "post",
-            Route = "admin/projects/{id:guid}/images/reorder")] HttpRequest req,
+            Route = "cms/admin/projects/{id:guid}/images/reorder")] HttpRequest req,
         Guid id,
         CancellationToken cancellationToken)
     {

@@ -23,13 +23,17 @@ public class FrostWoodTechDbContext : DbContext
 
     public DbSet<ProjectTag> ProjectTags => Set<ProjectTag>();
 
+    public DbSet<Product> Products => Set<Product>();
+
+    public DbSet<ProductImage> ProductImages => Set<ProductImage>();
+
     public DbSet<Article> Articles => Set<Article>();
 
     public DbSet<ArticleTag> ArticleTags => Set<ArticleTag>();
 
     public DbSet<ServiceOffering> Services => Set<ServiceOffering>();
 
-    public DbSet<ServiceFeature> ServiceFeatures => Set<ServiceFeature>();
+    public DbSet<ServiceProject> ServiceProjects => Set<ServiceProject>();
 
     public DbSet<PricingPlan> PricingPlans => Set<PricingPlan>();
 
@@ -37,11 +41,21 @@ public class FrostWoodTechDbContext : DbContext
 
     public DbSet<Faq> Faqs => Set<Faq>();
 
+    public DbSet<Certificate> Certificates => Set<Certificate>();
+
     public DbSet<Review> Reviews => Set<Review>();
+
+    public DbSet<ContactSubmission> ContactSubmissions => Set<ContactSubmission>();
+
+    public DbSet<Currency> Currencies => Set<Currency>();
 
     public DbSet<User> Users => Set<User>();
 
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
+
+    public DbSet<EmailVerificationToken> EmailVerificationTokens => Set<EmailVerificationToken>();
+
+    public DbSet<PasswordToken> PasswordTokens => Set<PasswordToken>();
 
     public DbSet<LoginAttempt> LoginAttempts => Set<LoginAttempt>();
 
@@ -49,19 +63,22 @@ public class FrostWoodTechDbContext : DbContext
     {
         base.OnModelCreating(modelBuilder);
 
-        // Case-insensitive email lookups on users.
         modelBuilder.HasPostgresExtension("citext");
 
-        // Enums are native Postgres enums, never ints, so migrations stay readable.
+        // Native Postgres enums, never ints, so migrations stay readable.
         modelBuilder.HasPostgresEnum<TechCategory>(name: "tech_category");
         modelBuilder.HasPostgresEnum<PriceType>(name: "price_type");
         modelBuilder.HasPostgresEnum<UserRole>(name: "user_role");
         modelBuilder.HasPostgresEnum<UserStatus>(name: "user_status");
+        modelBuilder.HasPostgresEnum<PasswordTokenPurpose>(name: "password_token_purpose");
+        modelBuilder.HasPostgresEnum<AuthAttemptAction>(name: "auth_attempt_action");
+        modelBuilder.HasPostgresEnum<ContactSubmissionStatus>(name: "contact_submission_status");
+        modelBuilder.HasPostgresEnum<ContactBudgetRange>(name: "contact_budget_range");
+        modelBuilder.HasPostgresEnum<CertificateCategory>(name: "certificate_category");
+        modelBuilder.HasPostgresEnum<Site>(name: "site");
 
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(FrostWoodTechDbContext).Assembly);
 
-        // The audit and site visibility blocks are identical everywhere, so they are mapped
-        // once here rather than repeated in every IEntityTypeConfiguration.
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
         {
             var clrType = entityType.ClrType;
@@ -73,8 +90,14 @@ public class FrostWoodTechDbContext : DbContext
                 entity.Property(nameof(AuditableEntity.CreatedAt)).HasColumnName("created_at");
                 entity.Property(nameof(AuditableEntity.UpdatedAt)).HasColumnName("updated_at");
                 entity.Property(nameof(AuditableEntity.IsDeleted)).HasColumnName("is_deleted").HasDefaultValue(false);
+                entity.Property(nameof(AuditableEntity.DeletedAt)).HasColumnName("deleted_at");
+                entity.Property(nameof(AuditableEntity.DeletedBy)).HasColumnName("deleted_by");
 
-                // Soft delete must not be forgettable on a read path.
+                entity.HasIndex(nameof(AuditableEntity.DeletedAt))
+                    .HasFilter("is_deleted")
+                    .HasDatabaseName($"ix_{entityType.GetTableName()}_deleted_at");
+
+                // Use IgnoreQueryFilters only where a deleted row must be found on purpose.
                 entity.HasQueryFilter(BuildNotDeletedFilter(clrType));
             }
 
@@ -104,7 +127,6 @@ public class FrostWoodTechDbContext : DbContext
         return base.SaveChanges();
     }
 
-    /// <summary>Builds <c>e =&gt; !e.IsDeleted</c> for the given entity type.</summary>
     private static LambdaExpression BuildNotDeletedFilter(Type clrType)
     {
         var parameter = Expression.Parameter(clrType, "e");
@@ -128,6 +150,19 @@ public class FrostWoodTechDbContext : DbContext
             {
                 entry.Entity.UpdatedAt = now;
                 entry.Property(e => e.CreatedAt).IsModified = false;
+
+                // OriginalValue is the value read from the database, so the delete/restore flip is detectable.
+                var wasDeleted = entry.Property(e => e.IsDeleted).OriginalValue;
+
+                if (!wasDeleted && entry.Entity.IsDeleted)
+                {
+                    entry.Entity.DeletedAt = now;
+                }
+                else if (wasDeleted && !entry.Entity.IsDeleted)
+                {
+                    entry.Entity.DeletedAt = null;
+                    entry.Entity.DeletedBy = null;
+                }
             }
         }
     }

@@ -16,13 +16,12 @@ public class DeletePricingPlanFeature
         _pricing = pricing;
     }
 
-    /// <summary>Hard delete — a feature row carries no soft-delete flag.</summary>
     [Function("DeletePricingPlanFeature")]
     public async Task<IActionResult> Run(
         [HttpTrigger(
             AuthorizationLevel.Anonymous,
             "delete",
-            Route = "admin/pricing-plans/{id:guid}/features/{featureId:guid}")] HttpRequest req,
+            Route = "cms/admin/pricing-plans/{id:guid}/features/{featureId:guid}")] HttpRequest req,
         Guid id,
         Guid featureId,
         CancellationToken cancellationToken)

@@ -7,20 +7,17 @@ namespace FrostWoodTech.API.Interfaces;
 
 public interface IFaqService
 {
-    /// <summary>
-    /// Public read: always scoped to one site and to published, non-deleted rows. There is no
-    /// overload that lets a caller skip those filters.
-    /// </summary>
+    /// <summary>Always filtered to one site and published, non-deleted, global FAQs.</summary>
     Task<IReadOnlyList<FaqResponse>> GetPublicFaqsAsync(
         Site site,
-        string? category,
         CancellationToken cancellationToken);
 
     Task<PagedResult<AdminFaqResponse>> GetAdminFaqsAsync(
         Site? site,
         bool? isPublished,
-        string? category,
         string? search,
+        Guid? serviceId,
+        bool globalOnly,
         int page,
         int pageSize,
         CancellationToken cancellationToken);
@@ -36,9 +33,19 @@ public interface IFaqService
         UpdateFaqRequest request,
         CancellationToken cancellationToken);
 
-    /// <summary>Soft delete.</summary>
     Task<ServiceResult<bool>> DeleteAsync(Guid id, CancellationToken cancellationToken);
 
-    /// <summary>Bulk sort_order update for one site.</summary>
-    Task<ServiceResult<bool>> ReorderAsync(ReorderRequest request, CancellationToken cancellationToken);
+    Task<PagedResult<TrashedItemResponse>> GetTrashAsync(
+        string? search,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken);
+
+    /// <summary>404 unless the row is in the trash.</summary>
+    Task<ServiceResult<AdminFaqResponse>> RestoreAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <summary>Super admin only; stored files are deleted after the commit.</summary>
+    Task<ServiceResult<bool>> PurgeAsync(Guid id, CancellationToken cancellationToken);
+
+    Task<ServiceResult<bool>> ReorderAsync(FaqReorderRequest request, CancellationToken cancellationToken);
 }

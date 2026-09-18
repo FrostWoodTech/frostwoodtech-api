@@ -19,16 +19,12 @@ public class UpdateProjectImage
         _projectService = projectService;
     }
 
-    /// <summary>
-    /// A full replacement. Setting isPrimary here is how the primary image moves — the previous
-    /// one is cleared in the same transaction.
-    /// </summary>
     [Function("UpdateProjectImage")]
     public async Task<IActionResult> Run(
         [HttpTrigger(
             AuthorizationLevel.Anonymous,
             "put",
-            Route = "admin/projects/{id:guid}/images/{imageId:guid}")] HttpRequest req,
+            Route = "cms/admin/projects/{id:guid}/images/{imageId:guid}")] HttpRequest req,
         Guid id,
         Guid imageId,
         CancellationToken cancellationToken)

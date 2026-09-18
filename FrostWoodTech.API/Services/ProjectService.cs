@@ -2,6 +2,7 @@ using System.Linq.Expressions;
 
 using Microsoft.EntityFrameworkCore;
 
+using FrostWoodTech.API.Auth;
 using FrostWoodTech.API.Common;
 using FrostWoodTech.API.Data;
 using FrostWoodTech.API.DTOs.Admin;
@@ -14,16 +15,17 @@ namespace FrostWoodTech.API.Services;
 
 public class ProjectService : IProjectService
 {
-    /// <summary>Anything older is a typo, not a project.</summary>
     private const int EarliestYear = 1990;
 
     private readonly FrostWoodTechDbContext _db;
     private readonly IMediaService _mediaService;
+    private readonly CurrentUser _currentUser;
 
-    public ProjectService(FrostWoodTechDbContext db, IMediaService mediaService)
+    public ProjectService(FrostWoodTechDbContext db, IMediaService mediaService, CurrentUser currentUser)
     {
         _db = db;
         _mediaService = mediaService;
+        _currentUser = currentUser;
     }
 
     public async Task<PagedResult<ProjectResponse>> GetPublicProjectsAsync(
@@ -35,8 +37,7 @@ public class ProjectService : IProjectService
         int pageSize,
         CancellationToken cancellationToken)
     {
-        // is_deleted is handled by the DbContext's global filter; is_published and the site flag
-        // are applied here and are not optional.
+        // is_deleted comes from the global filter; is_published and the site flag are mandatory.
         var query = ForSite(_db.Projects.AsNoTracking().Where(p => p.IsPublished), site);
 
         if (tagSlug is not null)
@@ -46,7 +47,7 @@ public class ProjectService : IProjectService
 
         if (categorySlug is not null)
         {
-            // A category tag, not a technology one — both live in the same table.
+            // Category tags only, not technology tags (same table).
             query = query.Where(p => p.ProjectTags.Any(pt =>
                 pt.Tag.Slug == categorySlug && !pt.Tag.IsTechnology && !pt.Tag.IsDeleted));
         }
@@ -96,13 +97,15 @@ public class ProjectService : IProjectService
         Site? site,
         bool? isPublished,
         string? search,
+        bool includeHidden,
         int page,
         int pageSize,
         CancellationToken cancellationToken)
     {
         var query = _db.Projects.AsNoTracking();
 
-        if (site is not null)
+        // includeHidden: the visibility screen passes site (for sort order) but must see rows not shown yet.
+        if (site is not null && !includeHidden)
         {
             query = ForSite(query, site.Value);
         }
@@ -119,7 +122,6 @@ public class ProjectService : IProjectService
 
         var total = await query.CountAsync(cancellationToken);
 
-        // Drafts have no meaningful site order, so the admin list is newest-first instead.
         var items = await query
             .OrderByDescending(p => p.Year)
             .ThenBy(p => p.Title)
@@ -172,10 +174,19 @@ public class ProjectService : IProjectService
         }
 
         var slug = ResolveSlug(request.Slug, title!);
+        if (slug.Length == 0)
+        {
+            return ServiceResult<AdminProjectResponse>.Validation("A slug could not be generated; provide one with letters or digits.");
+        }
+
         if (await SlugExistsAsync(slug, excludingId: null, cancellationToken))
         {
             return SlugTaken(slug);
         }
+
+        // Sort order never comes from the client; new rows go to the end of each site's order.
+        var nextAgencySortOrder = await _db.Projects.MaxAsync(p => (int?)p.AgencySortOrder, cancellationToken) + 1 ?? 0;
+        var nextPersonalSortOrder = await _db.Projects.MaxAsync(p => (int?)p.PersonalSortOrder, cancellationToken) + 1 ?? 0;
 
         var project = new Project
         {
@@ -195,10 +206,10 @@ public class ProjectService : IProjectService
             SeoDescription = Blank(request.SeoDescription),
             ShowOnAgency = request.ShowOnAgency,
             FeaturedOnAgency = request.FeaturedOnAgency,
-            AgencySortOrder = request.AgencySortOrder,
+            AgencySortOrder = nextAgencySortOrder,
             ShowOnPersonal = request.ShowOnPersonal,
             FeaturedOnPersonal = request.FeaturedOnPersonal,
-            PersonalSortOrder = request.PersonalSortOrder,
+            PersonalSortOrder = nextPersonalSortOrder,
             ProjectTags = [.. tagIds.Select(tagId => new ProjectTag { TagId = tagId })]
         };
 
@@ -207,8 +218,7 @@ public class ProjectService : IProjectService
         _db.Projects.Add(project);
         await _db.SaveChangesAsync(cancellationToken);
 
-        // Re-read rather than project the in-memory entity: the links were added by tag id, so
-        // their Tag navigations are not loaded yet.
+        // Re-read: tag navigations aren't loaded for links added by id.
         return await GetByIdAsync(project.Id, cancellationToken);
     }
 
@@ -246,6 +256,11 @@ public class ProjectService : IProjectService
         }
 
         var slug = ResolveSlug(request.Slug, title!);
+        if (slug.Length == 0)
+        {
+            return ServiceResult<AdminProjectResponse>.Validation("A slug could not be generated; provide one with letters or digits.");
+        }
+
         if (await SlugExistsAsync(slug, excludingId: id, cancellationToken))
         {
             return SlugTaken(slug);
@@ -266,10 +281,8 @@ public class ProjectService : IProjectService
         project.SeoDescription = Blank(request.SeoDescription);
         project.ShowOnAgency = request.ShowOnAgency;
         project.FeaturedOnAgency = request.FeaturedOnAgency;
-        project.AgencySortOrder = request.AgencySortOrder;
         project.ShowOnPersonal = request.ShowOnPersonal;
         project.FeaturedOnPersonal = request.FeaturedOnPersonal;
-        project.PersonalSortOrder = request.PersonalSortOrder;
 
         ApplyPublished(project, request.IsPublished);
         SyncTags(project, tagIds);
@@ -290,6 +303,13 @@ public class ProjectService : IProjectService
             return NotFound(id);
         }
 
+        // First publish only: show on both sites. Republishing keeps the editor's choice.
+        if (request.IsPublished && project.PublishedAt is null)
+        {
+            project.ShowOnAgency = true;
+            project.ShowOnPersonal = true;
+        }
+
         ApplyPublished(project, request.IsPublished);
 
         await _db.SaveChangesAsync(cancellationToken);
@@ -305,9 +325,105 @@ public class ProjectService : IProjectService
             return ServiceResult<bool>.NotFound("not_found", $"No project with id {id}.");
         }
 
-        // Soft delete: the tag links and image rows stay put so restoring the row keeps them.
+        // Soft delete keeps tag links and images so a restore keeps them.
         project.IsDeleted = true;
+        project.DeletedBy = _currentUser.UserId;
         await _db.SaveChangesAsync(cancellationToken);
+
+        return ServiceResult<bool>.Success(true);
+    }
+
+    public async Task<PagedResult<TrashedItemResponse>> GetTrashAsync(
+        string? search,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        var query = _db.Projects.Trashed().AsNoTracking();
+
+        if (search is not null)
+        {
+            query = query.Where(p => EF.Functions.ILike(p.Title, $"%{search}%"));
+        }
+
+        var total = await query.CountAsync(cancellationToken);
+
+        var items = await query
+            .OrderByDescending(p => p.DeletedAt)
+            .ThenByDescending(p => p.UpdatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(p => new TrashedItemResponse
+            {
+                Id = p.Id,
+                Label = p.Title,
+                DeletedAt = p.DeletedAt,
+                DeletedBy = p.DeletedBy,
+                DeletedByEmail = _db.Users.Where(u => u.Id == p.DeletedBy).Select(u => u.Email).FirstOrDefault()
+            })
+            .ToListAsync(cancellationToken);
+
+        return new PagedResult<TrashedItemResponse>
+        {
+            Items = items,
+            Page = page,
+            PageSize = pageSize,
+            Total = total
+        };
+    }
+
+    public async Task<ServiceResult<AdminProjectResponse>> RestoreAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var project = await _db.Projects.FindTrashedAsync(id, cancellationToken);
+        if (project is null)
+        {
+            return ServiceResult<AdminProjectResponse>.NotFound("not_found", $"No deleted project with id {id}.");
+        }
+
+        project.IsDeleted = false;
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return await GetByIdAsync(id, cancellationToken);
+    }
+
+    public async Task<ServiceResult<bool>> PurgeAsync(Guid id, CancellationToken cancellationToken)
+    {
+        if (_currentUser.RequireSuperAdmin<bool>() is { } denied)
+        {
+            return denied;
+        }
+
+        var project = await _db.Projects
+            .IgnoreQueryFilters()
+            .Include(p => p.Images)
+            .FirstOrDefaultAsync(p => p.Id == id && p.IsDeleted, cancellationToken);
+
+        if (project is null)
+        {
+            return ServiceResult<bool>.NotFound("not_found", $"No deleted project with id {id}.");
+        }
+
+        // service_projects.project_id is Restrict, and a deleted service holds its link just as firmly.
+        var linkedServices = await _db.ServiceProjects.CountAsync(sp => sp.ProjectId == id, cancellationToken);
+        if (linkedServices > 0)
+        {
+            return ServiceResult<bool>.Conflict(
+                "project_in_use",
+                $"{linkedServices} service(s) still link this project as a case study, including deleted ones. "
+                + "Unlink it before deleting permanently.");
+        }
+
+        // Read the keys before the row goes; image and tag links follow it by cascade.
+        var objectKeys = project.Images.Select(i => i.ObjectKey).ToList();
+
+        _db.Projects.Remove(project);
+        await _db.SaveChangesAsync(cancellationToken);
+
+        // After the commit: a failed delete only orphans a file, never keeps the row.
+        foreach (var objectKey in objectKeys)
+        {
+            await _mediaService.DeleteFileAsync(objectKey, cancellationToken);
+        }
 
         return ServiceResult<bool>.Success(true);
     }
@@ -381,8 +497,7 @@ public class ProjectService : IProjectService
             return ServiceResult<ProjectImageResponse>.Validation(validationError);
         }
 
-        // The first image is the primary whatever the caller asked for — a project with images
-        // always has exactly one.
+        // The first image is always primary.
         var isPrimary = request.IsPrimary || project.Images.Count == 0;
 
         var image = new ProjectImage
@@ -436,9 +551,8 @@ public class ProjectService : IProjectService
             return ServiceResult<ProjectImageResponse>.Validation(validationError);
         }
 
-        // Clearing the flag on the only image would leave the project without a primary, so it
-        // stays put.
-        var isPrimary = request.IsPrimary || project.Images.Count == 1;
+        // Primary only moves by promoting another image; clearing it would leave none.
+        var isPrimary = request.IsPrimary || image.IsPrimary || project.Images.Count == 1;
 
         image.ObjectKey = objectKey!;
         image.Url = url!;
@@ -476,13 +590,10 @@ public class ProjectService : IProjectService
                 $"No image with id {imageId} on project {projectId}.");
         }
 
-        // Hard delete — the row carries no soft-delete flag, so the Neon Object Storage asset goes too
-        // (below, once the row is actually gone).
         project.Images.Remove(image);
         _db.ProjectImages.Remove(image);
 
-        // Losing the primary promotes the next image so the project still has exactly one. The
-        // delete has to land before the promotion, or the partial unique index sees two primaries.
+        // Delete must save before promoting, or the partial unique index sees two primaries.
         var successor = image.IsPrimary
             ? project.Images.OrderBy(i => i.SortOrder).FirstOrDefault()
             : null;
@@ -499,9 +610,7 @@ public class ProjectService : IProjectService
                 cancellationToken);
         }
 
-        // After the row is committed, never before: a destroy that succeeded against a delete
-        // that then rolled back would leave a row pointing at nothing. The reverse — a failed
-        // destroy — only leaves an orphan asset, so it must not fail the request.
+        // After the commit, never before: a failed delete only orphans the file.
         await _mediaService.DeleteFileAsync(image.ObjectKey, cancellationToken);
 
         return ServiceResult<bool>.Success(true);
@@ -564,7 +673,6 @@ public class ProjectService : IProjectService
                 .ThenByDescending(p => p.Year)
                 .ThenByDescending(p => p.PublishedAt);
 
-    /// <summary>Null when the project is valid, otherwise the message to hand back.</summary>
     private static string? Validate(
         string? title,
         string? shortDescription,
@@ -611,7 +719,6 @@ public class ProjectService : IProjectService
         return null;
     }
 
-    /// <summary>Null when the image is valid, otherwise the message to hand back.</summary>
     private static string? ValidateImage(
         string? objectKey,
         string? url,
@@ -628,7 +735,6 @@ public class ProjectService : IProjectService
             return "url is required and must be an absolute http(s) URL.";
         }
 
-        // Every image is described — a blank alt text fails the request rather than warning.
         if (altText is null)
         {
             return "altText is required on every image.";
@@ -646,10 +752,7 @@ public class ProjectService : IProjectService
         Uri.TryCreate(value, UriKind.Absolute, out var uri)
         && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
 
-    /// <summary>
-    /// Going live stamps published_at the first time only; unpublishing never clears it, so a
-    /// project that comes back keeps its original date.
-    /// </summary>
+    // published_at is stamped on first publish and never cleared.
     private static void ApplyPublished(Project project, bool isPublished)
     {
         if (isPublished && project.PublishedAt is null)
@@ -660,7 +763,6 @@ public class ProjectService : IProjectService
         project.IsPublished = isPublished;
     }
 
-    /// <summary>Null when every id resolves to a live tag, otherwise the message to hand back.</summary>
     private async Task<string?> UnknownTagIdsAsync(IReadOnlyList<Guid> tagIds, CancellationToken cancellationToken)
     {
         if (tagIds.Count == 0)
@@ -678,7 +780,6 @@ public class ProjectService : IProjectService
         return missing.Count == 0 ? null : $"Unknown tag id(s): {string.Join(", ", missing)}.";
     }
 
-    /// <summary>Adds and removes only what changed, so untouched links keep their row.</summary>
     private void SyncTags(Project project, IReadOnlyList<Guid> tagIds)
     {
         foreach (var link in project.ProjectTags.Where(pt => !tagIds.Contains(pt.TagId)).ToList())
@@ -701,12 +802,7 @@ public class ProjectService : IProjectService
     private static List<ProjectImage> OtherPrimaries(Project project, Guid keepId) =>
         [.. project.Images.Where(i => i.IsPrimary && i.Id != keepId)];
 
-    /// <summary>
-    /// Clears the images in <paramref name="demote"/> before applying <paramref name="then"/>.
-    /// The partial unique index on <c>(project_id) where is_primary</c> is checked per statement,
-    /// so the old primary has to be cleared in its own round trip — hence two saves in one
-    /// transaction. With nothing to demote it is a single ordinary save.
-    /// </summary>
+    // The partial unique index is checked per statement, so demote in its own save first.
     private Task SaveAsync(List<ProjectImage> demote, Action then, CancellationToken cancellationToken)
     {
         if (demote.Count == 0)
@@ -728,12 +824,7 @@ public class ProjectService : IProjectService
             cancellationToken);
     }
 
-    /// <summary>
-    /// Saves twice — once after <paramref name="first"/>, once after <paramref name="second"/> —
-    /// inside a single transaction, so an ordering constraint can be respected without the caller
-    /// seeing a half-applied change. Wrapped in the execution strategy because the connection
-    /// retries on failure.
-    /// </summary>
+    // Two saves in one transaction, inside the retrying execution strategy.
     private Task InOneTransactionAsync(Action first, Action second, CancellationToken cancellationToken)
     {
         var strategy = _db.Database.CreateExecutionStrategy();
@@ -759,7 +850,7 @@ public class ProjectService : IProjectService
         SlugGenerator.Generate(string.IsNullOrWhiteSpace(requestedSlug) ? title : requestedSlug);
 
     private Task<bool> SlugExistsAsync(string slug, Guid? excludingId, CancellationToken cancellationToken) =>
-        _db.Projects.AnyAsync(p => p.Slug == slug && (excludingId == null || p.Id != excludingId), cancellationToken);
+        _db.Projects.IgnoreQueryFilters().AnyAsync(p => p.Slug == slug && (excludingId == null || p.Id != excludingId), cancellationToken);
 
     private static ServiceResult<AdminProjectResponse> NotFound(Guid id) =>
         ServiceResult<AdminProjectResponse>.NotFound("not_found", $"No project with id {id}.");
@@ -789,10 +880,6 @@ public class ProjectService : IProjectService
         SortOrder = image.SortOrder
     };
 
-    /// <summary>
-    /// Projected inside the query, tags and images and all, so a list page is one round trip
-    /// rather than one query per project. The site picks which visibility pair is exposed.
-    /// </summary>
     private static Expression<Func<Project, ProjectResponse>> PublicProjection(Site site)
     {
         if (site == Site.Agency)
@@ -818,18 +905,14 @@ public class ProjectService : IProjectService
                 SortOrder = p.AgencySortOrder,
                 Tags = p.ProjectTags
                     .Where(pt => !pt.Tag.IsDeleted)
-                    .OrderBy(pt => pt.Tag.SortOrder)
-                    .ThenBy(pt => pt.Tag.Name)
+                    .OrderBy(pt => pt.Tag.Name)
                     .Select(pt => new TagResponse
                     {
                         Id = pt.Tag.Id,
                         Name = pt.Tag.Name,
                         Slug = pt.Tag.Slug,
                         IsTechnology = pt.Tag.IsTechnology,
-                        TechnologyCategory = pt.Tag.TechnologyCategory,
-                        IconUrl = pt.Tag.IconUrl,
-                        ColorHex = pt.Tag.ColorHex,
-                        SortOrder = pt.Tag.SortOrder
+                        TechnologyCategory = pt.Tag.TechnologyCategory
                     })
                     .ToList(),
                 Images = p.Images
@@ -871,18 +954,14 @@ public class ProjectService : IProjectService
             SortOrder = p.PersonalSortOrder,
             Tags = p.ProjectTags
                 .Where(pt => !pt.Tag.IsDeleted)
-                .OrderBy(pt => pt.Tag.SortOrder)
-                .ThenBy(pt => pt.Tag.Name)
+                .OrderBy(pt => pt.Tag.Name)
                 .Select(pt => new TagResponse
                 {
                     Id = pt.Tag.Id,
                     Name = pt.Tag.Name,
                     Slug = pt.Tag.Slug,
                     IsTechnology = pt.Tag.IsTechnology,
-                    TechnologyCategory = pt.Tag.TechnologyCategory,
-                    IconUrl = pt.Tag.IconUrl,
-                    ColorHex = pt.Tag.ColorHex,
-                    SortOrder = pt.Tag.SortOrder
+                    TechnologyCategory = pt.Tag.TechnologyCategory
                 })
                 .ToList(),
             Images = p.Images
@@ -929,8 +1008,7 @@ public class ProjectService : IProjectService
         PersonalSortOrder = p.PersonalSortOrder,
         Tags = p.ProjectTags
             .Where(pt => !pt.Tag.IsDeleted)
-            .OrderBy(pt => pt.Tag.SortOrder)
-            .ThenBy(pt => pt.Tag.Name)
+            .OrderBy(pt => pt.Tag.Name)
             .Select(pt => new AdminTagResponse
             {
                 Id = pt.Tag.Id,
@@ -938,10 +1016,6 @@ public class ProjectService : IProjectService
                 Slug = pt.Tag.Slug,
                 IsTechnology = pt.Tag.IsTechnology,
                 TechnologyCategory = pt.Tag.TechnologyCategory,
-                IconObjectKey = pt.Tag.IconObjectKey,
-                IconUrl = pt.Tag.IconUrl,
-                ColorHex = pt.Tag.ColorHex,
-                SortOrder = pt.Tag.SortOrder,
                 CreatedAt = pt.Tag.CreatedAt,
                 UpdatedAt = pt.Tag.UpdatedAt
             })

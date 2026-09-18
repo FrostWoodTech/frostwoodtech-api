@@ -2,6 +2,7 @@ using System.Linq.Expressions;
 
 using Microsoft.EntityFrameworkCore;
 
+using FrostWoodTech.API.Auth;
 using FrostWoodTech.API.Common;
 using FrostWoodTech.API.Data;
 using FrostWoodTech.API.DTOs.Admin;
@@ -14,19 +15,18 @@ namespace FrostWoodTech.API.Services;
 
 public class ReviewService : IReviewService
 {
-    /// <summary>
-    /// Rows are already kept forever (a review is real content, not a disposable attempt record),
-    /// so the submission rate limit counts them directly instead of a second attempts table.
-    /// </summary>
+    // Rate limit counts review rows directly; no separate attempts table.
     private static readonly TimeSpan SubmissionWindow = TimeSpan.FromHours(24);
 
     private const int MaxSubmissionsPerIpPerWindow = 3;
 
     private readonly FrostWoodTechDbContext _db;
+    private readonly CurrentUser _currentUser;
 
-    public ReviewService(FrostWoodTechDbContext db)
+    public ReviewService(FrostWoodTechDbContext db, CurrentUser currentUser)
     {
         _db = db;
+        _currentUser = currentUser;
     }
 
     public async Task<ServiceResult<ReviewSubmissionResponse>> SubmitAsync(
@@ -87,8 +87,7 @@ public class ReviewService : IReviewService
         int pageSize,
         CancellationToken cancellationToken)
     {
-        // is_deleted is handled by the DbContext's global filter; is_published is applied here
-        // and is not optional.
+        // is_published is mandatory; is_deleted comes from the global filter.
         var query = _db.Reviews.AsNoTracking().Where(r => r.IsPublished);
 
         var total = await query.CountAsync(cancellationToken);
@@ -197,6 +196,9 @@ public class ReviewService : IReviewService
             return ServiceResult<AdminReviewResponse>.Validation(validationError);
         }
 
+        // Sort order never comes from the client; new rows go to the end.
+        var nextSortOrder = await _db.Reviews.MaxAsync(r => (int?)r.SortOrder, cancellationToken) + 1 ?? 0;
+
         var review = new Review
         {
             Id = Guid.NewGuid(),
@@ -208,7 +210,7 @@ public class ReviewService : IReviewService
             ReviewText = reviewText!,
             IsPublished = request.IsPublished,
             IsFeatured = request.IsFeatured,
-            SortOrder = request.SortOrder
+            SortOrder = nextSortOrder
         };
 
         _db.Reviews.Add(review);
@@ -248,7 +250,6 @@ public class ReviewService : IReviewService
         review.ReviewText = reviewText!;
         review.IsPublished = request.IsPublished;
         review.IsFeatured = request.IsFeatured;
-        review.SortOrder = request.SortOrder;
 
         await _db.SaveChangesAsync(cancellationToken);
 
@@ -264,6 +265,79 @@ public class ReviewService : IReviewService
         }
 
         review.IsDeleted = true;
+        review.DeletedBy = _currentUser.UserId;
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return ServiceResult<bool>.Success(true);
+    }
+
+    public async Task<PagedResult<TrashedItemResponse>> GetTrashAsync(
+        string? search,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        var query = _db.Reviews.Trashed().AsNoTracking();
+
+        if (search is not null)
+        {
+            query = query.Where(r => EF.Functions.ILike(r.Name, $"%{search}%"));
+        }
+
+        var total = await query.CountAsync(cancellationToken);
+
+        var items = await query
+            .OrderByDescending(r => r.DeletedAt)
+            .ThenByDescending(r => r.UpdatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(r => new TrashedItemResponse
+            {
+                Id = r.Id,
+                Label = r.Name,
+                DeletedAt = r.DeletedAt,
+                DeletedBy = r.DeletedBy,
+                DeletedByEmail = _db.Users.Where(u => u.Id == r.DeletedBy).Select(u => u.Email).FirstOrDefault()
+            })
+            .ToListAsync(cancellationToken);
+
+        return new PagedResult<TrashedItemResponse>
+        {
+            Items = items,
+            Page = page,
+            PageSize = pageSize,
+            Total = total
+        };
+    }
+
+    public async Task<ServiceResult<AdminReviewResponse>> RestoreAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var review = await _db.Reviews.FindTrashedAsync(id, cancellationToken);
+        if (review is null)
+        {
+            return ServiceResult<AdminReviewResponse>.NotFound("not_found", $"No deleted review with id {id}.");
+        }
+
+        review.IsDeleted = false;
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return await GetByIdAsync(id, cancellationToken);
+    }
+
+    public async Task<ServiceResult<bool>> PurgeAsync(Guid id, CancellationToken cancellationToken)
+    {
+        if (_currentUser.RequireSuperAdmin<bool>() is { } denied)
+        {
+            return denied;
+        }
+
+        var review = await _db.Reviews.FindTrashedAsync(id, cancellationToken);
+        if (review is null)
+        {
+            return ServiceResult<bool>.NotFound("not_found", $"No deleted review with id {id}.");
+        }
+
+        _db.Reviews.Remove(review);
         await _db.SaveChangesAsync(cancellationToken);
 
         return ServiceResult<bool>.Success(true);
@@ -312,7 +386,6 @@ public class ReviewService : IReviewService
         _ => query.OrderByDescending(r => r.CreatedAt)
     };
 
-    /// <summary>Null when the review is valid, otherwise the message to hand back.</summary>
     private static string? Validate(
         string? name,
         string? country,
@@ -389,6 +462,5 @@ public class ReviewService : IReviewService
         UpdatedAt = r.UpdatedAt
     };
 
-    /// <summary>The same shape for an entity already in memory after a write.</summary>
     private static readonly Func<Review, AdminReviewResponse> ToAdminResponse = AdminProjection.Compile();
 }

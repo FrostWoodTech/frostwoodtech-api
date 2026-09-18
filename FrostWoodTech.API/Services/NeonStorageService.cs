@@ -12,10 +12,7 @@ using FrostWoodTech.API.Media;
 
 namespace FrostWoodTech.API.Services;
 
-/// <summary>
-/// Talks to Neon Object Storage, which is S3-compatible. Presigning an upload is pure local
-/// signing — no call leaves the process — but deleting an object is a real request.
-/// </summary>
+/// <summary>Neon Object Storage (S3-compatible). Presigning is local; deleting is a network call.</summary>
 public class NeonStorageService : IMediaService
 {
     private const int UploadExpiryMinutes = 15;
@@ -35,8 +32,6 @@ public class NeonStorageService : IMediaService
     {
         if (!_options.IsConfigured)
         {
-            // A misconfigured deployment is a bad request the operator can act on, not a 500 the
-            // admin SPA can only shrug at.
             return ServiceResult<PresignedUploadResponse>.Validation(
                 "Neon Object Storage is not configured. Set NeonS3__Endpoint, NeonS3__AccessKey, " +
                 "NeonS3__SecretKey and NeonS3__BucketName.");
@@ -45,7 +40,7 @@ public class NeonStorageService : IMediaService
         if (request.Target is not { } target)
         {
             return ServiceResult<PresignedUploadResponse>.Validation(
-                "target is required: projects, services, tags or articles.");
+                "target is required: projects, products, services, tags, articles or certificates.");
         }
 
         var folderResult = BuildFolder(target, request.Slug);
@@ -72,12 +67,16 @@ public class NeonStorageService : IMediaService
         {
             UploadUrl = uploadUrl,
             ObjectKey = objectKey,
+            PublicUrl = GetPublicUrl(objectKey),
             ExpiresAt = expiresAt
         });
     }
 
+    public string GetPublicBaseUrl() =>
+        $"{_options.Endpoint.TrimEnd('/')}/{_options.BucketName}";
+
     public string GetPublicUrl(string objectKey) =>
-        $"{_options.Endpoint.TrimEnd('/')}/{_options.BucketName}/{objectKey.TrimStart('/')}";
+        $"{GetPublicBaseUrl()}/{objectKey.TrimStart('/')}";
 
     public async Task<bool> DeleteFileAsync(string objectKey, CancellationToken cancellationToken)
     {
@@ -92,8 +91,7 @@ public class NeonStorageService : IMediaService
                 new DeleteObjectRequest { BucketName = _options.BucketName, Key = objectKey },
                 cancellationToken);
 
-            // S3's delete is idempotent — an object that is already gone still returns success,
-            // which is the outcome we wanted.
+            // S3 delete is idempotent.
             return true;
         }
         catch (AmazonS3Exception ex)
@@ -104,21 +102,17 @@ public class NeonStorageService : IMediaService
         }
     }
 
-    /// <summary>
-    /// The folder convention from the media rules. Built here rather than taken from the client
-    /// so an upload can only ever land under the configured base folder.
-    /// </summary>
+    // Folder is built server-side so uploads can't escape the base folder.
     private ServiceResult<string> BuildFolder(MediaTarget target, string? slug)
     {
         var root = _options.BaseFolder.Trim('/');
 
-        if (target != MediaTarget.Projects && target != MediaTarget.Articles)
+        if (target is not (MediaTarget.Projects or MediaTarget.Products or MediaTarget.Articles))
         {
             return ServiceResult<string>.Success($"{root}/{target.ToString().ToLowerInvariant()}/");
         }
 
-        // Re-slugging is what makes the path safe: SlugGenerator strips everything but [a-z0-9-],
-        // so no "../" can survive it.
+        // SlugGenerator strips everything but [a-z0-9-], so "../" can't survive.
         var safeSlug = string.IsNullOrWhiteSpace(slug) ? string.Empty : SlugGenerator.Generate(slug);
         var folderName = target.ToString().ToLowerInvariant();
 

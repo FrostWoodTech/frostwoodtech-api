@@ -2,9 +2,12 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
+
+permissions:
+  contents: read
 
 env:
   DOTNET_VERSION: '10.0.x'
@@ -38,8 +41,7 @@ jobs:
       - name: Build
         run: dotnet build FrostWoodTech.sln --configuration Release --no-restore
 
-      # No test project exists yet (see Gap 9). Once FrostWoodTech.Tests is added this step
-      # starts running automatically; --no-build keeps it on the artifacts built above.
+      # Integration tests start Postgres via Testcontainers; ubuntu runners ship with Docker.
       - name: Test
         run: dotnet test FrostWoodTech.sln --configuration Release --no-build --verbosity normal
 
@@ -55,10 +57,83 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
+      - name: Restore
+        run: dotnet restore FrostWoodTech.sln
+
+      - name: Build
+        run: dotnet build FrostWoodTech.sln --configuration Release --no-restore
+
       - name: Install dotnet-ef
         run: dotnet tool install --global dotnet-ef
 
-      # Catches an entity or configuration change that was committed without a matching
-      # migration — the failure mode that otherwise only shows up against a real database.
+      # Fails when an entity changed without a migration. Never connects; the design-time factory just needs a value.
       - name: Check for pending model changes
-        run: dotnet ef migrations has-pending-model-changes --project FrostWoodTech.API
+        env:
+          ConnectionStrings__Default: Host=localhost;Database=unused;Username=unused;Password=unused
+        run: >-
+          dotnet ef migrations has-pending-model-changes
+          --project FrostWoodTech.API --no-build --configuration Release
+
+  migrate-dry-run:
+    name: Apply migrations to a throwaway Neon branch
+    runs-on: ubuntu-latest
+    # Fork PRs get no secrets, so the Neon API key would be empty.
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore FrostWoodTech.sln
+
+      - name: Build
+        run: dotnet build FrostWoodTech.sln --configuration Release --no-restore
+
+      - name: Install dotnet-ef
+        run: dotnet tool install --global dotnet-ef
+
+      # Copy-on-write branch off production: instant, and it carries the real current schema,
+      # so the migrations meet the same starting state they will meet on the deploy to main.
+      - name: Create Neon branch
+        id: neon
+        uses: neondatabase/create-branch-action@v5
+        with:
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          parent: production
+          branch_name: ci-pr-${{ github.event.pull_request.number }}-${{ github.run_id }}
+          username: ${{ vars.NEON_DB_USER }}
+          database: ${{ vars.NEON_DB_NAME }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      # Neon hands back a postgresql:// URL; Npgsql only parses keyword syntax.
+      - name: Build Npgsql connection string
+        env:
+          DB_URL: ${{ steps.neon.outputs.db_url }}
+        run: |
+          rest="${DB_URL#postgres}"; rest="${rest#ql}"; rest="${rest#://}"
+          creds="${rest%%@*}"; tail="${rest#*@}"
+          user="${creds%%:*}"; pass="${creds#*:}"
+          host="${tail%%/*}"; host="${host%%:*}"
+          db="${tail#*/}"; db="${db%%\?*}"
+          echo "::add-mask::$pass"
+          echo "ConnectionStrings__Default=Host=$host;Database=$db;Username=$user;Password=$pass;SSL Mode=Require" >> "$GITHUB_ENV"
+
+      - name: Apply migrations
+        run: >-
+          dotnet ef database update
+          --project FrostWoodTech.API --no-build --configuration Release
+
+      - name: Delete Neon branch
+        if: always()
+        uses: neondatabase/delete-branch-action@v3
+        with:
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          branch: ci-pr-${{ github.event.pull_request.number }}-${{ github.run_id }}
+          api_key: ${{ secrets.NEON_API_KEY }}

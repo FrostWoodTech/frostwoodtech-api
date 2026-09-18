@@ -3,13 +3,10 @@ using FrostWoodTech.API.Enums;
 
 namespace FrostWoodTech.API.Entities;
 
-/// <summary>
-/// Per-service tiers and general combo packs share this one table.
-/// <see cref="ServiceId"/> = null means combo pack.
-/// </summary>
-public class PricingPlan : SiteVisibleEntity
+/// <summary>Service tiers and combo packs. Agency-only, so no site visibility block.</summary>
+public class PricingPlan : AuditableEntity
 {
-    /// <summary>Null means a general / combo package.</summary>
+    /// <summary>Null means a combo pack.</summary>
     public Guid? ServiceId { get; set; }
 
     public ServiceOffering? Service { get; set; }
@@ -18,22 +15,17 @@ public class PricingPlan : SiteVisibleEntity
 
     public string? Tagline { get; set; }
 
-    /// <summary>Null means "Custom / Contact us" — never defaulted to 0.</summary>
+    /// <summary>Null means "Custom / Contact us"; never defaulted to 0.</summary>
     public decimal? PriceAmount { get; set; }
 
-    /// <summary>ISO 4217, e.g. 'LKR', 'USD'.</summary>
     public required string Currency { get; set; }
 
     public PriceType PriceType { get; set; }
 
-    public int? DeliveryDays { get; set; }
-
-    /// <summary>Free text for ranges such as "2–3 weeks".</summary>
     public string? DeliveryText { get; set; }
 
     public required string Description { get; set; }
 
-    /// <summary>The highlighted middle card.</summary>
     public bool IsPopular { get; set; }
 
     public string? CtaLabel { get; set; }
@@ -42,6 +34,9 @@ public class PricingPlan : SiteVisibleEntity
 
     public bool IsPublished { get; set; }
 
+    public bool Featured { get; set; }
+
+    /// <summary>Changed only via the reorder endpoint.</summary>
     public int SortOrder { get; set; }
 
     public ICollection<PricingPlanFeature> Features { get; set; } = [];

@@ -19,13 +19,12 @@ public class UpdatePricingPlan
         _pricing = pricing;
     }
 
-    /// <summary>A full replacement — every field is written as given.</summary>
     [Function("UpdatePricingPlan")]
     public async Task<IActionResult> Run(
         [HttpTrigger(
             AuthorizationLevel.Anonymous,
             "put",
-            Route = "admin/pricing-plans/{id:guid}")] HttpRequest req,
+            Route = "cms/admin/pricing-plans/{id:guid}")] HttpRequest req,
         Guid id,
         CancellationToken cancellationToken)
     {

@@ -2,26 +2,22 @@ using Microsoft.EntityFrameworkCore;
 
 using FrostWoodTech.API.Data;
 using FrostWoodTech.API.Entities;
+using FrostWoodTech.API.Enums;
 using FrostWoodTech.API.Interfaces;
 
 namespace FrostWoodTech.API.Auth;
 
-/// <summary>
-/// A fixed window counted in Postgres. Functions scale out, so an in-process counter would be
-/// per-instance and would reset on every cold start — which is no limit at all.
-/// </summary>
+/// <summary>Fixed window counted in Postgres, so the limit holds across scaled-out instances.</summary>
 public sealed class LoginRateLimiter : ILoginRateLimiter
 {
     private static readonly TimeSpan Window = TimeSpan.FromMinutes(15);
 
-    /// <summary>Generous enough for someone genuinely misremembering their password.</summary>
-    private const int MaxFailuresPerEmail = 10;
-
-    /// <summary>
-    /// Higher than the per-email limit because a whole office can share one address, but low
-    /// enough to blunt someone spraying one password across many accounts.
-    /// </summary>
-    private const int MaxFailuresPerIp = 30;
+    // Reset is tight: a loose limit lets someone flood another person's inbox.
+    private static (int PerEmail, int PerIp) LimitsFor(AuthAttemptAction action) => action switch
+    {
+        AuthAttemptAction.PasswordReset => (3, 3),
+        _ => (10, 30)
+    };
 
     private readonly FrostWoodTechDbContext _db;
 
@@ -30,14 +26,19 @@ public sealed class LoginRateLimiter : ILoginRateLimiter
         _db = db;
     }
 
-    public async Task<bool> IsBlockedAsync(string email, string? ipAddress, CancellationToken cancellationToken)
+    public async Task<bool> IsBlockedAsync(
+        string email,
+        string? ipAddress,
+        AuthAttemptAction action,
+        CancellationToken cancellationToken)
     {
         var since = DateTimeOffset.UtcNow - Window;
+        var (perEmail, perIp) = LimitsFor(action);
 
-        var emailFailures = await _db.LoginAttempts
-            .CountAsync(a => a.Email == email && a.AttemptedAt >= since, cancellationToken);
+        var emailAttempts = await _db.LoginAttempts
+            .CountAsync(a => a.Email == email && a.Action == action && a.AttemptedAt >= since, cancellationToken);
 
-        if (emailFailures >= MaxFailuresPerEmail)
+        if (emailAttempts >= perEmail)
         {
             return true;
         }
@@ -47,13 +48,17 @@ public sealed class LoginRateLimiter : ILoginRateLimiter
             return false;
         }
 
-        var ipFailures = await _db.LoginAttempts
-            .CountAsync(a => a.IpAddress == ipAddress && a.AttemptedAt >= since, cancellationToken);
+        var ipAttempts = await _db.LoginAttempts
+            .CountAsync(a => a.IpAddress == ipAddress && a.Action == action && a.AttemptedAt >= since, cancellationToken);
 
-        return ipFailures >= MaxFailuresPerIp;
+        return ipAttempts >= perIp;
     }
 
-    public async Task RecordFailureAsync(string email, string? ipAddress, CancellationToken cancellationToken)
+    public async Task RecordAttemptAsync(
+        string email,
+        string? ipAddress,
+        AuthAttemptAction action,
+        CancellationToken cancellationToken)
     {
         var now = DateTimeOffset.UtcNow;
 
@@ -61,11 +66,11 @@ public sealed class LoginRateLimiter : ILoginRateLimiter
         {
             Email = email,
             IpAddress = ipAddress,
+            Action = action,
             AttemptedAt = now
         });
 
-        // Swept here rather than on a timer function: the table only matters at sign-in, so this
-        // is the one code path that needs it kept small.
+        // Old rows are swept here; no timer needed.
         var cutoff = now - Window;
         await _db.LoginAttempts
             .Where(a => a.AttemptedAt < cutoff)
@@ -74,8 +79,8 @@ public sealed class LoginRateLimiter : ILoginRateLimiter
         await _db.SaveChangesAsync(cancellationToken);
     }
 
-    public Task ClearAsync(string email, CancellationToken cancellationToken) =>
+    public Task ClearAsync(string email, AuthAttemptAction action, CancellationToken cancellationToken) =>
         _db.LoginAttempts
-            .Where(a => a.Email == email)
+            .Where(a => a.Email == email && a.Action == action)
             .ExecuteDeleteAsync(cancellationToken);
 }

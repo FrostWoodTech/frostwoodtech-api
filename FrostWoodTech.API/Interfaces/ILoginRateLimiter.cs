@@ -1,19 +1,22 @@
+using FrostWoodTech.API.Enums;
+
 namespace FrostWoodTech.API.Interfaces;
 
-/// <summary>
-/// Rate limiting for the sign-in surface — per email and per IP, as the auth rules require.
-/// </summary>
+/// <summary>Postgres-backed limits per email and per IP, counted separately per action.</summary>
 public interface ILoginRateLimiter
 {
-    /// <summary>
-    /// True when this email or address has failed too many times inside the window and should be
-    /// refused without the password even being checked.
-    /// </summary>
-    Task<bool> IsBlockedAsync(string email, string? ipAddress, CancellationToken cancellationToken);
+    Task<bool> IsBlockedAsync(
+        string email,
+        string? ipAddress,
+        AuthAttemptAction action,
+        CancellationToken cancellationToken);
 
-    /// <summary>Records a failure. Only failures count — a successful sign-in is not suspicious.</summary>
-    Task RecordFailureAsync(string email, string? ipAddress, CancellationToken cancellationToken);
+    /// <summary>Login records failures only; password reset records every request.</summary>
+    Task RecordAttemptAsync(
+        string email,
+        string? ipAddress,
+        AuthAttemptAction action,
+        CancellationToken cancellationToken);
 
-    /// <summary>Clears an email's failures after it signs in successfully.</summary>
-    Task ClearAsync(string email, CancellationToken cancellationToken);
+    Task ClearAsync(string email, AuthAttemptAction action, CancellationToken cancellationToken);
 }

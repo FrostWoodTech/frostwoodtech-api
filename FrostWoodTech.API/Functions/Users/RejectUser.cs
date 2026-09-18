@@ -19,10 +19,9 @@ public class RejectUser
         _users = users;
     }
 
-    /// <summary>Super admin only. The reason is required — the applicant is told why.</summary>
     [Function("RejectUser")]
     public async Task<IActionResult> Run(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "admin/users/{id:guid}/reject")] HttpRequest req,
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "cms/admin/users/{id:guid}/reject")] HttpRequest req,
         Guid id,
         CancellationToken cancellationToken)
     {

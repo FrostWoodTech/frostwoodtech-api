@@ -24,7 +24,7 @@ public class ReorderPricingPlanFeatures
         [HttpTrigger(
             AuthorizationLevel.Anonymous,
             "post",
-            Route = "admin/pricing-plans/{id:guid}/features/reorder")] HttpRequest req,
+            Route = "cms/admin/pricing-plans/{id:guid}/features/reorder")] HttpRequest req,
         Guid id,
         CancellationToken cancellationToken)
     {

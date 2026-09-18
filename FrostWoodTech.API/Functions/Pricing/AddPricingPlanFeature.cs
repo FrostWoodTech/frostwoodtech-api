@@ -24,7 +24,7 @@ public class AddPricingPlanFeature
         [HttpTrigger(
             AuthorizationLevel.Anonymous,
             "post",
-            Route = "admin/pricing-plans/{id:guid}/features")] HttpRequest req,
+            Route = "cms/admin/pricing-plans/{id:guid}/features")] HttpRequest req,
         Guid id,
         CancellationToken cancellationToken)
     {

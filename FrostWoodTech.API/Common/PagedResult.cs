@@ -1,6 +1,5 @@
 namespace FrostWoodTech.API.Common;
 
-/// <summary>The shape every list endpoint returns.</summary>
 public sealed class PagedResult<T>
 {
     public required IReadOnlyList<T> Items { get; init; }

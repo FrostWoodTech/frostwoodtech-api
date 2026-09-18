@@ -8,7 +8,7 @@ using FrostWoodTech.API.Interfaces;
 
 namespace FrostWoodTech.API.Functions.Users;
 
-/// <summary>Super admin only — the role check lives in <c>UserService</c>.</summary>
+/// <summary>Super admin check lives in UserService.</summary>
 public class GetUsers
 {
     private readonly IUserService _users;
@@ -20,7 +20,7 @@ public class GetUsers
 
     [Function("GetUsers")]
     public async Task<IActionResult> Run(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "admin/users")] HttpRequest req,
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "cms/admin/users")] HttpRequest req,
         CancellationToken cancellationToken)
     {
         HttpResponses.MarkNoStore(req);

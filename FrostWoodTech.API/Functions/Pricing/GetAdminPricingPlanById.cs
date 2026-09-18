@@ -21,7 +21,7 @@ public class GetAdminPricingPlanById
         [HttpTrigger(
             AuthorizationLevel.Anonymous,
             "get",
-            Route = "admin/pricing-plans/{id:guid}")] HttpRequest req,
+            Route = "cms/admin/pricing-plans/{id:guid}")] HttpRequest req,
         Guid id,
         CancellationToken cancellationToken)
     {

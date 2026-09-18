@@ -16,11 +16,7 @@ public class GetOpenApiSpec
         _options = options.Value;
     }
 
-    /// <summary>
-    /// The machine-readable contract the three frontends generate clients from. Anonymous, but
-    /// gated on <c>Docs__Enabled</c> — and a disabled deployment answers <c>404</c> rather than
-    /// <c>403</c>, so it does not confirm the endpoint is there at all.
-    /// </summary>
+    /// <summary>Gated on Docs__Enabled; disabled answers 404 so the endpoint isn't confirmed.</summary>
     [Function("GetOpenApiSpec")]
     public IActionResult Run(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "openapi.yaml")] HttpRequest req)
@@ -32,8 +28,6 @@ public class GetOpenApiSpec
             return new NotFoundResult();
         }
 
-        // A developer-facing artefact, not a cached public read — it stays off the ETag path so
-        // an edited spec shows up on the next request.
         req.HttpContext.Response.Headers.CacheControl = "no-store";
 
         return new ContentResult
