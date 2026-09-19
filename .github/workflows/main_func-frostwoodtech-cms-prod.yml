@@ -14,6 +14,8 @@ env:
   DOTNET_NOLOGO: true
   DOTNET_CLI_TELEMETRY_OPTOUT: true
   AZURE_FUNCTIONAPP_PACKAGE_PATH: './publish'
+  # The Function App setting holding Neon's DIRECT (non-pooled) string for DDL. Change it here only.
+  MIGRATION_APPSETTING_NAME: ConnectionStrings__Migration
 
 # Two deploys racing would migrate the same Neon branch concurrently.
 concurrency:
@@ -50,10 +52,36 @@ jobs:
       - name: Install dotnet-ef
         run: dotnet tool install --global dotnet-ef
 
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_92BF6F2CFD134A4C9D333FD1C69E6710 }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_D683C956C76D45ED83BCF95EDD98E423 }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_E36FB923C69E47B28C0396761839B1BA }}
+
+      # The production string stays in Azure; this reads it for one step rather than copying it into a GitHub secret.
+      - name: Read the migration connection string from Azure
+        id: migration_connection
+        run: |
+          value=$(az functionapp config appsettings list \
+            --name "${{ vars.AZURE_FUNCTIONAPP_NAME }}" \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --query "[?name=='${{ env.MIGRATION_APPSETTING_NAME }}'].value | [0]" \
+            --output tsv)
+
+          if [ -z "$value" ] || [ "$value" = "None" ]; then
+            echo "App setting '${{ env.MIGRATION_APPSETTING_NAME }}' is missing or empty on '${{ vars.AZURE_FUNCTIONAPP_NAME }}'." >&2
+            echo "Add it under Settings -> Environment variables -> App settings, holding Neon's direct (non-pooled) string." >&2
+            exit 1
+          fi
+
+          echo "::add-mask::$value"
+          echo "value=$value" >> "$GITHUB_OUTPUT"
+
       # Migrations run here, never at startup. Use Neon's DIRECT (non-pooled) string for DDL.
       - name: Apply migrations
         env:
-          ConnectionStrings__Default: ${{ secrets.NEON_MIGRATION_CONNECTION_STRING }}
+          ConnectionStrings__Default: ${{ steps.migration_connection.outputs.value }}
         run: >-
           dotnet ef database update
           --project FrostWoodTech.API --no-build --configuration Release
@@ -65,13 +93,6 @@ jobs:
           --configuration Release
           --no-build
           --output ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
-
-      - name: Login to Azure
-        uses: azure/login@v2
-        with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_92BF6F2CFD134A4C9D333FD1C69E6710 }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_D683C956C76D45ED83BCF95EDD98E423 }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_E36FB923C69E47B28C0396761839B1BA }}
 
       - name: 'Run Azure Functions Action'
         uses: Azure/functions-action@v1
