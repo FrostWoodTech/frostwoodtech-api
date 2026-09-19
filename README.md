@@ -75,23 +75,25 @@ workflow, never at startup. CI fails if the model changed without a migration.
 ## Deployment
 
 - `ci.yml` builds, runs the tests and checks for missing migrations on every push and PR to `main`.
-- `deploy.yml` runs on push to `main`: build → test → migrate → publish → deploy → health check.
-  A failing test stops the job before the database is touched.
+- `main_func-frostwoodtech-cms-prod.yml` runs on push to `main`: build → test → migrate → publish →
+  deploy → health check. A failing test stops the job before the database is touched. The migration
+  string is read from the Function App's own settings at deploy time, so it never becomes a GitHub secret.
 
 Repository configuration:
 
 | Kind | Name | Notes |
 |---|---|---|
-| Secret | `NEON_MIGRATION_CONNECTION_STRING` | Neon's **direct** (non-pooled) string, for DDL |
-| Secret | `AZURE_FUNCTIONAPP_PUBLISH_PROFILE` | From the Function App |
+| Secret | `AZUREAPPSERVICE_CLIENTID_*`, `AZUREAPPSERVICE_TENANTID_*`, `AZUREAPPSERVICE_SUBSCRIPTIONID_*` | OIDC login; also used to read the migration app setting |
 | Variable | `AZURE_FUNCTIONAPP_NAME` | The Function App name |
+| Variable | `AZURE_RESOURCE_GROUP` | Holds the Function App; needed to read its app settings |
 | Variable | `AZURE_FUNCTIONAPP_URL` | e.g. `https://<app>.azurewebsites.net`; enables the post-deploy health check |
 
 Function App settings (use `__` for nesting):
 
 | Setting | Notes |
 |---|---|
-| `ConnectionStrings__Default` | Neon **pooled** string |
+| `ConnectionStrings__Default` | Neon **pooled** string, used at runtime |
+| `ConnectionStrings__Migration` | Neon **direct** (non-pooled) string; the deploy workflow reads it for DDL |
 | `Jwt__Signer`, `Jwt__Issuer`, `Jwt__Audience` | Signer is a long random secret |
 | `Google__ClientId` | Admin SPA OAuth client id |
 | `SuperAdmin__Email`, `SuperAdmin__FirstName`, `SuperAdmin__LastName` | Identity only |

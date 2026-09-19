@@ -45,10 +45,11 @@ host. Schema changes are **never** applied at startup.
 
 - `ci.yml` (push/PR to `main` or `develop`): build → test (Testcontainers needs Docker, present on
   ubuntu runners) → `dotnet ef migrations has-pending-model-changes` (with a dummy connection string).
-- `deploy.yml` (push to `main`, one at a time): build → **test** → `dotnet ef database update`
-  (direct string from `NEON_MIGRATION_CONNECTION_STRING`) → publish → deploy → `/api/health` smoke
-  check when `AZURE_FUNCTIONAPP_URL` is set. Tests run before migrations so a failure never touches
-  the database.
+- `main_func-frostwoodtech-cms-prod.yml` (push to `main`, one at a time): build → **test** → OIDC
+  login → read the `ConnectionStrings__Migration` app setting from the Function App →
+  `dotnet ef database update` → publish → deploy → `/api/health` smoke check when
+  `AZURE_FUNCTIONAPP_URL` is set. Tests run before migrations so a failure never touches the
+  database, and the direct string never leaves Azure.
 - Both workflows use `permissions: contents: read`.
 - Migrations are created only with `dotnet ef migrations add`; never hand-edit migration, designer
   or snapshot files.
