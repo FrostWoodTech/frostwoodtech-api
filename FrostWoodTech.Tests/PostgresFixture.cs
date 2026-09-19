@@ -65,8 +65,11 @@ public sealed class PostgresFixture : IAsyncLifetime
             .Distinct()
             .Select(name => "\"" + name + "\"");
 
+        // Table names come from the EF model, not from test input, so there is nothing to parameterize.
+#pragma warning disable EF1002
         await db.Database.ExecuteSqlRawAsync(
             $"TRUNCATE {string.Join(", ", tables)} RESTART IDENTITY CASCADE;");
+#pragma warning restore EF1002
     }
 
     public async Task DisposeAsync()
