@@ -10,10 +10,10 @@ on:
   workflow_dispatch:
 
 env:
-  DOTNET_VERSION: '10.0.x'
+  DOTNET_VERSION: "10.0.x"
   DOTNET_NOLOGO: true
   DOTNET_CLI_TELEMETRY_OPTOUT: true
-  AZURE_FUNCTIONAPP_PACKAGE_PATH: './publish'
+  AZURE_FUNCTIONAPP_PACKAGE_PATH: "./publish"
   # The Function App setting holding Neon's DIRECT (non-pooled) string for DDL. Change it here only.
   MIGRATION_APPSETTING_NAME: ConnectionStrings__Migration
 
@@ -30,7 +30,7 @@ jobs:
       contents: read #This is required for actions/checkout
 
     steps:
-      - name: 'Checkout GitHub Action'
+      - name: "Checkout GitHub Action"
         uses: actions/checkout@v4
 
       - name: Setup DotNet ${{ env.DOTNET_VERSION }} Environment
@@ -54,9 +54,9 @@ jobs:
       - name: Login to Azure
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_92BF6F2CFD134A4C9D333FD1C69E6710 }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_D683C956C76D45ED83BCF95EDD98E423 }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_E36FB923C69E47B28C0396761839B1BA }}
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
 
       # The production string stays in Azure; this reads it for one step rather than copying it into a GitHub secret.
       - name: Read the migration connection string from Azure
@@ -93,12 +93,12 @@ jobs:
           --no-build
           --output ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
 
-      - name: 'Run Azure Functions Action'
+      - name: "Run Azure Functions Action"
         uses: Azure/functions-action@v1
         id: fa
         with:
-          app-name: 'func-frostwoodtech-cms-prod'
-          slot-name: 'Production'
+          app-name: "func-frostwoodtech-cms-prod"
+          slot-name: "Production"
           package: ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
 
       # Health also checks the database, so this catches bad app settings as well as a bad package.
