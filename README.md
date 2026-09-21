@@ -102,5 +102,6 @@ Function App settings (use `__` for nesting):
 | `Cors__AllowedOrigins` | Comma-separated exact origins of the three frontends |
 | `Contact__NotifyAddress` | Optional; defaults to the super admin |
 | `Docs__Enabled` | Optional; `true` to expose `/api/docs` |
+| `Docs__ServerUrls__0`, `__1`, … | Optional; extra servers in the docs dropdown after "This host" (absolute URLs ending in `/api`) |
 
 [func]: https://learn.microsoft.com/azure/azure-functions/functions-run-local

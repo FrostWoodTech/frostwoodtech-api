@@ -38,7 +38,8 @@
     "BaseUrl": "<email-base-url>"
   },
   "Docs": {
-    "Enabled": "<docs-enabled>"
+    "Enabled": "<docs-enabled>",
+    "ServerUrls": [ "<optional; extra absolute server URLs for the docs dropdown, e.g. https://api.example.com/api>" ]
   },
   "Contact": {
     "NotifyAddress": "<address for new contact-form submissions; falls back to SuperAdmin:Email>"
