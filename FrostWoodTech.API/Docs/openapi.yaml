@@ -23,10 +23,9 @@ info:
     * Timestamps are UTC `timestamptz`; enums travel as `snake_case` names.
 
 servers:
-  - url: http://localhost:7060/api
-    description: Local Functions host
-  - url: https://<your-function-app>.azurewebsites.net/api
-    description: Deployed Function App
+  # Rewritten when served: this entry plus Docs:ServerUrls.
+  - url: /api
+    description: This host
 
 tags:
   - name: public

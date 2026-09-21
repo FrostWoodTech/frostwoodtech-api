@@ -32,7 +32,7 @@ public class GetOpenApiSpec
 
         return new ContentResult
         {
-            Content = OpenApiDocument.Yaml,
+            Content = OpenApiDocument.WithServers(_options.ServerUrls),
             ContentType = OpenApiDocument.ContentType,
             StatusCode = StatusCodes.Status200OK
         };

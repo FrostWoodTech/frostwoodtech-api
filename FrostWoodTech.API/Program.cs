@@ -147,7 +147,10 @@ builder.Services.AddHttpClient<IExchangeRateProvider, OpenExchangeRateProvider>(
 });
 
 // /api/docs and /api/openapi.yaml return 404 unless Docs__Enabled is set.
-builder.Services.Configure<DocsOptions>(builder.Configuration.GetSection("Docs"));
+builder.Services.AddOptions<DocsOptions>()
+    .Bind(builder.Configuration.GetSection("Docs"))
+    .Validate(o => o.HasValidServerUrls(), "Docs:ServerUrls entries must be absolute http(s) URLs.")
+    .ValidateOnStart();
 
 // Order matters: CORS outermost so error responses get headers; the exception handler wraps auth.
 builder.UseMiddleware<CorsMiddleware>();
