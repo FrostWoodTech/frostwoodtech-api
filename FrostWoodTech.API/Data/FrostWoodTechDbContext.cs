@@ -41,8 +41,6 @@ public class FrostWoodTechDbContext : DbContext
 
     public DbSet<Faq> Faqs => Set<Faq>();
 
-    public DbSet<Certificate> Certificates => Set<Certificate>();
-
     public DbSet<Review> Reviews => Set<Review>();
 
     public DbSet<ContactSubmission> ContactSubmissions => Set<ContactSubmission>();
@@ -74,8 +72,6 @@ public class FrostWoodTechDbContext : DbContext
         modelBuilder.HasPostgresEnum<AuthAttemptAction>(name: "auth_attempt_action");
         modelBuilder.HasPostgresEnum<ContactSubmissionStatus>(name: "contact_submission_status");
         modelBuilder.HasPostgresEnum<ContactBudgetRange>(name: "contact_budget_range");
-        modelBuilder.HasPostgresEnum<CertificateCategory>(name: "certificate_category");
-        modelBuilder.HasPostgresEnum<Site>(name: "site");
 
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(FrostWoodTechDbContext).Assembly);
 
@@ -101,16 +97,12 @@ public class FrostWoodTechDbContext : DbContext
                 entity.HasQueryFilter(BuildNotDeletedFilter(clrType));
             }
 
-            if (typeof(SiteVisibleEntity).IsAssignableFrom(clrType))
+            if (typeof(FeaturableEntity).IsAssignableFrom(clrType))
             {
                 var entity = modelBuilder.Entity(clrType);
 
-                entity.Property(nameof(SiteVisibleEntity.ShowOnAgency)).HasColumnName("show_on_agency");
-                entity.Property(nameof(SiteVisibleEntity.FeaturedOnAgency)).HasColumnName("featured_on_agency");
-                entity.Property(nameof(SiteVisibleEntity.AgencySortOrder)).HasColumnName("agency_sort_order");
-                entity.Property(nameof(SiteVisibleEntity.ShowOnPersonal)).HasColumnName("show_on_personal");
-                entity.Property(nameof(SiteVisibleEntity.FeaturedOnPersonal)).HasColumnName("featured_on_personal");
-                entity.Property(nameof(SiteVisibleEntity.PersonalSortOrder)).HasColumnName("personal_sort_order");
+                entity.Property(nameof(FeaturableEntity.IsFeatured)).HasColumnName("is_featured");
+                entity.Property(nameof(FeaturableEntity.SortOrder)).HasColumnName("sort_order");
             }
         }
     }

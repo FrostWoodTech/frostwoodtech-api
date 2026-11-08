@@ -40,7 +40,7 @@ public class NeonStorageService : IMediaService
         if (request.Target is not { } target)
         {
             return ServiceResult<PresignedUploadResponse>.Validation(
-                "target is required: projects, products, services, tags, articles or certificates.");
+                "target is required: projects, products, services, tags or articles.");
         }
 
         var folderResult = BuildFolder(target, request.Slug);

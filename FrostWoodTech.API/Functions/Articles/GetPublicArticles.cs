@@ -21,22 +21,11 @@ public class GetPublicArticles
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "public/articles")] HttpRequest req,
         CancellationToken cancellationToken)
     {
-        if (!QueryParameters.TryReadSite(req, out var site))
-        {
-            return ProblemResults.BadRequest("validation_failed", "Unknown site.");
-        }
-
-        if (site is null)
-        {
-            return ProblemResults.SiteRequired();
-        }
-
         var tagSlug = QueryParameters.ReadString(req, "tag");
         var featured = QueryParameters.ReadBool(req, "featured");
         var (page, pageSize) = QueryParameters.ReadPaging(req);
 
         var result = await _articleService.GetPublicArticlesAsync(
-            site.Value,
             tagSlug,
             featured,
             page,

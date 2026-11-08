@@ -62,21 +62,6 @@ public class ContactTests(PostgresFixture fixture) : DatabaseTest(fixture)
     }
 
     [Fact]
-    public async Task A_missing_site_is_rejected()
-    {
-        await using var db = _fixture.CreateContext();
-        var service = CreateService(db);
-
-        var request = NewSubmission();
-        request.Site = null;
-
-        var result = await service.SubmitAsync(request, IpAddress(), CancellationToken.None);
-
-        Assert.False(result.IsSuccess);
-        Assert.Equal("validation_failed", result.Error!.Code);
-    }
-
-    [Fact]
     public async Task A_sixth_submission_from_the_same_ip_inside_the_window_is_rejected()
     {
         await using var db = _fixture.CreateContext();
@@ -193,6 +178,5 @@ public class ContactTests(PostgresFixture fixture) : DatabaseTest(fixture)
         Subject = "New project enquiry",
         Message = "We'd like a quote for a new website.",
         BudgetRange = ContactBudgetRange.OneToFiveK,
-        Site = Site.Agency
     };
 }

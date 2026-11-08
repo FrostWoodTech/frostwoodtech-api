@@ -21,8 +21,6 @@ public class CreateContactSubmissionRequest
 
     public ContactBudgetRange? BudgetRange { get; set; }
 
-    public Site? Site { get; set; }
-
     /// <summary>Honeypot: any value files the submission as spam, still answered 201.</summary>
     public string? Website { get; set; }
 }

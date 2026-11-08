@@ -15,8 +15,8 @@ Adding it needs a `warnings` field on admin write responses, the spec, and the a
 
 ### Service URL validation
 
-Service CTA URLs and image URLs are not checked for absolute http(s), unlike projects, products,
-images and certificates. Services also still accept sort orders on create/update.
+Service CTA URLs and image URLs are not checked for absolute http(s), unlike projects, products
+and images. Services also still accept sort orders on create/update.
 
 ### Scheduled exchange-rate refresh
 

@@ -16,13 +16,7 @@ public class CreateArticleRequest
 
     public bool IsPublished { get; set; }
 
-    public bool ShowOnAgency { get; set; }
-
-    public bool FeaturedOnAgency { get; set; }
-
-    public bool ShowOnPersonal { get; set; }
-
-    public bool FeaturedOnPersonal { get; set; }
+    public bool IsFeatured { get; set; }
 
     /// <summary>The full tag set; omitted or empty means none.</summary>
     public List<Guid>? TagIds { get; set; }

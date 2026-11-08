@@ -22,17 +22,7 @@ public class GetPublicProductBySlug
         string slug,
         CancellationToken cancellationToken)
     {
-        if (!QueryParameters.TryReadSite(req, out var site))
-        {
-            return ProblemResults.BadRequest("validation_failed", "Unknown site.");
-        }
-
-        if (site is null)
-        {
-            return ProblemResults.SiteRequired();
-        }
-
-        var result = await _productService.GetPublicProductBySlugAsync(site.Value, slug, cancellationToken);
+        var result = await _productService.GetPublicProductBySlugAsync(slug, cancellationToken);
 
         return result.IsSuccess
             ? HttpResponses.PublicJson(req, result.Value!)

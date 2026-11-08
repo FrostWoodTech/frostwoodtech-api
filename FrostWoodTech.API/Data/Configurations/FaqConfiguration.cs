@@ -26,8 +26,5 @@ public class FaqConfiguration : IEntityTypeConfiguration<Faq>
 
         builder.HasIndex(f => f.ServiceId);
 
-        // FAQs don't use SiteVisibleEntity, so map their flags here.
-        builder.Property(f => f.ShowOnAgency).HasColumnName("show_on_agency");
-        builder.Property(f => f.ShowOnPersonal).HasColumnName("show_on_personal");
     }
 }

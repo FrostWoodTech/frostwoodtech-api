@@ -9,9 +9,4 @@ public class CreateFaqRequest
 
     public string? Answer { get; set; }
 
-    public bool IsPublished { get; set; }
-
-    public bool ShowOnAgency { get; set; }
-
-    public bool ShowOnPersonal { get; set; }
-}
+    public bool IsPublished { get; set; }}

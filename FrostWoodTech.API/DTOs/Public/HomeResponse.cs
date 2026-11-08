@@ -1,6 +1,6 @@
 namespace FrostWoodTech.API.DTOs.Public;
 
-/// <summary>All home slices in one call, scoped to the requested site and published rows.</summary>
+/// <summary>All home slices in one call, published rows only.</summary>
 public sealed class HomeResponse
 {
     public required IReadOnlyList<ProjectResponse> FeaturedProjects { get; init; }
@@ -15,6 +15,6 @@ public sealed class HomeResponse
     /// <summary>Not filtered by featured.</summary>
     public required IReadOnlyList<FaqResponse> Faqs { get; init; }
 
-    /// <summary>Not site-scoped: reviews are shared by both sites.</summary>
+    /// <summary>Published reviews.</summary>
     public required IReadOnlyList<ReviewResponse> FeaturedReviews { get; init; }
 }

@@ -1,7 +1,6 @@
 using FrostWoodTech.API.Auth;
 using FrostWoodTech.API.Data;
 using FrostWoodTech.API.DTOs.Admin;
-using FrostWoodTech.API.Enums;
 using FrostWoodTech.API.Services;
 
 namespace FrostWoodTech.Tests;
@@ -9,21 +8,6 @@ namespace FrostWoodTech.Tests;
 /// <summary>Presence is checked by slug; scanning a page breaks once the shared database grows.</summary>
 public class ArticleTests(PostgresFixture fixture) : DatabaseTest(fixture)
 {
-    [Fact]
-    public async Task Personal_only_article_is_not_returned_for_the_agency_site()
-    {
-        await using var db = _fixture.CreateContext();
-        var service = NewService(db);
-
-        var created = await CreateAsync(service, NewArticle(showOnAgency: false, showOnPersonal: true));
-
-        Assert.True((await service.GetPublicArticleBySlugAsync(Site.Personal, created.Slug!, CancellationToken.None)).IsSuccess);
-        Assert.Equal("not_found", (await service.GetPublicArticleBySlugAsync(Site.Agency, created.Slug!, CancellationToken.None)).Error!.Code);
-
-        var agency = await service.GetPublicArticlesAsync(Site.Agency, null, null, 1, 100, CancellationToken.None);
-        Assert.DoesNotContain(agency.Items, a => a.Id == created.Id);
-    }
-
     [Fact]
     public async Task Unpublished_article_is_never_returned_on_the_public_surface()
     {
@@ -34,9 +18,9 @@ public class ArticleTests(PostgresFixture fixture) : DatabaseTest(fixture)
         request.IsPublished = false;
         var created = await CreateAsync(service, request);
 
-        Assert.Equal("not_found", (await service.GetPublicArticleBySlugAsync(Site.Agency, created.Slug!, CancellationToken.None)).Error!.Code);
+        Assert.Equal("not_found", (await service.GetPublicArticleBySlugAsync(created.Slug!, CancellationToken.None)).Error!.Code);
 
-        var admin = await service.GetAdminArticlesAsync(null, null, created.Title, false, 1, 20, CancellationToken.None);
+        var admin = await service.GetAdminArticlesAsync(null, created.Title, 1, 20, CancellationToken.None);
         Assert.Contains(admin.Items, a => a.Id == created.Id);
     }
 
@@ -49,27 +33,10 @@ public class ArticleTests(PostgresFixture fixture) : DatabaseTest(fixture)
         var created = await CreateAsync(service, NewArticle());
         Assert.True((await service.DeleteAsync(created.Id, CancellationToken.None)).IsSuccess);
 
-        Assert.Equal("not_found", (await service.GetPublicArticleBySlugAsync(Site.Agency, created.Slug!, CancellationToken.None)).Error!.Code);
+        Assert.Equal("not_found", (await service.GetPublicArticleBySlugAsync(created.Slug!, CancellationToken.None)).Error!.Code);
 
-        var admin = await service.GetAdminArticlesAsync(null, null, created.Title, false, 1, 20, CancellationToken.None);
+        var admin = await service.GetAdminArticlesAsync(null, created.Title, 1, 20, CancellationToken.None);
         Assert.DoesNotContain(admin.Items, a => a.Id == created.Id);
-    }
-
-    [Theory]
-    [InlineData(true, false)]
-    [InlineData(false, true)]
-    public async Task Featuring_an_article_on_a_site_it_is_not_shown_on_is_rejected(bool agency, bool personal)
-    {
-        await using var db = _fixture.CreateContext();
-        var service = NewService(db);
-
-        var request = NewArticle(showOnAgency: false, showOnPersonal: false);
-        request.FeaturedOnAgency = agency;
-        request.FeaturedOnPersonal = personal;
-
-        var result = await service.CreateAsync(request, CancellationToken.None);
-
-        Assert.Equal("validation_failed", result.Error!.Code);
     }
 
     [Fact]
@@ -105,7 +72,6 @@ public class ArticleTests(PostgresFixture fixture) : DatabaseTest(fixture)
                 Excerpt = "An excerpt.",
                 Slug = first.Slug,
                 IsPublished = true,
-                ShowOnAgency = true
             },
             CancellationToken.None);
 
@@ -138,40 +104,20 @@ public class ArticleTests(PostgresFixture fixture) : DatabaseTest(fixture)
         var tagged = await CreateAsync(service, taggedRequest);
         var untagged = await CreateAsync(service, NewArticle());
 
-        var result = await service.GetPublicArticlesAsync(Site.Agency, tag.Slug, null, 1, 100, CancellationToken.None);
+        var result = await service.GetPublicArticlesAsync(tag.Slug, null, 1, 100, CancellationToken.None);
 
         Assert.Equal([tagged.Id], result.Items.Select(a => a.Id));
         Assert.DoesNotContain(result.Items, a => a.Id == untagged.Id);
     }
 
     [Fact]
-    public async Task Republishing_keeps_the_editors_site_choice()
-    {
-        await using var db = _fixture.CreateContext();
-        var service = NewService(db);
-
-        var created = await CreateAsync(service, NewArticle(showOnAgency: false, showOnPersonal: true));
-
-        await service.SetPublishedAsync(created.Id, new SetPublishedRequest { IsPublished = false }, CancellationToken.None);
-        var republished = await service.SetPublishedAsync(created.Id, new SetPublishedRequest { IsPublished = true }, CancellationToken.None);
-
-        Assert.False(republished.Value!.ShowOnAgency);
-        Assert.Equal(created.PublishedAt, republished.Value.PublishedAt);
-    }
-
-    [Fact]
-    public async Task Reorder_rejects_a_missing_site_and_an_unknown_id()
+    public async Task Reorder_rejects_an_unknown_id()
     {
         await using var db = _fixture.CreateContext();
         var service = NewService(db);
         var created = await CreateAsync(service, NewArticle());
-
-        var noSite = await service.ReorderAsync(
-            new ReorderRequest { Items = [new ReorderItem { Id = created.Id }] }, CancellationToken.None);
-        Assert.Equal("validation_failed", noSite.Error!.Code);
-
         var unknown = await service.ReorderAsync(
-            new ReorderRequest { Site = Site.Agency, Items = [new ReorderItem { Id = Guid.NewGuid() }] }, CancellationToken.None);
+            new ReorderRequest { Items = [new ReorderItem { Id = Guid.NewGuid() }] }, CancellationToken.None);
         Assert.Equal("not_found", unknown.Error!.Code);
     }
 
@@ -186,12 +132,10 @@ public class ArticleTests(PostgresFixture fixture) : DatabaseTest(fixture)
         return created.Value!;
     }
 
-    private static CreateArticleRequest NewArticle(bool showOnAgency = true, bool showOnPersonal = false) => new()
+    private static CreateArticleRequest NewArticle() => new()
     {
         Title = $"An article {Guid.NewGuid():N}",
         Excerpt = "An excerpt.",
         IsPublished = true,
-        ShowOnAgency = showOnAgency,
-        ShowOnPersonal = showOnPersonal
     };
 }

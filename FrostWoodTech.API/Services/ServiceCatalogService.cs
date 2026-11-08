@@ -8,7 +8,6 @@ using FrostWoodTech.API.Data;
 using FrostWoodTech.API.DTOs.Admin;
 using FrostWoodTech.API.DTOs.Public;
 using FrostWoodTech.API.Entities;
-using FrostWoodTech.API.Enums;
 using FrostWoodTech.API.Interfaces;
 
 namespace FrostWoodTech.API.Services;
@@ -30,28 +29,25 @@ public class ServiceCatalogService : IServiceCatalogService
     }
 
     public async Task<PagedResult<ServiceResponse>> GetPublicServicesAsync(
-        Site site,
         bool? featured,
         int page,
         int pageSize,
         CancellationToken cancellationToken)
     {
-        // is_deleted comes from the global filter; is_published and the site flag are mandatory.
-        var query = ForSite(_db.Services.AsNoTracking().Where(s => s.IsPublished), site);
+        // is_deleted comes from the global filter; is_published is mandatory.
+        var query = _db.Services.AsNoTracking().Where(s => s.IsPublished);
 
         if (featured is not null)
         {
-            query = site == Site.Agency
-                ? query.Where(s => s.FeaturedOnAgency == featured)
-                : query.Where(s => s.FeaturedOnPersonal == featured);
+            query = query.Where(s => s.IsFeatured == featured);
         }
 
         var total = await query.CountAsync(cancellationToken);
 
-        var items = await OrderForSite(query, site)
+        var items = await OrderForPublic(query)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Select(PublicProjection(site, withDetail: false))
+            .Select(PublicProjection(withDetail: false))
             .ToListAsync(cancellationToken);
 
         return new PagedResult<ServiceResponse>
@@ -64,39 +60,29 @@ public class ServiceCatalogService : IServiceCatalogService
     }
 
     public async Task<ServiceResult<ServiceResponse>> GetPublicServiceBySlugAsync(
-        Site site,
         string slug,
         CancellationToken cancellationToken)
     {
-        var service = await ForSite(_db.Services.AsNoTracking().Where(s => s.IsPublished), site)
+        var service = await _db.Services.AsNoTracking().Where(s => s.IsPublished)
             .Where(s => s.Slug == slug)
-            .Select(PublicProjection(site, withDetail: true))
+            .Select(PublicProjection(withDetail: true))
             .FirstOrDefaultAsync(cancellationToken);
 
         return service is null
             ? ServiceResult<ServiceResponse>.NotFound(
                 "not_found",
-                $"No published service with slug '{slug}' on this site.")
+                $"No published service with slug '{slug}'.")
             : ServiceResult<ServiceResponse>.Success(service);
     }
 
     public async Task<PagedResult<AdminServiceResponse>> GetAdminServicesAsync(
-        Site? site,
         bool? isPublished,
         string? search,
-        bool includeHidden,
         int page,
         int pageSize,
         CancellationToken cancellationToken)
     {
         var query = _db.Services.AsNoTracking();
-
-        // includeHidden: the visibility screen passes site (for sort order) but must see rows not shown yet.
-        if (site is not null && !includeHidden)
-        {
-            query = ForSite(query, site.Value);
-        }
-
         if (isPublished is not null)
         {
             query = query.Where(s => s.IsPublished == isPublished);
@@ -203,12 +189,8 @@ public class ServiceCatalogService : IServiceCatalogService
             DepthImageWidth = request.DepthImageWidth,
             DepthImageHeight = request.DepthImageHeight,
             DepthImageAltText = Blank(request.DepthImageAltText),
-            ShowOnAgency = request.ShowOnAgency,
-            FeaturedOnAgency = request.FeaturedOnAgency,
-            AgencySortOrder = request.AgencySortOrder,
-            ShowOnPersonal = request.ShowOnPersonal,
-            FeaturedOnPersonal = request.FeaturedOnPersonal,
-            PersonalSortOrder = request.PersonalSortOrder
+            IsFeatured = request.IsFeatured,
+            SortOrder = request.SortOrder,
         };
 
         ApplyPublished(service, request.IsPublished);
@@ -292,12 +274,8 @@ public class ServiceCatalogService : IServiceCatalogService
         service.DepthImageWidth = request.DepthImageWidth;
         service.DepthImageHeight = request.DepthImageHeight;
         service.DepthImageAltText = Blank(request.DepthImageAltText);
-        service.ShowOnAgency = request.ShowOnAgency;
-        service.FeaturedOnAgency = request.FeaturedOnAgency;
-        service.AgencySortOrder = request.AgencySortOrder;
-        service.ShowOnPersonal = request.ShowOnPersonal;
-        service.FeaturedOnPersonal = request.FeaturedOnPersonal;
-        service.PersonalSortOrder = request.PersonalSortOrder;
+        service.IsFeatured = request.IsFeatured;
+        service.SortOrder = request.SortOrder;
 
         ApplyPublished(service, request.IsPublished);
         SyncProjects(service, projectIds);
@@ -317,14 +295,6 @@ public class ServiceCatalogService : IServiceCatalogService
         {
             return NotFound(id);
         }
-
-        // First publish only: show on both sites. Republishing keeps the editor's choice.
-        if (request.IsPublished && service.PublishedAt is null)
-        {
-            service.ShowOnAgency = true;
-            service.ShowOnPersonal = true;
-        }
-
         ApplyPublished(service, request.IsPublished);
 
         await _db.SaveChangesAsync(cancellationToken);
@@ -448,11 +418,6 @@ public class ServiceCatalogService : IServiceCatalogService
 
     public async Task<ServiceResult<bool>> ReorderAsync(ReorderRequest request, CancellationToken cancellationToken)
     {
-        if (request.Site is null)
-        {
-            return ServiceResult<bool>.Validation("site is required — sort order is kept per site.");
-        }
-
         var items = request.Items;
         if (items is null || items.Count == 0)
         {
@@ -477,16 +442,7 @@ public class ServiceCatalogService : IServiceCatalogService
 
         foreach (var item in items)
         {
-            var service = services[item.Id];
-
-            if (request.Site == Site.Agency)
-            {
-                service.AgencySortOrder = item.SortOrder;
-            }
-            else
-            {
-                service.PersonalSortOrder = item.SortOrder;
-            }
+            services[item.Id].SortOrder = item.SortOrder;
         }
 
         await _db.SaveChangesAsync(cancellationToken);
@@ -494,15 +450,8 @@ public class ServiceCatalogService : IServiceCatalogService
         return ServiceResult<bool>.Success(true);
     }
 
-    private static IQueryable<ServiceOffering> ForSite(IQueryable<ServiceOffering> query, Site site) =>
-        site == Site.Agency
-            ? query.Where(s => s.ShowOnAgency)
-            : query.Where(s => s.ShowOnPersonal);
-
-    private static IOrderedQueryable<ServiceOffering> OrderForSite(IQueryable<ServiceOffering> query, Site site) =>
-        site == Site.Agency
-            ? query.OrderBy(s => s.AgencySortOrder).ThenByDescending(s => s.PublishedAt)
-            : query.OrderBy(s => s.PersonalSortOrder).ThenByDescending(s => s.PublishedAt);
+    private static IOrderedQueryable<ServiceOffering> OrderForPublic(IQueryable<ServiceOffering> query) =>
+        query.OrderBy(s => s.SortOrder).ThenByDescending(s => s.PublishedAt);
 
     private static string? Validate(
         string? name,
@@ -518,17 +467,6 @@ public class ServiceCatalogService : IServiceCatalogService
         {
             return "shortDescription is required.";
         }
-
-        if (request.FeaturedOnAgency && !request.ShowOnAgency)
-        {
-            return "featuredOnAgency requires showOnAgency.";
-        }
-
-        if (request.FeaturedOnPersonal && !request.ShowOnPersonal)
-        {
-            return "featuredOnPersonal requires showOnPersonal.";
-        }
-
         if (request.IconObjectKey is not null && string.IsNullOrWhiteSpace(request.IconAltText))
         {
             return "iconAltText is required whenever an icon is set.";
@@ -619,10 +557,8 @@ public class ServiceCatalogService : IServiceCatalogService
     private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     // withDetail adds projects and FAQs; only the single-service endpoint needs them (avoids N+1 on lists).
-    private static Expression<Func<ServiceOffering, ServiceResponse>> PublicProjection(Site site, bool withDetail)
+    private static Expression<Func<ServiceOffering, ServiceResponse>> PublicProjection(bool withDetail)
     {
-        var isAgency = site == Site.Agency;
-
         if (!withDetail)
         {
             return s => new ServiceResponse
@@ -657,8 +593,8 @@ public class ServiceCatalogService : IServiceCatalogService
                 SeoTitle = s.SeoTitle,
                 SeoDescription = s.SeoDescription,
                 PublishedAt = s.PublishedAt,
-                Featured = isAgency ? s.FeaturedOnAgency : s.FeaturedOnPersonal,
-                SortOrder = isAgency ? s.AgencySortOrder : s.PersonalSortOrder
+                Featured = s.IsFeatured,
+                SortOrder = s.SortOrder
             };
         }
 
@@ -694,14 +630,12 @@ public class ServiceCatalogService : IServiceCatalogService
             SeoTitle = s.SeoTitle,
             SeoDescription = s.SeoDescription,
             PublishedAt = s.PublishedAt,
-            Featured = isAgency ? s.FeaturedOnAgency : s.FeaturedOnPersonal,
-            SortOrder = isAgency ? s.AgencySortOrder : s.PersonalSortOrder,
+            Featured = s.IsFeatured,
+            SortOrder = s.SortOrder,
             // ServiceProject has no soft-delete filter, so check the project's own state here.
             Projects = s.ServiceProjects
-                .Where(sp => !sp.Project.IsDeleted
-                    && sp.Project.IsPublished
-                    && (isAgency ? sp.Project.ShowOnAgency : sp.Project.ShowOnPersonal))
-                .OrderBy(sp => isAgency ? sp.Project.AgencySortOrder : sp.Project.PersonalSortOrder)
+                .Where(sp => !sp.Project.IsDeleted && sp.Project.IsPublished)
+                .OrderBy(sp => sp.Project.SortOrder)
                 .ThenByDescending(sp => sp.Project.Year)
                 .Select(sp => new ServiceProjectResponse
                 {
@@ -723,9 +657,7 @@ public class ServiceCatalogService : IServiceCatalogService
                 })
                 .ToList(),
             Faqs = s.Faqs
-                .Where(f => !f.IsDeleted
-                    && f.IsPublished
-                    && (isAgency ? f.ShowOnAgency : f.ShowOnPersonal))
+                .Where(f => !f.IsDeleted && f.IsPublished)
                 .OrderBy(f => f.SortOrder)
                 .Select(f => new FaqResponse
                 {
@@ -786,12 +718,8 @@ public class ServiceCatalogService : IServiceCatalogService
         SeoDescription = s.SeoDescription,
         IsPublished = s.IsPublished,
         PublishedAt = s.PublishedAt,
-        ShowOnAgency = s.ShowOnAgency,
-        FeaturedOnAgency = s.FeaturedOnAgency,
-        AgencySortOrder = s.AgencySortOrder,
-        ShowOnPersonal = s.ShowOnPersonal,
-        FeaturedOnPersonal = s.FeaturedOnPersonal,
-        PersonalSortOrder = s.PersonalSortOrder,
+        IsFeatured = s.IsFeatured,
+        SortOrder = s.SortOrder,
         CreatedAt = s.CreatedAt,
         UpdatedAt = s.UpdatedAt
     };

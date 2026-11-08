@@ -21,21 +21,10 @@ public class GetPublicProducts
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "public/products")] HttpRequest req,
         CancellationToken cancellationToken)
     {
-        if (!QueryParameters.TryReadSite(req, out var site))
-        {
-            return ProblemResults.BadRequest("validation_failed", "Unknown site.");
-        }
-
-        if (site is null)
-        {
-            return ProblemResults.SiteRequired();
-        }
-
         var featured = QueryParameters.ReadBool(req, "featured");
         var (page, pageSize) = QueryParameters.ReadPaging(req);
 
         var result = await _productService.GetPublicProductsAsync(
-            site.Value,
             featured,
             page,
             pageSize,

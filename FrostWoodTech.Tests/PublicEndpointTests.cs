@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
-using FrostWoodTech.API.Enums;
 using FrostWoodTech.API.Functions.Articles;
 using FrostWoodTech.API.Functions.Faqs;
 using FrostWoodTech.API.Functions.Home;
@@ -12,8 +11,8 @@ using FrostWoodTech.API.Interfaces;
 
 namespace FrostWoodTech.Tests;
 
-/// <summary>The site check lives in the Functions, so each one is called directly with a stub service.</summary>
-public class PublicSiteGuardTests
+/// <summary>Each public Function is called directly with a stub service.</summary>
+public class PublicEndpointTests
 {
     public static TheoryData<string> Endpoints =>
     [
@@ -23,39 +22,27 @@ public class PublicSiteGuardTests
 
     [Theory]
     [MemberData(nameof(Endpoints))]
-    public async Task A_missing_site_is_a_400_and_the_service_is_never_called(string endpoint)
+    public async Task The_endpoint_answers_without_a_site(string endpoint)
     {
         var (run, recorder) = Build(endpoint);
 
         var result = await run(ApiAssert.Request());
 
-        ApiAssert.Problem(result, StatusCodes.Status400BadRequest, "site_required");
-        Assert.Empty(recorder.SitesReceived);
+        Assert.IsType<ContentResult>(result);
+        Assert.True(recorder.Calls > 0);
     }
 
+    // Regression: the retired ?site= parameter is ignored, not rejected.
     [Theory]
     [MemberData(nameof(Endpoints))]
-    public async Task An_unknown_site_is_a_400_and_the_service_is_never_called(string endpoint)
-    {
-        var (run, recorder) = Build(endpoint);
-
-        var result = await run(ApiAssert.Request("site=99"));
-
-        ApiAssert.Problem(result, StatusCodes.Status400BadRequest, "validation_failed");
-        Assert.Empty(recorder.SitesReceived);
-    }
-
-    [Theory]
-    [MemberData(nameof(Endpoints))]
-    public async Task A_valid_site_reaches_the_service_unchanged(string endpoint)
+    public async Task A_legacy_site_parameter_is_ignored(string endpoint)
     {
         var (run, recorder) = Build(endpoint);
 
         var result = await run(ApiAssert.Request("site=personal"));
 
         Assert.IsType<ContentResult>(result);
-        Assert.NotEmpty(recorder.SitesReceived);
-        Assert.All(recorder.SitesReceived, site => Assert.Equal(Site.Personal, site));
+        Assert.True(recorder.Calls > 0);
     }
 
     private static (Func<HttpRequest, Task<IActionResult>> Run, RecordingServiceProxy Recorder) Build(string endpoint)
@@ -112,18 +99,15 @@ public class PublicSiteGuardTests
             case "home":
             {
                 var (projects, recorder) = RecordingServiceProxy.Create<IProjectService>();
-                var (articles, articleRecorder) = RecordingServiceProxy.Create<IArticleService>();
-                var (services, serviceRecorder) = RecordingServiceProxy.Create<IServiceCatalogService>();
+                var (articles, _) = RecordingServiceProxy.Create<IArticleService>();
+                var (services, _) = RecordingServiceProxy.Create<IServiceCatalogService>();
                 var (pricing, _) = RecordingServiceProxy.Create<IPricingService>();
-                var (faqs, faqRecorder) = RecordingServiceProxy.Create<IFaqService>();
+                var (faqs, _) = RecordingServiceProxy.Create<IFaqService>();
                 var (reviews, _) = RecordingServiceProxy.Create<IReviewService>();
 
                 return (async req =>
                 {
                     var result = await new GetPublicHome(projects, articles, services, pricing, faqs, reviews).Run(req, none);
-                    recorder.SitesReceived.AddRange(articleRecorder.SitesReceived);
-                    recorder.SitesReceived.AddRange(serviceRecorder.SitesReceived);
-                    recorder.SitesReceived.AddRange(faqRecorder.SitesReceived);
 
                     return result;
                 }, recorder);

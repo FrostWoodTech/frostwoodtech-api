@@ -24,8 +24,7 @@ with `ServiceURL` = Neon's endpoint and `ForcePathStyle = true`.
 ## What the DB stores
 
 `object_key`, `url`, `width`, `height`, `alt_text` — never bytes or per-size URLs. `alt_text` is
-required. Certificates also store `mime_type` (`application/pdf` or `image/*`); PDFs may omit
-dimensions.
+required.
 
 Articles store `media://{objectKey}` tokens instead of URLs, in both `content_markdown` and
 `cover_image_key`. The public path resolves them server-side (`IArticleMediaResolver`); the admin SPA
@@ -35,7 +34,7 @@ resolves them client-side using `GET /api/cms/admin/media/config` (`{ publicBase
 
 ```
 {BaseFolder}/projects/{slug}/    {BaseFolder}/products/{slug}/    {BaseFolder}/articles/{slug}/
-{BaseFolder}/services/           {BaseFolder}/tags/               {BaseFolder}/certificates/
+{BaseFolder}/services/           {BaseFolder}/tags/
 ```
 
 The client sends a `target`, never a folder. `slug` is required for projects, products and
@@ -45,9 +44,9 @@ articles and is re-run through `SlugGenerator`, so nothing outside the base fold
 
 - Soft-deleting a row never deletes its file, so a restore keeps it.
 - Purging a row (super admin, from the trash) deletes every file it owns after the commit: project and
-  product images, a certificate file, a service's icon/hero/depth images, and an article's cover image plus
+  product images, a service's icon/hero/depth images, and an article's cover image plus
   every `media://` key in its Markdown. Legacy `http(s)` cover URLs are skipped: nothing maps a URL back to a key.
-- Hard-deleting an image row, or replacing a certificate's file, deletes the object **after** the
+- Hard-deleting an image row deletes the object **after** the
   row is committed. A failed delete is logged, never surfaced; a missing object counts as success.
 
 ## Config

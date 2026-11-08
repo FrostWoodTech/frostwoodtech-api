@@ -1,30 +1,25 @@
 using FrostWoodTech.API.Common;
 using FrostWoodTech.API.DTOs.Admin;
 using FrostWoodTech.API.DTOs.Public;
-using FrostWoodTech.API.Enums;
 
 namespace FrostWoodTech.API.Interfaces;
 
 public interface IProductService
 {
-    /// <summary>Always filtered to one site and published, non-deleted rows.</summary>
+    /// <summary>Always filtered to published, non-deleted rows.</summary>
     Task<PagedResult<ProductResponse>> GetPublicProductsAsync(
-        Site site,
         bool? featured,
         int page,
         int pageSize,
         CancellationToken cancellationToken);
 
     Task<ServiceResult<ProductResponse>> GetPublicProductBySlugAsync(
-        Site site,
         string slug,
         CancellationToken cancellationToken);
 
     Task<PagedResult<AdminProductResponse>> GetAdminProductsAsync(
-        Site? site,
         bool? isPublished,
         string? search,
-        bool includeHidden,
         int page,
         int pageSize,
         CancellationToken cancellationToken);
@@ -40,7 +35,7 @@ public interface IProductService
         UpdateProductRequest request,
         CancellationToken cancellationToken);
 
-    /// <summary>First publish stamps published_at and shows the product on both sites.</summary>
+    /// <summary>First publish stamps published_at; republishing keeps it.</summary>
     Task<ServiceResult<AdminProductResponse>> SetPublishedAsync(
         Guid id,
         SetPublishedRequest request,

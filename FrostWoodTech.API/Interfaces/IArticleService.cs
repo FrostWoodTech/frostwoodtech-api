@@ -1,15 +1,13 @@
 using FrostWoodTech.API.Common;
 using FrostWoodTech.API.DTOs.Admin;
 using FrostWoodTech.API.DTOs.Public;
-using FrostWoodTech.API.Enums;
 
 namespace FrostWoodTech.API.Interfaces;
 
 public interface IArticleService
 {
-    /// <summary>Always filtered to one site and published, non-deleted rows.</summary>
+    /// <summary>Always filtered to published, non-deleted rows.</summary>
     Task<PagedResult<ArticleResponse>> GetPublicArticlesAsync(
-        Site site,
         string? tagSlug,
         bool? featured,
         int page,
@@ -17,15 +15,12 @@ public interface IArticleService
         CancellationToken cancellationToken);
 
     Task<ServiceResult<ArticleResponse>> GetPublicArticleBySlugAsync(
-        Site site,
         string slug,
         CancellationToken cancellationToken);
 
     Task<PagedResult<AdminArticleResponse>> GetAdminArticlesAsync(
-        Site? site,
         bool? isPublished,
         string? search,
-        bool includeHidden,
         int page,
         int pageSize,
         CancellationToken cancellationToken);

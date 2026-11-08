@@ -1,7 +1,5 @@
 using Microsoft.AspNetCore.Http;
 
-using FrostWoodTech.API.Enums;
-
 namespace FrostWoodTech.API.Common;
 
 public static class QueryParameters
@@ -45,7 +43,7 @@ public static class QueryParameters
             return true;
         }
 
-        // Names only: Enum.TryParse also accepts "1", "99" and "agency,personal".
+        // Names only: Enum.TryParse also accepts "1", "99" and "draft,published".
         if (raw.All(c => char.IsAsciiLetter(c) || c == '_')
             && Enum.TryParse<TEnum>(raw.Replace("_", string.Empty), ignoreCase: true, out var parsed)
             && Enum.IsDefined(parsed))
@@ -56,8 +54,4 @@ public static class QueryParameters
 
         return false;
     }
-
-    /// <summary>False for an unknown site; true with null when absent (answer with SiteRequired).</summary>
-    public static bool TryReadSite(HttpRequest request, out Site? site) =>
-        TryReadEnum(request, "site", out site);
 }

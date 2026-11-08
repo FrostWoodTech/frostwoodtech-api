@@ -8,7 +8,6 @@ using FrostWoodTech.API.Data;
 using FrostWoodTech.API.DTOs.Admin;
 using FrostWoodTech.API.DTOs.Public;
 using FrostWoodTech.API.Entities;
-using FrostWoodTech.API.Enums;
 using FrostWoodTech.API.Interfaces;
 
 namespace FrostWoodTech.API.Services;
@@ -29,7 +28,6 @@ public class ProjectService : IProjectService
     }
 
     public async Task<PagedResult<ProjectResponse>> GetPublicProjectsAsync(
-        Site site,
         string? tagSlug,
         string? categorySlug,
         bool? featured,
@@ -37,8 +35,8 @@ public class ProjectService : IProjectService
         int pageSize,
         CancellationToken cancellationToken)
     {
-        // is_deleted comes from the global filter; is_published and the site flag are mandatory.
-        var query = ForSite(_db.Projects.AsNoTracking().Where(p => p.IsPublished), site);
+        // is_deleted comes from the global filter; is_published is mandatory.
+        var query = _db.Projects.AsNoTracking().Where(p => p.IsPublished);
 
         if (tagSlug is not null)
         {
@@ -54,17 +52,15 @@ public class ProjectService : IProjectService
 
         if (featured is not null)
         {
-            query = site == Site.Agency
-                ? query.Where(p => p.FeaturedOnAgency == featured)
-                : query.Where(p => p.FeaturedOnPersonal == featured);
+            query = query.Where(p => p.IsFeatured == featured);
         }
 
         var total = await query.CountAsync(cancellationToken);
 
-        var items = await OrderForSite(query, site)
+        var items = await OrderForPublic(query)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Select(PublicProjection(site))
+            .Select(PublicProjection)
             .ToListAsync(cancellationToken);
 
         return new PagedResult<ProjectResponse>
@@ -77,39 +73,29 @@ public class ProjectService : IProjectService
     }
 
     public async Task<ServiceResult<ProjectResponse>> GetPublicProjectBySlugAsync(
-        Site site,
         string slug,
         CancellationToken cancellationToken)
     {
-        var project = await ForSite(_db.Projects.AsNoTracking().Where(p => p.IsPublished), site)
+        var project = await _db.Projects.AsNoTracking().Where(p => p.IsPublished)
             .Where(p => p.Slug == slug)
-            .Select(PublicProjection(site))
+            .Select(PublicProjection)
             .FirstOrDefaultAsync(cancellationToken);
 
         return project is null
             ? ServiceResult<ProjectResponse>.NotFound(
                 "not_found",
-                $"No published project with slug '{slug}' on this site.")
+                $"No published project with slug '{slug}'.")
             : ServiceResult<ProjectResponse>.Success(project);
     }
 
     public async Task<PagedResult<AdminProjectResponse>> GetAdminProjectsAsync(
-        Site? site,
         bool? isPublished,
         string? search,
-        bool includeHidden,
         int page,
         int pageSize,
         CancellationToken cancellationToken)
     {
         var query = _db.Projects.AsNoTracking();
-
-        // includeHidden: the visibility screen passes site (for sort order) but must see rows not shown yet.
-        if (site is not null && !includeHidden)
-        {
-            query = ForSite(query, site.Value);
-        }
-
         if (isPublished is not null)
         {
             query = query.Where(p => p.IsPublished == isPublished);
@@ -183,10 +169,8 @@ public class ProjectService : IProjectService
         {
             return SlugTaken(slug);
         }
-
-        // Sort order never comes from the client; new rows go to the end of each site's order.
-        var nextAgencySortOrder = await _db.Projects.MaxAsync(p => (int?)p.AgencySortOrder, cancellationToken) + 1 ?? 0;
-        var nextPersonalSortOrder = await _db.Projects.MaxAsync(p => (int?)p.PersonalSortOrder, cancellationToken) + 1 ?? 0;
+        // Sort order never comes from the client; new rows go to the end.
+        var nextSortOrder = await _db.Projects.MaxAsync(p => (int?)p.SortOrder, cancellationToken) + 1 ?? 0;
 
         var project = new Project
         {
@@ -204,12 +188,8 @@ public class ProjectService : IProjectService
             ClientName = Blank(request.ClientName),
             SeoTitle = Blank(request.SeoTitle),
             SeoDescription = Blank(request.SeoDescription),
-            ShowOnAgency = request.ShowOnAgency,
-            FeaturedOnAgency = request.FeaturedOnAgency,
-            AgencySortOrder = nextAgencySortOrder,
-            ShowOnPersonal = request.ShowOnPersonal,
-            FeaturedOnPersonal = request.FeaturedOnPersonal,
-            PersonalSortOrder = nextPersonalSortOrder,
+            IsFeatured = request.IsFeatured,
+            SortOrder = nextSortOrder,
             ProjectTags = [.. tagIds.Select(tagId => new ProjectTag { TagId = tagId })]
         };
 
@@ -279,10 +259,7 @@ public class ProjectService : IProjectService
         project.ClientName = Blank(request.ClientName);
         project.SeoTitle = Blank(request.SeoTitle);
         project.SeoDescription = Blank(request.SeoDescription);
-        project.ShowOnAgency = request.ShowOnAgency;
-        project.FeaturedOnAgency = request.FeaturedOnAgency;
-        project.ShowOnPersonal = request.ShowOnPersonal;
-        project.FeaturedOnPersonal = request.FeaturedOnPersonal;
+        project.IsFeatured = request.IsFeatured;
 
         ApplyPublished(project, request.IsPublished);
         SyncTags(project, tagIds);
@@ -302,14 +279,6 @@ public class ProjectService : IProjectService
         {
             return NotFound(id);
         }
-
-        // First publish only: show on both sites. Republishing keeps the editor's choice.
-        if (request.IsPublished && project.PublishedAt is null)
-        {
-            project.ShowOnAgency = true;
-            project.ShowOnPersonal = true;
-        }
-
         ApplyPublished(project, request.IsPublished);
 
         await _db.SaveChangesAsync(cancellationToken);
@@ -430,11 +399,6 @@ public class ProjectService : IProjectService
 
     public async Task<ServiceResult<bool>> ReorderAsync(ReorderRequest request, CancellationToken cancellationToken)
     {
-        if (request.Site is null)
-        {
-            return ServiceResult<bool>.Validation("site is required — sort order is kept per site.");
-        }
-
         var items = request.Items;
         if (items is null || items.Count == 0)
         {
@@ -459,16 +423,7 @@ public class ProjectService : IProjectService
 
         foreach (var item in items)
         {
-            var project = projects[item.Id];
-
-            if (request.Site == Site.Agency)
-            {
-                project.AgencySortOrder = item.SortOrder;
-            }
-            else
-            {
-                project.PersonalSortOrder = item.SortOrder;
-            }
+            projects[item.Id].SortOrder = item.SortOrder;
         }
 
         await _db.SaveChangesAsync(cancellationToken);
@@ -659,19 +614,10 @@ public class ProjectService : IProjectService
         return ServiceResult<bool>.Success(true);
     }
 
-    private static IQueryable<Project> ForSite(IQueryable<Project> query, Site site) =>
-        site == Site.Agency
-            ? query.Where(p => p.ShowOnAgency)
-            : query.Where(p => p.ShowOnPersonal);
-
-    private static IOrderedQueryable<Project> OrderForSite(IQueryable<Project> query, Site site) =>
-        site == Site.Agency
-            ? query.OrderBy(p => p.AgencySortOrder)
-                .ThenByDescending(p => p.Year)
-                .ThenByDescending(p => p.PublishedAt)
-            : query.OrderBy(p => p.PersonalSortOrder)
-                .ThenByDescending(p => p.Year)
-                .ThenByDescending(p => p.PublishedAt);
+    private static IOrderedQueryable<Project> OrderForPublic(IQueryable<Project> query) =>
+        query.OrderBy(p => p.SortOrder)
+            .ThenByDescending(p => p.Year)
+            .ThenByDescending(p => p.PublishedAt);
 
     private static string? Validate(
         string? title,
@@ -705,17 +651,6 @@ public class ProjectService : IProjectService
         {
             return $"Year must be between {EarliestYear} and {latestYear}.";
         }
-
-        if (request.FeaturedOnAgency && !request.ShowOnAgency)
-        {
-            return "featuredOnAgency requires showOnAgency.";
-        }
-
-        if (request.FeaturedOnPersonal && !request.ShowOnPersonal)
-        {
-            return "featuredOnPersonal requires showOnPersonal.";
-        }
-
         return null;
     }
 
@@ -880,107 +815,53 @@ public class ProjectService : IProjectService
         SortOrder = image.SortOrder
     };
 
-    private static Expression<Func<Project, ProjectResponse>> PublicProjection(Site site)
+    private static readonly Expression<Func<Project, ProjectResponse>> PublicProjection = p => new ProjectResponse
     {
-        if (site == Site.Agency)
-        {
-            return p => new ProjectResponse
+        Id = p.Id,
+        Slug = p.Slug,
+        Title = p.Title,
+        Year = p.Year,
+        ShortDescription = p.ShortDescription,
+        Description = p.Description,
+        WebsiteUrl = p.WebsiteUrl,
+        Problem = p.Problem,
+        Solution = p.Solution,
+        WhatWeDelivered = p.WhatWeDelivered,
+        Proof = p.Proof,
+        ClientName = p.ClientName,
+        PublishedAt = p.PublishedAt,
+        SeoTitle = p.SeoTitle,
+        SeoDescription = p.SeoDescription,
+        Featured = p.IsFeatured,
+        SortOrder = p.SortOrder,
+        Tags = p.ProjectTags
+            .Where(pt => !pt.Tag.IsDeleted)
+            .OrderBy(pt => pt.Tag.Name)
+            .Select(pt => new TagResponse
             {
-                Id = p.Id,
-                Slug = p.Slug,
-                Title = p.Title,
-                Year = p.Year,
-                ShortDescription = p.ShortDescription,
-                Description = p.Description,
-                WebsiteUrl = p.WebsiteUrl,
-                Problem = p.Problem,
-                Solution = p.Solution,
-                WhatWeDelivered = p.WhatWeDelivered,
-                Proof = p.Proof,
-                ClientName = p.ClientName,
-                PublishedAt = p.PublishedAt,
-                SeoTitle = p.SeoTitle,
-                SeoDescription = p.SeoDescription,
-                Featured = p.FeaturedOnAgency,
-                SortOrder = p.AgencySortOrder,
-                Tags = p.ProjectTags
-                    .Where(pt => !pt.Tag.IsDeleted)
-                    .OrderBy(pt => pt.Tag.Name)
-                    .Select(pt => new TagResponse
-                    {
-                        Id = pt.Tag.Id,
-                        Name = pt.Tag.Name,
-                        Slug = pt.Tag.Slug,
-                        IsTechnology = pt.Tag.IsTechnology,
-                        TechnologyCategory = pt.Tag.TechnologyCategory
-                    })
-                    .ToList(),
-                Images = p.Images
-                    .OrderByDescending(i => i.IsPrimary)
-                    .ThenBy(i => i.SortOrder)
-                    .Select(i => new ProjectImageResponse
-                    {
-                        Id = i.Id,
-                        ObjectKey = i.ObjectKey,
-                        Url = i.Url,
-                        AltText = i.AltText,
-                        Width = i.Width,
-                        Height = i.Height,
-                        IsPrimary = i.IsPrimary,
-                        SortOrder = i.SortOrder
-                    })
-                    .ToList()
-            };
-        }
-
-        return p => new ProjectResponse
-        {
-            Id = p.Id,
-            Slug = p.Slug,
-            Title = p.Title,
-            Year = p.Year,
-            ShortDescription = p.ShortDescription,
-            Description = p.Description,
-            WebsiteUrl = p.WebsiteUrl,
-            Problem = p.Problem,
-            Solution = p.Solution,
-            WhatWeDelivered = p.WhatWeDelivered,
-            Proof = p.Proof,
-            ClientName = p.ClientName,
-            PublishedAt = p.PublishedAt,
-            SeoTitle = p.SeoTitle,
-            SeoDescription = p.SeoDescription,
-            Featured = p.FeaturedOnPersonal,
-            SortOrder = p.PersonalSortOrder,
-            Tags = p.ProjectTags
-                .Where(pt => !pt.Tag.IsDeleted)
-                .OrderBy(pt => pt.Tag.Name)
-                .Select(pt => new TagResponse
-                {
-                    Id = pt.Tag.Id,
-                    Name = pt.Tag.Name,
-                    Slug = pt.Tag.Slug,
-                    IsTechnology = pt.Tag.IsTechnology,
-                    TechnologyCategory = pt.Tag.TechnologyCategory
-                })
-                .ToList(),
-            Images = p.Images
-                .OrderByDescending(i => i.IsPrimary)
-                .ThenBy(i => i.SortOrder)
-                .Select(i => new ProjectImageResponse
-                {
-                    Id = i.Id,
-                    ObjectKey = i.ObjectKey,
-                    Url = i.Url,
-                    AltText = i.AltText,
-                    Width = i.Width,
-                    Height = i.Height,
-                    IsPrimary = i.IsPrimary,
-                    SortOrder = i.SortOrder
-                })
-                .ToList()
-        };
-    }
+                Id = pt.Tag.Id,
+                Name = pt.Tag.Name,
+                Slug = pt.Tag.Slug,
+                IsTechnology = pt.Tag.IsTechnology,
+                TechnologyCategory = pt.Tag.TechnologyCategory
+            })
+            .ToList(),
+        Images = p.Images
+            .OrderByDescending(i => i.IsPrimary)
+            .ThenBy(i => i.SortOrder)
+            .Select(i => new ProjectImageResponse
+            {
+                Id = i.Id,
+                ObjectKey = i.ObjectKey,
+                Url = i.Url,
+                AltText = i.AltText,
+                Width = i.Width,
+                Height = i.Height,
+                IsPrimary = i.IsPrimary,
+                SortOrder = i.SortOrder
+            })
+            .ToList()
+    };
 
     private static readonly Expression<Func<Project, AdminProjectResponse>> AdminProjection = p => new AdminProjectResponse
     {
@@ -1000,12 +881,8 @@ public class ProjectService : IProjectService
         PublishedAt = p.PublishedAt,
         SeoTitle = p.SeoTitle,
         SeoDescription = p.SeoDescription,
-        ShowOnAgency = p.ShowOnAgency,
-        FeaturedOnAgency = p.FeaturedOnAgency,
-        AgencySortOrder = p.AgencySortOrder,
-        ShowOnPersonal = p.ShowOnPersonal,
-        FeaturedOnPersonal = p.FeaturedOnPersonal,
-        PersonalSortOrder = p.PersonalSortOrder,
+        IsFeatured = p.IsFeatured,
+        SortOrder = p.SortOrder,
         Tags = p.ProjectTags
             .Where(pt => !pt.Tag.IsDeleted)
             .OrderBy(pt => pt.Tag.Name)

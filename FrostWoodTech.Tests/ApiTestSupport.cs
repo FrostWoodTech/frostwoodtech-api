@@ -4,14 +4,13 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 using FrostWoodTech.API.Common;
-using FrostWoodTech.API.Enums;
 
 namespace FrostWoodTech.Tests;
 
-/// <summary>Stub for any service interface: records Site arguments and returns empty successes.</summary>
+/// <summary>Stub for any service interface: counts calls and returns empty successes.</summary>
 public class RecordingServiceProxy : DispatchProxy
 {
-    public List<Site> SitesReceived { get; } = [];
+    public int Calls { get; set; }
 
     public static (T Service, RecordingServiceProxy Recorder) Create<T>() where T : class
     {
@@ -22,7 +21,7 @@ public class RecordingServiceProxy : DispatchProxy
 
     protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
     {
-        SitesReceived.AddRange(args?.OfType<Site>() ?? []);
+        Calls++;
 
         var returnType = targetMethod!.ReturnType;
 

@@ -61,7 +61,6 @@ public class PurgeGuardTests(PostgresFixture fixture) : DatabaseTest(fixture)
         Assert.True(restored.IsSuccess);
     }
 
-
     [Fact]
     public async Task Purging_a_review_needs_a_super_admin()
     {
@@ -79,7 +78,6 @@ public class PurgeGuardTests(PostgresFixture fixture) : DatabaseTest(fixture)
         Year = 2025,
         ShortDescription = "Short.",
         Description = "Long.",
-        ShowOnAgency = true,
         TagIds = tagId is null ? [] : [tagId.Value]
     };
 }
