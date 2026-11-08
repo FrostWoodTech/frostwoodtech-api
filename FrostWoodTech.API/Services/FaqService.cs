@@ -8,7 +8,6 @@ using FrostWoodTech.API.Data;
 using FrostWoodTech.API.DTOs.Admin;
 using FrostWoodTech.API.DTOs.Public;
 using FrostWoodTech.API.Entities;
-using FrostWoodTech.API.Enums;
 using FrostWoodTech.API.Interfaces;
 
 namespace FrostWoodTech.API.Services;
@@ -25,11 +24,10 @@ public class FaqService : IFaqService
     }
 
     public async Task<IReadOnlyList<FaqResponse>> GetPublicFaqsAsync(
-        Site site,
         CancellationToken cancellationToken)
     {
         // Public list is global FAQs only; service-scoped FAQs render on their service page.
-        var query = ForSite(_db.Faqs.AsNoTracking().Where(f => f.IsPublished && f.ServiceId == null), site);
+        var query = _db.Faqs.AsNoTracking().Where(f => f.IsPublished && f.ServiceId == null);
 
         // Not paged: the FAQ page renders the whole list.
         return await query
@@ -39,7 +37,6 @@ public class FaqService : IFaqService
     }
 
     public async Task<PagedResult<AdminFaqResponse>> GetAdminFaqsAsync(
-        Site? site,
         bool? isPublished,
         string? search,
         Guid? serviceId,
@@ -49,12 +46,6 @@ public class FaqService : IFaqService
         CancellationToken cancellationToken)
     {
         var query = _db.Faqs.AsNoTracking();
-
-        if (site is not null)
-        {
-            query = ForSite(query, site.Value);
-        }
-
         // serviceId and globalOnly are separate filters; a missing serviceId never means "global".
         if (serviceId is not null)
         {
@@ -137,8 +128,6 @@ public class FaqService : IFaqService
             Answer = answer!,
             SortOrder = nextSortOrder,
             IsPublished = request.IsPublished,
-            ShowOnAgency = request.ShowOnAgency,
-            ShowOnPersonal = request.ShowOnPersonal
         };
 
         _db.Faqs.Add(faq);
@@ -178,8 +167,6 @@ public class FaqService : IFaqService
         faq.Question = question!;
         faq.Answer = answer!;
         faq.IsPublished = request.IsPublished;
-        faq.ShowOnAgency = request.ShowOnAgency;
-        faq.ShowOnPersonal = request.ShowOnPersonal;
 
         await _db.SaveChangesAsync(cancellationToken);
 
@@ -317,11 +304,6 @@ public class FaqService : IFaqService
         return ServiceResult<bool>.Success(true);
     }
 
-    private static IQueryable<Faq> ForSite(IQueryable<Faq> query, Site site) =>
-        site == Site.Agency
-            ? query.Where(f => f.ShowOnAgency)
-            : query.Where(f => f.ShowOnPersonal);
-
     private static string? Validate(string? question, string? answer, CreateFaqRequest request)
     {
         if (question is null)
@@ -359,8 +341,6 @@ public class FaqService : IFaqService
         Answer = f.Answer,
         SortOrder = f.SortOrder,
         IsPublished = f.IsPublished,
-        ShowOnAgency = f.ShowOnAgency,
-        ShowOnPersonal = f.ShowOnPersonal,
         CreatedAt = f.CreatedAt,
         UpdatedAt = f.UpdatedAt
     };

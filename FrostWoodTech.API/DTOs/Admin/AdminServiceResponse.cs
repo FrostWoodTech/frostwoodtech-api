@@ -72,17 +72,9 @@ public sealed class AdminServiceResponse
 
     public DateTimeOffset? PublishedAt { get; init; }
 
-    public required bool ShowOnAgency { get; init; }
+    public required bool IsFeatured { get; init; }
 
-    public required bool FeaturedOnAgency { get; init; }
-
-    public required int AgencySortOrder { get; init; }
-
-    public required bool ShowOnPersonal { get; init; }
-
-    public required bool FeaturedOnPersonal { get; init; }
-
-    public required int PersonalSortOrder { get; init; }
+    public required int SortOrder { get; init; }
 
     public required DateTimeOffset CreatedAt { get; init; }
 

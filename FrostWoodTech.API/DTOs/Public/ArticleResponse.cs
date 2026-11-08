@@ -1,6 +1,6 @@
 namespace FrostWoodTech.API.DTOs.Public;
 
-/// <summary>Public shape: Featured and SortOrder are for the requested site; no admin fields.</summary>
+/// <summary>Public shape: Featured and SortOrder are public; no admin fields.</summary>
 public sealed record ArticleResponse
 {
     public required Guid Id { get; init; }

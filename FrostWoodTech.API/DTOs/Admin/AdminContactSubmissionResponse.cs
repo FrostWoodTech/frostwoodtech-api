@@ -25,8 +25,6 @@ public sealed class AdminContactSubmissionResponse
 
     public ContactBudgetRange? BudgetRange { get; init; }
 
-    public required Site Site { get; init; }
-
     public required ContactSubmissionStatus Status { get; init; }
 
     public string? AdminNotes { get; init; }

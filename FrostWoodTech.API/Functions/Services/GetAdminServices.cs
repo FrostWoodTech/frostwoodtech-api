@@ -24,21 +24,13 @@ public class GetAdminServices
         HttpResponses.MarkNoStore(req);
 
         // Optional on admin lists, unlike the public surface.
-        if (!QueryParameters.TryReadSite(req, out var site))
-        {
-            return ProblemResults.BadRequest("validation_failed", "Unknown site.");
-        }
-
         var isPublished = QueryParameters.ReadBool(req, "isPublished");
         var search = QueryParameters.ReadString(req, "search");
-        var includeHidden = QueryParameters.ReadBool(req, "includeHidden") ?? false;
         var (page, pageSize) = QueryParameters.ReadPaging(req);
 
         var result = await _serviceCatalog.GetAdminServicesAsync(
-            site,
             isPublished,
             search,
-            includeHidden,
             page,
             pageSize,
             cancellationToken);

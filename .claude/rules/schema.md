@@ -24,23 +24,18 @@ A permanent delete is the first path where the `Cascade` foreign keys actually f
 are `Restrict`, so purging their target needs an explicit guard. `contact_submissions.service_id` is
 `SetNull`: purging a service keeps its enquiries and drops the link.
 
-## Site visibility block
+## Featuring block
 
 Applies to `projects`, `products`, `articles`, `services`:
 
 ```
-show_on_agency        bool
-featured_on_agency    bool      -- home page card; requires show_on_agency
-agency_sort_order     int
-show_on_personal      bool
-featured_on_personal  bool      -- requires show_on_personal
-personal_sort_order   int
+is_featured   bool   -- home page card
+sort_order    int
 ```
 
-Sort orders are never client-settable on create/update: new rows go to the end of both orders and
-only change via `POST /api/cms/admin/{entity}/reorder` with `site` in the body. (Services currently
-accept sort orders on create/update.) `faqs`, `pricing_plans` and `certificates` don't use this
-block — see below.
+Sort orders are never client-settable on create/update: new rows go to the end and only change via
+`POST /api/cms/admin/{entity}/reorder`. (Services currently accept sort orders on create/update.)
+`faqs` and `pricing_plans` don't use this block — see below.
 
 ## projects
 
@@ -57,7 +52,7 @@ client_name         text null
 is_published        bool
 published_at        timestamptz null  -- stamped on first publish, never cleared
 seo_title, seo_description   text null
-+ site visibility block
++ featuring block
 ```
 
 `project_images` (hard delete; the stored file is deleted after the row commits):
@@ -80,7 +75,7 @@ products never enter currency conversion.
 id, slug text unique, name, tagline, description (markdown), price_details text null (markdown),
 product_url text null (absolute http(s)), is_published, published_at null,
 seo_title null, seo_description null
-+ site visibility block
++ featuring block
 ```
 
 `product_images` — identical to `project_images`, with the same single-primary partial index.
@@ -94,7 +89,7 @@ id, title, excerpt, slug text unique,
 content_markdown text null   -- markdown with media:// tokens
 cover_image_key text null    -- media:// token or legacy URL
 is_published, published_at null
-+ site visibility block
++ featuring block
 ```
 
 Media inside articles is stored as `media://{objectKey}`, never a real URL. The public read path
@@ -124,15 +119,15 @@ who_this_is_for, outcomes, capabilities (markdown lists), in_depth (markdown)   
 primary_cta_label + primary_cta_url, secondary_cta_label + secondary_cta_url    text null, set together
 icon_*, hero_image_*, depth_image_*: object_key, url, width, height, alt_text   null; alt_text required when set
 seo_title, seo_description null, is_published, published_at null
-+ site visibility block
++ featuring block
 ```
 
 `service_projects` — join `(service_id, project_id)`; the service's case studies. The public detail
-endpoint only embeds projects and FAQs that are published and shown on the requested site.
+endpoint only embeds projects and FAQs that are published.
 
 ## pricing_plans
 
-Service tiers and combo packs (`service_id = null`) share one table. Agency-only: one `featured`
+Service tiers and combo packs (`service_id = null`) share one table. One `featured`
 flag and one `sort_order` (reorder only, within its group).
 
 ```
@@ -145,43 +140,19 @@ is_published, featured, sort_order
 
 `pricing_plan_features` — `id, pricing_plan_id fk, text, is_included bool, sort_order` (hard delete).
 
-## certificates
-
-Personal-site only: no visibility block, one `featured` flag and one global `sort_order` (reorder only).
-
-```
-id, name, issued_by,
-category certificate_category   -- course | exam, required; existing rows backfilled to course
-issued_date date     -- required, not in the future
-marks text null      -- optional free text for both categories
-object_key, url      -- url is absolute http(s)
-mime_type            -- application/pdf or image/*
-width, height int null   -- set together, positive; required for images, null allowed for PDFs
-alt_text             -- required
-is_published, featured, sort_order
-```
-
-`CertificateCategory` lists `Course` first so the CLR default matches the column default; EF omits a
-property equal to its CLR default on insert, so putting `Exam` first would store exams as courses.
-
-Replacing the file on update deletes the old object after the save. Soft delete keeps the file; a purge
-deletes it.
-
 ## faqs
 
-Own visibility flags, no featured flag, one sort order for both sites.
+No featured flag.
 
 ```
 id, question, answer (markdown), service_id uuid null fk, sort_order,
-is_published, show_on_agency, show_on_personal
+is_published
 ```
 
 `service_id` null = the global list; otherwise the FAQ appears only on that service's page.
 `sort_order` is ordered within that scope.
 
 ## reviews
-
-Not site-scoped; one pool for both sites.
 
 ```
 id, name (100), country (100), country_code (2, ISO 3166-1), position null (100),
@@ -215,7 +186,7 @@ Admin inbox only; never public.
 ```
 id, name (100), email citext (255), phone null (30), company null (150), subject null (200),
 message (4000), service_id null fk (SET NULL), budget_range contact_budget_range null,
-site site, status contact_submission_status (default new), admin_notes null,
+status contact_submission_status (default new), admin_notes null,
 replied_at null, replied_by null fk users (SET NULL), submitter_ip null
 ```
 

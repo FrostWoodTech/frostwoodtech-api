@@ -21,11 +21,4 @@ public class CreateProductRequest
 
     public string? SeoDescription { get; set; }
 
-    public bool ShowOnAgency { get; set; }
-
-    public bool FeaturedOnAgency { get; set; }
-
-    public bool ShowOnPersonal { get; set; }
-
-    public bool FeaturedOnPersonal { get; set; }
-}
+    public bool IsFeatured { get; set; }}

@@ -26,7 +26,6 @@ public class TagAndPricingRulesTests(PostgresFixture fixture) : DatabaseTest(fix
                 Title = $"Tagged {Guid.NewGuid():N}",
                 Excerpt = "An excerpt.",
                 IsPublished = true,
-                ShowOnAgency = true,
                 TagIds = [tag.Value!.Id]
             },
             CancellationToken.None);
@@ -125,7 +124,6 @@ public class TagAndPricingRulesTests(PostgresFixture fixture) : DatabaseTest(fix
                 Year = 2025,
                 ShortDescription = "Short.",
                 Description = "Long.",
-                ShowOnAgency = true,
                 TagIds = [tag.Id]
             },
             CancellationToken.None);

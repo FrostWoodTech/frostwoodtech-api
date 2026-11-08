@@ -12,24 +12,6 @@ namespace FrostWoodTech.Tests;
 public class ProjectTests(PostgresFixture fixture) : DatabaseTest(fixture)
 {
     [Fact]
-    public async Task Personal_only_project_is_not_returned_for_the_agency_site()
-    {
-        await using var db = _fixture.CreateContext();
-        var service = NewService(db);
-
-        var created = await CreateAsync(service, NewProject(showOnAgency: false, showOnPersonal: true));
-
-        var agency = await service.GetPublicProjectsAsync(Site.Agency, null, null, null, 1, 100, CancellationToken.None);
-        var personal = await service.GetPublicProjectsAsync(Site.Personal, null, null, null, 1, 100, CancellationToken.None);
-
-        Assert.DoesNotContain(agency.Items, p => p.Id == created.Id);
-        Assert.Contains(personal.Items, p => p.Id == created.Id);
-
-        var bySlug = await service.GetPublicProjectBySlugAsync(Site.Agency, created.Slug, CancellationToken.None);
-        Assert.Equal(ServiceErrorKind.NotFound, bySlug.Error!.Kind);
-    }
-
-    [Fact]
     public async Task A_draft_is_admin_only()
     {
         await using var db = _fixture.CreateContext();
@@ -39,10 +21,10 @@ public class ProjectTests(PostgresFixture fixture) : DatabaseTest(fixture)
         request.IsPublished = false;
         var created = await CreateAsync(service, request);
 
-        var agency = await service.GetPublicProjectsAsync(Site.Agency, null, null, null, 1, 100, CancellationToken.None);
+        var agency = await service.GetPublicProjectsAsync(null, null, null, 1, 100, CancellationToken.None);
         Assert.DoesNotContain(agency.Items, p => p.Id == created.Id);
 
-        var admin = await service.GetAdminProjectsAsync(null, false, created.Title, false, 1, 100, CancellationToken.None);
+        var admin = await service.GetAdminProjectsAsync(false, created.Title, 1, 100, CancellationToken.None);
         Assert.Contains(admin.Items, p => p.Id == created.Id);
     }
 
@@ -56,28 +38,11 @@ public class ProjectTests(PostgresFixture fixture) : DatabaseTest(fixture)
 
         Assert.True((await service.DeleteAsync(created.Id, CancellationToken.None)).IsSuccess);
 
-        var agency = await service.GetPublicProjectsAsync(Site.Agency, null, null, null, 1, 100, CancellationToken.None);
+        var agency = await service.GetPublicProjectsAsync(null, null, null, 1, 100, CancellationToken.None);
         Assert.DoesNotContain(agency.Items, p => p.Id == created.Id);
 
         var byId = await service.GetByIdAsync(created.Id, CancellationToken.None);
         Assert.Equal("not_found", byId.Error!.Code);
-    }
-
-    [Theory]
-    [InlineData(true, false)]
-    [InlineData(false, true)]
-    public async Task Featuring_a_project_on_a_site_it_is_not_shown_on_is_rejected(bool agency, bool personal)
-    {
-        await using var db = _fixture.CreateContext();
-        var service = NewService(db);
-
-        var request = NewProject(showOnAgency: false, showOnPersonal: false);
-        request.FeaturedOnAgency = agency;
-        request.FeaturedOnPersonal = personal;
-
-        var result = await service.CreateAsync(request, CancellationToken.None);
-
-        Assert.Equal("validation_failed", result.Error!.Code);
     }
 
     [Theory]
@@ -143,12 +108,12 @@ public class ProjectTests(PostgresFixture fixture) : DatabaseTest(fixture)
     }
 
     [Fact]
-    public async Task First_publish_stamps_published_at_and_shows_on_both_sites()
+    public async Task First_publish_stamps_published_at()
     {
         await using var db = _fixture.CreateContext();
         var service = NewService(db);
 
-        var request = NewProject(showOnAgency: false, showOnPersonal: false);
+        var request = NewProject();
         request.IsPublished = false;
         var draft = await CreateAsync(service, request);
         Assert.Null(draft.PublishedAt);
@@ -157,17 +122,15 @@ public class ProjectTests(PostgresFixture fixture) : DatabaseTest(fixture)
             draft.Id, new SetPublishedRequest { IsPublished = true }, CancellationToken.None);
 
         Assert.NotNull(published.Value!.PublishedAt);
-        Assert.True(published.Value.ShowOnAgency);
-        Assert.True(published.Value.ShowOnPersonal);
     }
 
     [Fact]
-    public async Task Republishing_keeps_the_original_date_and_the_editors_site_choice()
+    public async Task Republishing_keeps_the_original_date()
     {
         await using var db = _fixture.CreateContext();
         var service = NewService(db);
 
-        var created = await CreateAsync(service, NewProject(showOnAgency: false, showOnPersonal: true));
+        var created = await CreateAsync(service, NewProject());
         var originalDate = created.PublishedAt;
 
         await service.SetPublishedAsync(created.Id, new SetPublishedRequest { IsPublished = false }, CancellationToken.None);
@@ -175,23 +138,20 @@ public class ProjectTests(PostgresFixture fixture) : DatabaseTest(fixture)
             created.Id, new SetPublishedRequest { IsPublished = true }, CancellationToken.None);
 
         Assert.Equal(originalDate, republished.Value!.PublishedAt);
-        Assert.False(republished.Value.ShowOnAgency);
-        Assert.True(republished.Value.ShowOnPersonal);
     }
 
     [Fact]
-    public async Task Reordering_one_site_changes_its_public_order_and_leaves_the_other_alone()
+    public async Task Reordering_changes_the_public_order()
     {
         await using var db = _fixture.CreateContext();
         var service = NewService(db);
 
-        var first = await CreateAsync(service, NewProject(showOnPersonal: true));
-        var second = await CreateAsync(service, NewProject(showOnPersonal: true));
+        var first = await CreateAsync(service, NewProject());
+        var second = await CreateAsync(service, NewProject());
 
         var reordered = await service.ReorderAsync(
             new ReorderRequest
             {
-                Site = Site.Agency,
                 Items =
                 [
                     new ReorderItem { Id = second.Id, SortOrder = -2 },
@@ -201,36 +161,27 @@ public class ProjectTests(PostgresFixture fixture) : DatabaseTest(fixture)
             CancellationToken.None);
         Assert.True(reordered.IsSuccess);
 
-        var agency = (await service.GetPublicProjectsAsync(Site.Agency, null, null, null, 1, 100, CancellationToken.None)).Items.ToList();
+        var agency = (await service.GetPublicProjectsAsync(null, null, null, 1, 100, CancellationToken.None)).Items.ToList();
         Assert.True(agency.FindIndex(p => p.Id == second.Id) < agency.FindIndex(p => p.Id == first.Id));
-
-        var firstAfter = await service.GetByIdAsync(first.Id, CancellationToken.None);
-        Assert.Equal(first.PersonalSortOrder, firstAfter.Value!.PersonalSortOrder);
     }
 
     [Fact]
-    public async Task Reorder_rejects_a_missing_site_a_duplicate_and_an_unknown_id()
+    public async Task Reorder_rejects_a_duplicate_and_an_unknown_id()
     {
         await using var db = _fixture.CreateContext();
         var service = NewService(db);
 
         var created = await CreateAsync(service, NewProject());
-
-        var noSite = await service.ReorderAsync(
-            new ReorderRequest { Items = [new ReorderItem { Id = created.Id }] }, CancellationToken.None);
-        Assert.Equal("validation_failed", noSite.Error!.Code);
-
         var duplicate = await service.ReorderAsync(
             new ReorderRequest
             {
-                Site = Site.Agency,
                 Items = [new ReorderItem { Id = created.Id }, new ReorderItem { Id = created.Id, SortOrder = 1 }]
             },
             CancellationToken.None);
         Assert.Equal("validation_failed", duplicate.Error!.Code);
 
         var unknown = await service.ReorderAsync(
-            new ReorderRequest { Site = Site.Agency, Items = [new ReorderItem { Id = Guid.NewGuid() }] },
+            new ReorderRequest { Items = [new ReorderItem { Id = Guid.NewGuid() }] },
             CancellationToken.None);
         Assert.Equal("not_found", unknown.Error!.Code);
     }
@@ -258,15 +209,15 @@ public class ProjectTests(PostgresFixture fixture) : DatabaseTest(fixture)
         var withTags = await CreateAsync(service, tagged);
         var untagged = await CreateAsync(service, NewProject());
 
-        var byTag = await service.GetPublicProjectsAsync(Site.Agency, technology.Slug, null, null, 1, 100, CancellationToken.None);
+        var byTag = await service.GetPublicProjectsAsync(technology.Slug, null, null, 1, 100, CancellationToken.None);
         Assert.Contains(byTag.Items, p => p.Id == withTags.Id);
         Assert.DoesNotContain(byTag.Items, p => p.Id == untagged.Id);
 
-        var byCategory = await service.GetPublicProjectsAsync(Site.Agency, null, category.Slug, null, 1, 100, CancellationToken.None);
+        var byCategory = await service.GetPublicProjectsAsync(null, category.Slug, null, 1, 100, CancellationToken.None);
         Assert.Contains(byCategory.Items, p => p.Id == withTags.Id);
 
         var technologyAsCategory = await service.GetPublicProjectsAsync(
-            Site.Agency, null, technology.Slug, null, 1, 100, CancellationToken.None);
+            null, technology.Slug, null, 1, 100, CancellationToken.None);
         Assert.DoesNotContain(technologyAsCategory.Items, p => p.Id == withTags.Id);
     }
 
@@ -401,15 +352,13 @@ public class ProjectTests(PostgresFixture fixture) : DatabaseTest(fixture)
             .Select(i => i.Id)
             .ToListAsync(CancellationToken.None);
 
-    private static CreateProjectRequest NewProject(bool showOnAgency = true, bool showOnPersonal = false) => new()
+    private static CreateProjectRequest NewProject() => new()
     {
         Title = $"A project {Guid.NewGuid():N}",
         Year = 2026,
         ShortDescription = "Short.",
         Description = "Long.",
         IsPublished = true,
-        ShowOnAgency = showOnAgency,
-        ShowOnPersonal = showOnPersonal
     };
 
     private static AddProjectImageRequest NewImage(string name, bool isPrimary) => new()

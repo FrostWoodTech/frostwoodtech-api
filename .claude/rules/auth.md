@@ -10,7 +10,7 @@ paths:
 
 # Auth
 
-Both public sites are anonymous. Only `/api/cms/admin/*` is protected, by `JwtAuthenticationMiddleware`
+The public site is anonymous. Only `/api/cms/admin/*` is protected, by `JwtAuthenticationMiddleware`
 (not per Function). Every trigger is `AuthorizationLevel.Anonymous`; function keys are not auth.
 The middleware's anonymous allow-list is: register, login, google, refresh, logout, verify-email,
 resend-verification, forgot-password, set-password.

@@ -20,36 +20,6 @@ public class QueryParametersTests
         Assert.Equal((expectedPage, expectedPageSize), QueryParameters.ReadPaging(request));
     }
 
-    [Theory]
-    [InlineData("agency", Site.Agency)]
-    [InlineData("Personal", Site.Personal)]
-    [InlineData("  AGENCY ", Site.Agency)]
-    public void A_known_site_name_is_read(string raw, Site expected)
-    {
-        Assert.True(QueryParameters.TryReadSite(Request(("site", raw)), out var site));
-        Assert.Equal(expected, site);
-    }
-
-    [Fact]
-    public void A_missing_site_is_valid_but_null_so_the_caller_can_answer_site_required()
-    {
-        Assert.True(QueryParameters.TryReadSite(Request(), out var site));
-        Assert.Null(site);
-    }
-
-    [Theory]
-    [InlineData("0")]
-    [InlineData("1")]
-    [InlineData("99")]
-    [InlineData("-1")]
-    [InlineData("agency,personal")]
-    [InlineData("both")]
-    public void Anything_but_a_site_name_is_rejected(string raw)
-    {
-        Assert.False(QueryParameters.TryReadSite(Request(("site", raw)), out var site));
-        Assert.Null(site);
-    }
-
     [Fact]
     public void Snake_case_enum_values_are_read()
     {

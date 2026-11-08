@@ -15,7 +15,6 @@ public interface IContactService
 
     Task<PagedResult<AdminContactSubmissionResponse>> GetAdminSubmissionsAsync(
         ContactSubmissionStatus? status,
-        Site? site,
         Guid? serviceId,
         string? search,
         int page,

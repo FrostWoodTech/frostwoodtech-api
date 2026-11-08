@@ -3,76 +3,12 @@ using Microsoft.EntityFrameworkCore;
 using FrostWoodTech.API.Auth;
 using FrostWoodTech.API.Common;
 using FrostWoodTech.API.DTOs.Admin;
-using FrostWoodTech.API.Enums;
 using FrostWoodTech.API.Services;
 
 namespace FrostWoodTech.Tests;
 
 public class ProductTests(PostgresFixture fixture) : DatabaseTest(fixture)
 {
-    [Fact]
-    public async Task Personal_only_product_is_not_returned_for_the_agency_site()
-    {
-        await using var db = _fixture.CreateContext();
-        var service = new ProductService(db, new FakeMediaService(), new CurrentUser());
-
-        var created = await service.CreateAsync(
-            NewProduct(showOnAgency: false, showOnPersonal: true),
-            CancellationToken.None);
-
-        Assert.True(created.IsSuccess);
-
-        var personal = await service.GetPublicProductBySlugAsync(Site.Personal, created.Value!.Slug, CancellationToken.None);
-        var agency = await service.GetPublicProductBySlugAsync(Site.Agency, created.Value.Slug, CancellationToken.None);
-        var agencyList = await service.GetPublicProductsAsync(Site.Agency, null, 1, 100, CancellationToken.None);
-
-        Assert.True(personal.IsSuccess);
-        Assert.Equal("not_found", agency.Error!.Code);
-        Assert.DoesNotContain(agencyList.Items, p => p.Id == created.Value.Id);
-    }
-
-    [Fact]
-    public async Task Public_projection_flattens_the_requested_sites_flags()
-    {
-        await using var db = _fixture.CreateContext();
-        var service = new ProductService(db, new FakeMediaService(), new CurrentUser());
-
-        var request = NewProduct(showOnAgency: true, showOnPersonal: true);
-        request.FeaturedOnAgency = true;
-
-        var created = await service.CreateAsync(request, CancellationToken.None);
-        Assert.True(created.IsSuccess);
-
-        var agency = await service.GetPublicProductBySlugAsync(
-            Site.Agency, created.Value!.Slug, CancellationToken.None);
-
-        var personal = await service.GetPublicProductBySlugAsync(
-            Site.Personal, created.Value.Slug, CancellationToken.None);
-
-        Assert.True(agency.Value!.Featured);
-        Assert.False(personal.Value!.Featured);
-        Assert.Equal(created.Value.AgencySortOrder, agency.Value.SortOrder);
-        Assert.Equal(created.Value.PersonalSortOrder, personal.Value.SortOrder);
-    }
-
-    [Theory]
-    [InlineData(true, false)]
-    [InlineData(false, true)]
-    public async Task Featuring_a_product_on_a_site_it_is_not_shown_on_is_rejected(bool agency, bool personal)
-    {
-        await using var db = _fixture.CreateContext();
-        var service = new ProductService(db, new FakeMediaService(), new CurrentUser());
-
-        var request = NewProduct(showOnAgency: false, showOnPersonal: false);
-        request.FeaturedOnAgency = agency;
-        request.FeaturedOnPersonal = personal;
-
-        var result = await service.CreateAsync(request, CancellationToken.None);
-
-        Assert.False(result.IsSuccess);
-        Assert.Equal("validation_failed", result.Error!.Code);
-    }
-
     [Fact]
     public async Task A_second_product_with_the_same_slug_is_rejected()
     {
@@ -92,7 +28,7 @@ public class ProductTests(PostgresFixture fixture) : DatabaseTest(fixture)
     }
 
     [Fact]
-    public async Task A_new_product_is_appended_to_the_end_of_both_orders()
+    public async Task A_new_product_is_appended_to_the_end_of_the_order()
     {
         await using var db = _fixture.CreateContext();
         var service = new ProductService(db, new FakeMediaService(), new CurrentUser());
@@ -103,12 +39,11 @@ public class ProductTests(PostgresFixture fixture) : DatabaseTest(fixture)
         Assert.True(first.IsSuccess);
         Assert.True(second.IsSuccess);
 
-        Assert.True(second.Value!.AgencySortOrder > first.Value!.AgencySortOrder);
-        Assert.True(second.Value.PersonalSortOrder > first.Value.PersonalSortOrder);
+        Assert.True(second.Value!.SortOrder > first.Value!.SortOrder);
     }
 
     [Fact]
-    public async Task Reordering_one_site_leaves_the_other_sites_order_alone()
+    public async Task Reorder_sets_the_sort_order()
     {
         await using var db = _fixture.CreateContext();
         var service = new ProductService(db, new FakeMediaService(), new CurrentUser());
@@ -116,13 +51,10 @@ public class ProductTests(PostgresFixture fixture) : DatabaseTest(fixture)
         var created = await service.CreateAsync(NewProduct(), CancellationToken.None);
         Assert.True(created.IsSuccess);
 
-        var before = created.Value!.AgencySortOrder;
-
         var result = await service.ReorderAsync(
             new ReorderRequest
             {
-                Site = Site.Personal,
-                Items = [new ReorderItem { Id = created.Value.Id, SortOrder = 41 }]
+                Items = [new ReorderItem { Id = created.Value!.Id, SortOrder = 41 }]
             },
             CancellationToken.None);
 
@@ -130,29 +62,7 @@ public class ProductTests(PostgresFixture fixture) : DatabaseTest(fixture)
 
         var after = await service.GetByIdAsync(created.Value.Id, CancellationToken.None);
 
-        Assert.Equal(41, after.Value!.PersonalSortOrder);
-        Assert.Equal(before, after.Value.AgencySortOrder);
-    }
-
-    [Fact]
-    public async Task Reorder_without_a_site_is_rejected()
-    {
-        await using var db = _fixture.CreateContext();
-        var service = new ProductService(db, new FakeMediaService(), new CurrentUser());
-
-        var created = await service.CreateAsync(NewProduct(), CancellationToken.None);
-        Assert.True(created.IsSuccess);
-
-        var result = await service.ReorderAsync(
-            new ReorderRequest
-            {
-                Site = null,
-                Items = [new ReorderItem { Id = created.Value!.Id, SortOrder = 0 }]
-            },
-            CancellationToken.None);
-
-        Assert.False(result.IsSuccess);
-        Assert.Equal("validation_failed", result.Error!.Code);
+        Assert.Equal(41, after.Value!.SortOrder);
     }
 
     [Fact]
@@ -212,8 +122,8 @@ public class ProductTests(PostgresFixture fixture) : DatabaseTest(fixture)
         var deleted = await service.DeleteAsync(created.Value!.Id, CancellationToken.None);
         Assert.True(deleted.IsSuccess);
 
-        var agency = await service.GetPublicProductBySlugAsync(Site.Agency, created.Value.Slug, CancellationToken.None);
-        var admin = await service.GetAdminProductsAsync(null, null, created.Value.Name, false, 1, 20, CancellationToken.None);
+        var agency = await service.GetPublicProductBySlugAsync(created.Value.Slug, CancellationToken.None);
+        var admin = await service.GetAdminProductsAsync(null, created.Value.Name, 1, 20, CancellationToken.None);
 
         Assert.Equal("not_found", agency.Error!.Code);
         Assert.DoesNotContain(admin.Items, p => p.Id == created.Value.Id);
@@ -266,20 +176,18 @@ public class ProductTests(PostgresFixture fixture) : DatabaseTest(fixture)
     }
 
     [Fact]
-    public async Task Republishing_keeps_the_original_date_and_the_editors_site_choice()
+    public async Task Republishing_keeps_the_original_date()
     {
         await using var db = _fixture.CreateContext();
         var service = new ProductService(db, new FakeMediaService(), new CurrentUser());
 
-        var created = (await service.CreateAsync(NewProduct(showOnAgency: false, showOnPersonal: true), CancellationToken.None)).Value!;
+        var created = (await service.CreateAsync(NewProduct(), CancellationToken.None)).Value!;
 
         await service.SetPublishedAsync(created.Id, new SetPublishedRequest { IsPublished = false }, CancellationToken.None);
         var republished = (await service.SetPublishedAsync(
             created.Id, new SetPublishedRequest { IsPublished = true }, CancellationToken.None)).Value!;
 
         Assert.Equal(created.PublishedAt, republished.PublishedAt);
-        Assert.False(republished.ShowOnAgency);
-        Assert.True(republished.ShowOnPersonal);
     }
 
     [Fact]
@@ -378,7 +286,7 @@ public class ProductTests(PostgresFixture fixture) : DatabaseTest(fixture)
             .Select(i => i.Id)
             .ToListAsync(CancellationToken.None);
 
-    private static CreateProductRequest NewProduct(bool showOnAgency = true, bool showOnPersonal = false) => new()
+    private static CreateProductRequest NewProduct() => new()
     {
         Name = $"A product {Guid.NewGuid():N}",
         Tagline = "Does one thing well.",
@@ -386,8 +294,6 @@ public class ProductTests(PostgresFixture fixture) : DatabaseTest(fixture)
         PriceDetails = "Free while in beta.",
         ProductUrl = "https://example.com/the-product",
         IsPublished = true,
-        ShowOnAgency = showOnAgency,
-        ShowOnPersonal = showOnPersonal
     };
 
     private static AddProductImageRequest NewImage(string name, bool isPrimary) => new()
