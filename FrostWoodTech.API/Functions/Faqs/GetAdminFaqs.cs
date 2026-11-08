@@ -24,11 +24,6 @@ public class GetAdminFaqs
         HttpResponses.MarkNoStore(req);
 
         // Optional on admin lists, unlike the public surface.
-        if (!QueryParameters.TryReadSite(req, out var site))
-        {
-            return ProblemResults.BadRequest("validation_failed", "Unknown site.");
-        }
-
         var isPublished = QueryParameters.ReadBool(req, "isPublished");
         var search = QueryParameters.ReadString(req, "search");
         var serviceId = QueryParameters.ReadGuid(req, "serviceId");
@@ -36,7 +31,6 @@ public class GetAdminFaqs
         var (page, pageSize) = QueryParameters.ReadPaging(req);
 
         var result = await _faqService.GetAdminFaqsAsync(
-            site,
             isPublished,
             search,
             serviceId,

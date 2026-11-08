@@ -10,7 +10,6 @@ public class TrashRouteCoverageTests
     [InlineData("services")]
     [InlineData("pricing-plans")]
     [InlineData("faqs")]
-    [InlineData("certificates")]
     [InlineData("tags")]
     [InlineData("currencies")]
     [InlineData("reviews")]

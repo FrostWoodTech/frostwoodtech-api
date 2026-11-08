@@ -25,10 +25,6 @@ public static class ProblemResults
     public static IActionResult Conflict(string code, string detail) =>
         Create(StatusCodes.Status409Conflict, "Conflict", code, detail);
 
-    /// <summary>Public site-scoped endpoints never fall back to returning every site.</summary>
-    public static IActionResult SiteRequired() =>
-        BadRequest("site_required", "?site=agency or ?site=personal is required.");
-
     public static IActionResult FromError(ServiceError error) => error.Kind switch
     {
         ServiceErrorKind.NotFound => NotFound(error.Code, error.Message),

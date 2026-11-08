@@ -20,34 +20,31 @@ or `openapi.yaml`, or if a public route other than reviews/contact isn't GET.
 ## Public (anonymous, cached)
 
 ```
-GET  /api/public/projects?site=&tag=&category=&featured=&page=&pageSize=
-GET  /api/public/projects/{slug}?site=
-GET  /api/public/products?site=&featured=&page=&pageSize=
-GET  /api/public/products/{slug}?site=
-GET  /api/public/articles?site=&tag=&featured=&page=&pageSize=
-GET  /api/public/articles/{slug}?site=
-GET  /api/public/services?site=&featured=&page=&pageSize=
-GET  /api/public/services/{slug}?site=          # only this one embeds projects + faqs
-GET  /api/public/faqs?site=                     # global FAQs, not paged
-GET  /api/public/home?site=                     # featured slices in one call
-GET  /api/public/pricing/combos?featured=       # agency-only, no site
-GET  /api/public/pricing/services/{serviceId}   # agency-only, no site
-GET  /api/public/certificates?featured=&page=&pageSize=   # personal-only, no site
+GET  /api/public/projects?tag=&category=&featured=&page=&pageSize=
+GET  /api/public/projects/{slug}
+GET  /api/public/products?featured=&page=&pageSize=
+GET  /api/public/products/{slug}
+GET  /api/public/articles?tag=&featured=&page=&pageSize=
+GET  /api/public/articles/{slug}
+GET  /api/public/services?featured=&page=&pageSize=
+GET  /api/public/services/{slug}                    # only this one embeds projects + faqs
+GET  /api/public/faqs                           # global FAQs, not paged
+GET  /api/public/home                           # featured slices in one call
+GET  /api/public/pricing/combos?featured=
+GET  /api/public/pricing/services/{serviceId}
 GET  /api/public/tags?isTechnology=&category=
 GET  /api/public/currencies
-GET  /api/public/reviews?sort=latest|rating|country&page=&pageSize=   # shared by both sites
+GET  /api/public/reviews?sort=latest|rating|country&page=&pageSize=
 POST /api/public/reviews                        # anonymous; lands unpublished
 POST /api/public/contact                        # anonymous; admin inbox only
 ```
 
-- `?site=` is **required** wherever site visibility applies: missing ⇒ `400 site_required`,
-  unknown or numeric ⇒ `400 validation_failed`. `PublicSiteGuardTests` covers every such endpoint.
-- Only `is_published`, non-deleted rows shown on that site. Order by that site's sort order, then
-  `published_at`/`year` descending.
+- Only `is_published`, non-deleted rows. Order by `sort_order`, then `published_at`/`year` descending.
+- A legacy `?site=` is ignored, never rejected (`PublicEndpointTests`).
 - Combo packs and a service's tiers are separate routes on purpose: an absent query parameter must
   never silently change the `where` clause.
-- `home` returns featured projects, articles, services, combo plans (agency only), FAQs and
-  featured reviews (not site-scoped). Services are called sequentially (shared DbContext).
+- `home` returns featured projects, articles, services, combo plans, FAQs and
+  featured reviews. Services are called sequentially (shared DbContext).
 - The two POSTs return only an `id`. Rate limits and the honeypot are in auth.md.
 
 ## Admin (JWT required except the auth allow-list)
@@ -65,23 +62,21 @@ CRUD /articles      + /reorder, /{id}/publish
 CRUD /services      + /reorder, /{id}/publish; projectIds in the body replaces case-study links
 CRUD /pricing-plans + /reorder, /{id}/publish, /{id}/features[/{featureId}], /{id}/features/reorder
 CRUD /faqs          + /reorder; ?serviceId= scopes, ?globalOnly=true excludes scoped FAQs
-CRUD /certificates  + /reorder
 CRUD /tags          + GET /tags/categories
 CRUD /reviews       + /reorder; publish and featured via PUT
 CRUD /currencies    + POST /currencies/refresh-rates; ?isActive=
-GET,PUT,DELETE /contact-submissions[/{id}]   ?status=&site=&serviceId=&search=
+GET,PUT,DELETE /contact-submissions[/{id}]   ?status=&serviceId=&search=
 
 POST /media/presigned-upload    GET /media/config
 
 # Trash: the same three routes for projects, products, articles, services, pricing-plans, faqs,
-# certificates, tags, currencies, reviews and contact-submissions (not users)
+# tags, currencies, reviews and contact-submissions (not users)
 GET    /{entity}/trash?search=&page=&pageSize=     # soft-deleted rows -> { items: TrashedItemResponse }
 POST   /{entity}/{id}/restore                      # back to the live list; 200 with the admin DTO
 DELETE /{entity}/{id}/permanent                    # super admin only; 204
 ```
 
-All paths above are under `/api/cms/admin`. Admin lists take `?site=` as an optional filter plus
-`includeHidden=true` for the visibility screen. Pricing admin filters: `serviceId`, `tiersOnly`,
+All paths above are under `/api/cms/admin`. Pricing admin filters: `serviceId`, `tiersOnly`,
 `comboOnly` (`comboOnly` wins, then `serviceId`). Admin DTOs are separate from public DTOs.
 
 ## Response conventions

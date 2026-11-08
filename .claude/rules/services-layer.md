@@ -17,8 +17,7 @@ One service per aggregate, registered scoped in `Program.cs`. Services return
 
 ## Validation rules
 
-- `featured_on_X` requires `show_on_X`. FAQs have no featured flag; pricing plans and certificates
-  have a plain `featured` flag.
+- FAQs have no featured flag; pricing plans have a plain `featured` flag.
 - Tags: `is_technology` ⇔ `technology_category` is set.
 - Exactly one primary image per project/product. The first image is always primary; setting a new
   primary clears the old one (two saves in one transaction, because the partial unique index is
@@ -27,7 +26,7 @@ One service per aggregate, registered scoped in `Program.cs`. Services return
 - Slugs: generated with `SlugGenerator`, rejected when empty, unique **including soft-deleted rows**
   (use `IgnoreQueryFilters()` for the check, since the unique index covers them). The same applies
   to currency codes.
-- Project/product URLs, image URLs and certificate URLs must be absolute http(s).
+- Project/product URLs and image URLs must be absolute http(s).
 - `price_amount = null` means "Custom / Contact us" — never default it to 0.
 - A tag can't be deleted while a live project or article uses it (`tag_in_use`).
 - Unknown foreign ids (tags, projects, services) are validation errors, not 500s.
@@ -51,13 +50,11 @@ One service per aggregate, registered scoped in `Program.cs`. Services return
 
 ## Publishing
 
-`published_at` is stamped on the first publish and never cleared. `SetPublishedAsync` shows the row
-on both sites **only on the first publish** (`published_at is null`); republishing keeps the
-editor's site choice.
+`published_at` is stamped on the first publish and never cleared.
 
 ## Queries
 
-- Public reads always apply `is_published`, the site flag, and (via the global filter) `is_deleted`.
+- Public reads always apply `is_published` and (via the global filter) `is_deleted`.
   Never add a method that lets a public caller skip them.
 - `AsNoTracking()` on reads; project straight to DTOs with `Select`; avoid N+1 on lists.
 - Use `IgnoreQueryFilters()` only where a deleted row must be found on purpose (slug checks,

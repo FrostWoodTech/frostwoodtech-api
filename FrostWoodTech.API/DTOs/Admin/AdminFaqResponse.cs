@@ -13,14 +13,9 @@ public sealed class AdminFaqResponse
 
     public required string Answer { get; init; }
 
-    /// <summary>One order shared by both sites.</summary>
     public required int SortOrder { get; init; }
 
     public required bool IsPublished { get; init; }
-
-    public required bool ShowOnAgency { get; init; }
-
-    public required bool ShowOnPersonal { get; init; }
 
     public required DateTimeOffset CreatedAt { get; init; }
 

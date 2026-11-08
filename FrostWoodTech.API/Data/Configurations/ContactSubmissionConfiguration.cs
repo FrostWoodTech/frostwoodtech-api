@@ -21,7 +21,6 @@ public class ContactSubmissionConfiguration : IEntityTypeConfiguration<ContactSu
         builder.Property(c => c.Message).HasColumnName("message").HasMaxLength(4000).IsRequired();
         builder.Property(c => c.ServiceId).HasColumnName("service_id");
         builder.Property(c => c.BudgetRange).HasColumnName("budget_range").HasColumnType("contact_budget_range");
-        builder.Property(c => c.Site).HasColumnName("site").HasColumnType("site");
         builder.Property(c => c.Status).HasColumnName("status").HasColumnType("contact_submission_status");
         builder.Property(c => c.AdminNotes).HasColumnName("admin_notes").HasMaxLength(4000);
         builder.Property(c => c.RepliedAt).HasColumnName("replied_at");

@@ -3,7 +3,7 @@ using FrostWoodTech.API.Enums;
 
 namespace FrostWoodTech.API.Entities;
 
-/// <summary>Service tiers and combo packs. Agency-only, so no site visibility block.</summary>
+/// <summary>Service tiers and combo packs. Own featured flag and sort order, so no FeaturableEntity.</summary>
 public class PricingPlan : AuditableEntity
 {
     /// <summary>Null means a combo pack.</summary>

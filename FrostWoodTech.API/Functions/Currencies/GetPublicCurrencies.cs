@@ -21,7 +21,6 @@ public class GetPublicCurrencies
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "public/currencies")] HttpRequest req,
         CancellationToken cancellationToken)
     {
-        // No ?site=: currencies are shared by both sites.
         var currencies = await _currencyService.GetPublicCurrenciesAsync(cancellationToken);
 
         return HttpResponses.PublicJson(req, currencies);

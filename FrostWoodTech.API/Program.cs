@@ -44,8 +44,6 @@ dataSourceBuilder.MapEnum<PasswordTokenPurpose>("password_token_purpose");
 dataSourceBuilder.MapEnum<AuthAttemptAction>("auth_attempt_action");
 dataSourceBuilder.MapEnum<ContactSubmissionStatus>("contact_submission_status");
 dataSourceBuilder.MapEnum<ContactBudgetRange>("contact_budget_range");
-dataSourceBuilder.MapEnum<CertificateCategory>("certificate_category");
-dataSourceBuilder.MapEnum<Site>("site");
 var dataSource = dataSourceBuilder.Build();
 
 builder.Services.AddSingleton(dataSource);
@@ -61,8 +59,6 @@ builder.Services.AddDbContextPool<FrostWoodTechDbContext>(options =>
         npgsql.MapEnum<AuthAttemptAction>("auth_attempt_action");
         npgsql.MapEnum<ContactSubmissionStatus>("contact_submission_status");
         npgsql.MapEnum<ContactBudgetRange>("contact_budget_range");
-        npgsql.MapEnum<CertificateCategory>("certificate_category");
-        npgsql.MapEnum<Site>("site");
         npgsql.EnableRetryOnFailure(maxRetryCount: 3, maxRetryDelay: TimeSpan.FromSeconds(5), errorCodesToAdd: null);
         npgsql.CommandTimeout(30);
     }));
@@ -86,7 +82,6 @@ builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IServiceCatalogService, ServiceCatalogService>();
 builder.Services.AddScoped<IPricingService, PricingService>();
 builder.Services.AddScoped<IFaqService, FaqService>();
-builder.Services.AddScoped<ICertificateService, CertificateService>();
 builder.Services.AddScoped<IReviewService, ReviewService>();
 builder.Services.AddScoped<IContactService, ContactService>();
 builder.Services.AddScoped<ICurrencyService, CurrencyService>();

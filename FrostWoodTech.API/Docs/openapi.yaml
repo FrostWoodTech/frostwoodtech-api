@@ -4,8 +4,7 @@ info:
   title: FrostWoodTech CMS API
   version: "1.0.0"
   description: |
-    Headless CMS powering three frontends (agency site, personal site, admin SPA) from one
-    database. Entities carry per-site visibility flags instead of duplicated rows.
+    Headless CMS powering the FrostWoodTech agency site and its admin SPA from one database.
 
     ## Surfaces
 
@@ -14,8 +13,6 @@ info:
 
     ## Conventions
 
-    * `?site=` is **required** on public endpoints with site visibility — missing it returns
-      `400 site_required`.
     * Lists return `{ items, page, pageSize, total }` (`pageSize` defaults to 20, max 100).
     * Errors are RFC 7807 `application/problem+json` — match on `code`, not `detail`.
     * Public GETs are cacheable (`ETag` / `If-None-Match`, 5 min); admin responses are
@@ -29,7 +26,7 @@ servers:
 
 tags:
   - name: public
-    description: Anonymous, cacheable reads for the two public sites.
+    description: Anonymous, cacheable reads for the agency site.
   - name: admin
     description: JWT-protected CRUD for the admin SPA.
   - name: auth
@@ -74,10 +71,9 @@ paths:
     get:
       tags: [public]
       operationId: getPublicProjects
-      summary: List published projects for one site
+      summary: List published projects
       security: []
       parameters:
-        - $ref: "#/components/parameters/SiteRequired"
         - name: tag
           in: query
           description: Slug of a technology tag.
@@ -93,7 +89,6 @@ paths:
         "200":
           $ref: "#/components/responses/PublicProjectList"
         "304": { $ref: "#/components/responses/NotModified" }
-        "400": { $ref: "#/components/responses/SiteRequired" }
 
   /public/projects/{slug}:
     get:
@@ -103,7 +98,6 @@ paths:
       security: []
       parameters:
         - $ref: "#/components/parameters/SlugPath"
-        - $ref: "#/components/parameters/SiteRequired"
       responses:
         "200":
           description: The project, with its tags and images.
@@ -114,17 +108,15 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ProjectResponse" }
         "304": { $ref: "#/components/responses/NotModified" }
-        "400": { $ref: "#/components/responses/SiteRequired" }
         "404": { $ref: "#/components/responses/NotFound" }
 
   /public/products:
     get:
       tags: [public]
       operationId: getPublicProducts
-      summary: List published products for one site
+      summary: List published products
       security: []
       parameters:
-        - $ref: "#/components/parameters/SiteRequired"
         - $ref: "#/components/parameters/Featured"
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/PageSize"
@@ -132,7 +124,6 @@ paths:
         "200":
           $ref: "#/components/responses/PublicProductList"
         "304": { $ref: "#/components/responses/NotModified" }
-        "400": { $ref: "#/components/responses/SiteRequired" }
 
   /public/products/{slug}:
     get:
@@ -142,7 +133,6 @@ paths:
       security: []
       parameters:
         - $ref: "#/components/parameters/SlugPath"
-        - $ref: "#/components/parameters/SiteRequired"
       responses:
         "200":
           description: The product, with its images.
@@ -153,17 +143,15 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ProductResponse" }
         "304": { $ref: "#/components/responses/NotModified" }
-        "400": { $ref: "#/components/responses/SiteRequired" }
         "404": { $ref: "#/components/responses/NotFound" }
 
   /public/articles:
     get:
       tags: [public]
       operationId: getPublicArticles
-      summary: List published articles for one site
+      summary: List published articles
       security: []
       parameters:
-        - $ref: "#/components/parameters/SiteRequired"
         - name: tag
           in: query
           schema: { type: string }
@@ -174,7 +162,6 @@ paths:
         "200":
           $ref: "#/components/responses/PublicArticleList"
         "304": { $ref: "#/components/responses/NotModified" }
-        "400": { $ref: "#/components/responses/SiteRequired" }
 
   /public/articles/{slug}:
     get:
@@ -184,7 +171,6 @@ paths:
       security: []
       parameters:
         - $ref: "#/components/parameters/SlugPath"
-        - $ref: "#/components/parameters/SiteRequired"
       responses:
         "200":
           description: The article.
@@ -195,17 +181,15 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ArticleResponse" }
         "304": { $ref: "#/components/responses/NotModified" }
-        "400": { $ref: "#/components/responses/SiteRequired" }
         "404": { $ref: "#/components/responses/NotFound" }
 
   /public/services:
     get:
       tags: [public]
       operationId: getPublicServices
-      summary: List published services for one site
+      summary: List published services
       security: []
       parameters:
-        - $ref: "#/components/parameters/SiteRequired"
         - $ref: "#/components/parameters/Featured"
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/PageSize"
@@ -213,7 +197,6 @@ paths:
         "200":
           $ref: "#/components/responses/PublicServiceList"
         "304": { $ref: "#/components/responses/NotModified" }
-        "400": { $ref: "#/components/responses/SiteRequired" }
 
   /public/services/{slug}:
     get:
@@ -223,7 +206,6 @@ paths:
       security: []
       parameters:
         - $ref: "#/components/parameters/SlugPath"
-        - $ref: "#/components/parameters/SiteRequired"
       responses:
         "200":
           description: The service.
@@ -234,7 +216,6 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ServiceResponse" }
         "304": { $ref: "#/components/responses/NotModified" }
-        "400": { $ref: "#/components/responses/SiteRequired" }
         "404": { $ref: "#/components/responses/NotFound" }
 
   /public/pricing/combos:
@@ -242,7 +223,7 @@ paths:
       tags: [public]
       operationId: getPublicComboPricingPlans
       summary: List combo packs
-      description: Plans with no service. Agency-only, so no `site` param.
+      description: Plans with no service.
       security: []
       parameters:
         - $ref: "#/components/parameters/Featured"
@@ -258,7 +239,6 @@ paths:
       tags: [public]
       operationId: getPublicServicePricingPlans
       summary: List one service's pricing tiers
-      description: Agency-only, so no `site` param.
       security: []
       parameters:
         - name: serviceId
@@ -276,14 +256,13 @@ paths:
     get:
       tags: [public]
       operationId: getPublicFaqs
-      summary: List published FAQs for one site
+      summary: List published FAQs
       description: Returns a bare array — the FAQ list is small enough that paging would only get in the way.
       security: []
       parameters:
-        - $ref: "#/components/parameters/SiteRequired"
       responses:
         "200":
-          description: The site's FAQs, in sort order.
+          description: Global FAQs, in sort order.
           headers:
             ETag: { $ref: "#/components/headers/ETag" }
             Cache-Control: { $ref: "#/components/headers/PublicCacheControl" }
@@ -293,30 +272,12 @@ paths:
                 type: array
                 items: { $ref: "#/components/schemas/FaqResponse" }
         "304": { $ref: "#/components/responses/NotModified" }
-        "400": { $ref: "#/components/responses/SiteRequired" }
-
-  /public/certificates:
-    get:
-      tags: [public]
-      operationId: getPublicCertificates
-      summary: List published certificates
-      description: Personal-site only — certificates never appear on the agency site, so there is no `site` param.
-      security: []
-      parameters:
-        - $ref: "#/components/parameters/Featured"
-        - $ref: "#/components/parameters/Page"
-        - $ref: "#/components/parameters/PageSize"
-      responses:
-        "200":
-          $ref: "#/components/responses/PublicCertificateList"
-        "304": { $ref: "#/components/responses/NotModified" }
 
   /public/tags:
     get:
       tags: [public]
       operationId: getPublicTags
       summary: List tags
-      description: Tags carry no site visibility, so there is no `?site=` here.
       security: []
       parameters:
         - $ref: "#/components/parameters/IsTechnology"
@@ -339,7 +300,7 @@ paths:
       tags: [public]
       operationId: getPublicCurrencies
       summary: List selectable display currencies
-      description: Active currencies with a manual or live rate. No `site` param.
+      description: Active currencies with a manual or live rate..
       security: []
       responses:
         "200":
@@ -359,10 +320,9 @@ paths:
       tags: [public]
       operationId: getPublicHome
       summary: Everything one home page needs
-      description: One round trip instead of six — the featured slices for that site, plus its FAQs.
+      description: One round trip instead of six — the featured slices, plus FAQs.
       security: []
       parameters:
-        - $ref: "#/components/parameters/SiteRequired"
       responses:
         "200":
           description: The home page payload.
@@ -373,14 +333,12 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/HomeResponse" }
         "304": { $ref: "#/components/responses/NotModified" }
-        "400": { $ref: "#/components/responses/SiteRequired" }
 
   /public/reviews:
     get:
       tags: [public]
       operationId: getPublicReviews
       summary: Paged, published reviews
-      description: Not site-scoped — reviews are shared across both public sites.
       security: []
       parameters:
         - $ref: "#/components/parameters/ReviewSort"
@@ -756,10 +714,8 @@ paths:
       operationId: getAdminProjects
       summary: List projects, drafts included
       parameters:
-        - $ref: "#/components/parameters/SiteRequired"
         - $ref: "#/components/parameters/IsPublished"
         - $ref: "#/components/parameters/Search"
-        - $ref: "#/components/parameters/IncludeHidden"
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/PageSize"
       responses:
@@ -775,7 +731,6 @@ paths:
                       items:
                         type: array
                         items: { $ref: "#/components/schemas/AdminProjectResponse" }
-        "400": { $ref: "#/components/responses/SiteRequired" }
         "401": { $ref: "#/components/responses/Unauthorized" }
     post:
       tags: [admin]
@@ -856,7 +811,7 @@ paths:
     post:
       tags: [admin]
       operationId: reorderProjects
-      summary: Bulk sort order for one site
+      summary: Bulk sort order
       requestBody:
         required: true
         content:
@@ -948,10 +903,8 @@ paths:
       operationId: getAdminProducts
       summary: List products, drafts included
       parameters:
-        - $ref: "#/components/parameters/SiteRequired"
         - $ref: "#/components/parameters/IsPublished"
         - $ref: "#/components/parameters/Search"
-        - $ref: "#/components/parameters/IncludeHidden"
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/PageSize"
       responses:
@@ -967,7 +920,6 @@ paths:
                       items:
                         type: array
                         items: { $ref: "#/components/schemas/AdminProductResponse" }
-        "400": { $ref: "#/components/responses/SiteRequired" }
         "401": { $ref: "#/components/responses/Unauthorized" }
     post:
       tags: [admin]
@@ -1048,7 +1000,7 @@ paths:
     post:
       tags: [admin]
       operationId: reorderProducts
-      summary: Bulk sort order for one site
+      summary: Bulk sort order
       requestBody:
         required: true
         content:
@@ -1140,10 +1092,8 @@ paths:
       operationId: getAdminArticles
       summary: List articles, drafts included
       parameters:
-        - $ref: "#/components/parameters/SiteRequired"
         - $ref: "#/components/parameters/IsPublished"
         - $ref: "#/components/parameters/Search"
-        - $ref: "#/components/parameters/IncludeHidden"
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/PageSize"
       responses:
@@ -1159,7 +1109,6 @@ paths:
                       items:
                         type: array
                         items: { $ref: "#/components/schemas/AdminArticleResponse" }
-        "400": { $ref: "#/components/responses/SiteRequired" }
         "401": { $ref: "#/components/responses/Unauthorized" }
     post:
       tags: [admin]
@@ -1237,7 +1186,7 @@ paths:
     post:
       tags: [admin]
       operationId: reorderArticles
-      summary: Bulk sort order for one site
+      summary: Bulk sort order
       requestBody:
         required: true
         content:
@@ -1255,10 +1204,8 @@ paths:
       operationId: getAdminServices
       summary: List services, drafts included
       parameters:
-        - $ref: "#/components/parameters/SiteRequired"
         - $ref: "#/components/parameters/IsPublished"
         - $ref: "#/components/parameters/Search"
-        - $ref: "#/components/parameters/IncludeHidden"
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/PageSize"
       responses:
@@ -1274,7 +1221,6 @@ paths:
                       items:
                         type: array
                         items: { $ref: "#/components/schemas/AdminServiceResponse" }
-        "400": { $ref: "#/components/responses/SiteRequired" }
         "401": { $ref: "#/components/responses/Unauthorized" }
     post:
       tags: [admin]
@@ -1352,7 +1298,7 @@ paths:
     post:
       tags: [admin]
       operationId: reorderServices
-      summary: Bulk sort order for one site
+      summary: Bulk sort order
       requestBody:
         required: true
         content:
@@ -1566,7 +1512,6 @@ paths:
       operationId: getAdminFaqs
       summary: List FAQs, drafts included
       parameters:
-        - $ref: "#/components/parameters/SiteRequired"
         - $ref: "#/components/parameters/IsPublished"
         - $ref: "#/components/parameters/Search"
         - $ref: "#/components/parameters/ServiceIdFilter"
@@ -1586,7 +1531,6 @@ paths:
                       items:
                         type: array
                         items: { $ref: "#/components/schemas/AdminFaqResponse" }
-        "400": { $ref: "#/components/responses/SiteRequired" }
         "401": { $ref: "#/components/responses/Unauthorized" }
     post:
       tags: [admin]
@@ -1645,105 +1589,12 @@ paths:
     post:
       tags: [admin]
       operationId: reorderFaqs
-      summary: Bulk sort order — FAQs share one order across both sites
+      summary: Bulk sort order
       requestBody:
         required: true
         content:
           application/json:
             schema: { $ref: "#/components/schemas/FaqReorderRequest" }
-      responses:
-        "204": { $ref: "#/components/responses/NoContent" }
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-
-  # ------------------------------------------------------------------------------- certificates
-  /cms/admin/certificates:
-    get:
-      tags: [admin]
-      operationId: getAdminCertificates
-      summary: List certificates, drafts included
-      parameters:
-        - $ref: "#/components/parameters/IsPublished"
-        - $ref: "#/components/parameters/Search"
-        - $ref: "#/components/parameters/Page"
-        - $ref: "#/components/parameters/PageSize"
-      responses:
-        "200":
-          description: A page of certificates.
-          content:
-            application/json:
-              schema:
-                allOf:
-                  - $ref: "#/components/schemas/Paged"
-                  - type: object
-                    properties:
-                      items:
-                        type: array
-                        items: { $ref: "#/components/schemas/AdminCertificateResponse" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-    post:
-      tags: [admin]
-      operationId: createCertificate
-      summary: Create a certificate
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/CreateCertificateRequest" }
-      responses:
-        "201":
-          description: The created certificate.
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/AdminCertificateResponse" }
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-
-  /cms/admin/certificates/{id}:
-    get:
-      tags: [admin]
-      operationId: getAdminCertificateById
-      summary: One certificate, drafts included
-      parameters: [{ $ref: "#/components/parameters/IdPath" }]
-      responses:
-        "200": { $ref: "#/components/responses/AdminCertificate" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "404": { $ref: "#/components/responses/NotFound" }
-    put:
-      tags: [admin]
-      operationId: updateCertificate
-      summary: Replace a certificate
-      parameters: [{ $ref: "#/components/parameters/IdPath" }]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/CreateCertificateRequest" }
-      responses:
-        "200": { $ref: "#/components/responses/AdminCertificate" }
-        "400": { $ref: "#/components/responses/BadRequest" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "404": { $ref: "#/components/responses/NotFound" }
-    delete:
-      tags: [admin]
-      operationId: deleteCertificate
-      summary: Soft-delete a certificate
-      parameters: [{ $ref: "#/components/parameters/IdPath" }]
-      responses:
-        "204": { $ref: "#/components/responses/NoContent" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "404": { $ref: "#/components/responses/NotFound" }
-
-  /cms/admin/certificates/reorder:
-    post:
-      tags: [admin]
-      operationId: reorderCertificates
-      summary: Bulk sort order — certificates share one global order
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/CertificateReorderRequest" }
       responses:
         "204": { $ref: "#/components/responses/NoContent" }
         "400": { $ref: "#/components/responses/BadRequest" }
@@ -1841,7 +1692,7 @@ paths:
       tags: [admin]
       operationId: reorderReviews
       summary: Bulk sort order
-      description: Reviews have one shared order, not a per-site one — no `site` on the body.
+      description: Reviews have one order.
       requestBody:
         required: true
         content:
@@ -1860,10 +1711,6 @@ paths:
       summary: List contact form enquiries
       parameters:
         - $ref: "#/components/parameters/ContactStatusFilter"
-        - name: site
-          in: query
-          description: Which frontend the enquiry came from. Optional — omit to get both.
-          schema: { $ref: "#/components/schemas/Site" }
         - name: serviceId
           in: query
           description: Only enquiries about this service.
@@ -2507,63 +2354,6 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
 
-  /cms/admin/certificates/trash:
-    get:
-      tags: [admin]
-      operationId: getTrashedCertificates
-      summary: List soft-deleted certificates
-      description: Newest deletion first. `deletedAt` is null for rows deleted before the trash existed.
-      parameters:
-        - $ref: "#/components/parameters/Search"
-        - $ref: "#/components/parameters/Page"
-        - $ref: "#/components/parameters/PageSize"
-      responses:
-        "200":
-          description: A page of deleted rows.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  items:
-                    type: array
-                    items: { $ref: "#/components/schemas/TrashedItemResponse" }
-                  page: { type: integer }
-                  pageSize: { type: integer }
-                  total: { type: integer }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-
-  /cms/admin/certificates/{id}/restore:
-    post:
-      tags: [admin]
-      operationId: restoreCertificates
-      summary: Restore a soft-deleted row
-      description: "Restoring always works. Permanent delete also removes the stored file."
-      parameters: [{ $ref: "#/components/parameters/IdPath" }]
-      responses:
-        "200":
-          description: The restored row.
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/AdminCertificateResponse" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "404": { $ref: "#/components/responses/NotFound" }
-        "409": { $ref: "#/components/responses/Conflict" }
-
-  /cms/admin/certificates/{id}/permanent:
-    delete:
-      tags: [admin]
-      operationId: purgeCertificates
-      summary: Permanently delete a soft-deleted row
-      description: Super admin only. The row must already be in the trash. Stored files are removed after the row is gone.
-      parameters: [{ $ref: "#/components/parameters/IdPath" }]
-      responses:
-        "204": { $ref: "#/components/responses/NoContent" }
-        "401": { $ref: "#/components/responses/Unauthorized" }
-        "403": { $ref: "#/components/responses/Forbidden" }
-        "404": { $ref: "#/components/responses/NotFound" }
-        "409": { $ref: "#/components/responses/Conflict" }
-
   /cms/admin/tags/trash:
     get:
       tags: [admin]
@@ -2792,7 +2582,6 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
 
-
 components:
   securitySchemes:
     bearerAuth:
@@ -2810,12 +2599,6 @@ components:
       schema: { type: string }
 
   parameters:
-    SiteRequired:
-      name: site
-      in: query
-      required: true
-      description: "Which frontend is asking. Required — missing it is `400 site_required`, never \"return everything\"."
-      schema: { $ref: "#/components/schemas/Site" }
     Page:
       name: page
       in: query
@@ -2832,18 +2615,13 @@ components:
     Featured:
       name: featured
       in: query
-      description: Only rows featured on the requested site's home page.
+      description: Only rows featured on the home page.
       schema: { type: boolean }
     IsPublished:
       name: isPublished
       in: query
       description: Admin-only filter. Omit to get drafts and published rows alike.
       schema: { type: boolean }
-    IncludeHidden:
-      name: includeHidden
-      in: query
-      description: Skip the show-on-`site` filter while still returning that site's sort order. Used by the visibility screen.
-      schema: { type: boolean, default: false }
     ServiceIdFilter:
       name: serviceId
       in: query
@@ -2852,7 +2630,7 @@ components:
     GlobalOnly:
       name: globalOnly
       in: query
-      description: "Only FAQs with no service — the shared list both public sites render. Ignored when `serviceId` is also sent."
+      description: "Only FAQs with no service — the shared list the site renders. Ignored when `serviceId` is also sent."
       schema: { type: boolean, default: false }
     ReviewSort:
       name: sort
@@ -2902,11 +2680,6 @@ components:
       description: Your `If-None-Match` matched. No body.
     BadRequest:
       description: Validation failed. See `code`.
-      content:
-        application/problem+json:
-          schema: { $ref: "#/components/schemas/Problem" }
-    SiteRequired:
-      description: "`?site=` was missing (`site_required`) or invalid (`validation_failed`)."
       content:
         application/problem+json:
           schema: { $ref: "#/components/schemas/Problem" }
@@ -2971,11 +2744,6 @@ components:
       content:
         application/json:
           schema: { $ref: "#/components/schemas/AdminFaqResponse" }
-    AdminCertificate:
-      description: The certificate, drafts and metadata included.
-      content:
-        application/json:
-          schema: { $ref: "#/components/schemas/AdminCertificateResponse" }
     AdminReview:
       description: The review, drafts and metadata included.
       content:
@@ -3072,28 +2840,8 @@ components:
                   items:
                     type: array
                     items: { $ref: "#/components/schemas/PricingPlanResponse" }
-    PublicCertificateList:
-      description: A page of published certificates.
-      headers:
-        ETag: { $ref: "#/components/headers/ETag" }
-        Cache-Control: { $ref: "#/components/headers/PublicCacheControl" }
-      content:
-        application/json:
-          schema:
-            allOf:
-              - $ref: "#/components/schemas/Paged"
-              - type: object
-                properties:
-                  items:
-                    type: array
-                    items: { $ref: "#/components/schemas/CertificateResponse" }
-
   schemas:
     # ---------------------------------------------------------------------------- enums
-    Site:
-      type: string
-      enum: [agency, personal]
-      description: The two public frontends.
     ContactSubmissionStatus:
       type: string
       enum: [new, read, replied, archived, spam]
@@ -3134,11 +2882,7 @@ components:
       enum: [email_verification_required, pending, approved, rejected, disabled]
     MediaTarget:
       type: string
-      enum: [projects, products, services, tags, articles, certificates]
-
-    CertificateCategory:
-      type: string
-      enum: [course, exam]
+      enum: [projects, products, services, tags, articles]
 
     TrashedItemResponse:
       type: object
@@ -3162,8 +2906,8 @@ components:
         detail: { type: string }
         code:
           type: string
-          description: "Stable machine-readable code, e.g. `site_required`, `validation_failed`, `slug_taken`, `tag_in_use`."
-          examples: [site_required]
+          description: "Stable machine-readable code, e.g. `validation_failed`, `slug_taken`, `tag_in_use`."
+          examples: [validation_failed]
       required: [status, title, code]
 
     Paged:
@@ -3245,10 +2989,10 @@ components:
         seoDescription: { type: [string, "null"] }
         featured:
           type: boolean
-          description: Featured on the requested site's home page.
+          description: Featured on the home page.
         sortOrder:
           type: integer
-          description: The requested site's sort order, already resolved.
+          description: Manual sort order.
         tags:
           type: array
           items: { $ref: "#/components/schemas/TagResponse" }
@@ -3292,10 +3036,10 @@ components:
         seoDescription: { type: [string, "null"] }
         featured:
           type: boolean
-          description: Featured on the requested site's home page.
+          description: Featured on the home page.
         sortOrder:
           type: integer
-          description: The requested site's sort order, already resolved.
+          description: Manual sort order.
         images:
           type: array
           items: { $ref: "#/components/schemas/ProductImageResponse" }
@@ -3434,32 +3178,13 @@ components:
 
     FaqResponse:
       type: object
-      description: FAQs have no "featured" concept and share one sort order across both sites.
+      description: FAQs have no "featured" concept.
       properties:
         id: { type: string, format: uuid }
         question: { type: string }
         answer: { type: string }
         sortOrder: { type: integer }
       required: [id, question, answer, sortOrder]
-
-    CertificateResponse:
-      type: object
-      description: Personal-site only — there is no `site` concept here, certificates never exist for the agency site.
-      properties:
-        id: { type: string, format: uuid }
-        name: { type: string }
-        issuedBy: { type: string }
-        category: { $ref: "#/components/schemas/CertificateCategory" }
-        issuedDate: { type: string, format: date }
-        marks: { type: [string, "null"], description: "Free text — a score, grade, or \"Distinction\" style result." }
-        url: { type: string }
-        mimeType: { type: string, description: "e.g. application/pdf, image/png." }
-        width: { type: [integer, "null"], description: Null when the file is a PDF. }
-        height: { type: [integer, "null"] }
-        altText: { type: string }
-        featured: { type: boolean }
-        sortOrder: { type: integer }
-      required: [id, name, issuedBy, category, issuedDate, url, mimeType, altText, featured, sortOrder]
 
     ReviewResponse:
       type: object
@@ -3480,7 +3205,7 @@ components:
 
     HomeResponse:
       type: object
-      description: The featured slices for one site, plus its FAQs and reviews.
+      description: The featured slices, plus FAQs and reviews.
       properties:
         featuredProjects:
           type: array
@@ -3499,22 +3224,17 @@ components:
           items: { $ref: "#/components/schemas/FaqResponse" }
         featuredReviews:
           type: array
-          description: Not site-scoped — reviews are shared across both public sites.
           items: { $ref: "#/components/schemas/ReviewResponse" }
       required:
         [featuredProjects, featuredArticles, featuredServices, featuredPricingPlans, faqs, featuredReviews]
 
     # ------------------------------------------------------------------- shared fragments
-    SiteVisibility:
+    Featuring:
       type: object
-      description: "Per-site visibility. `featuredOn*` requires the matching `showOn*`."
+      description: "Home-page featuring and manual order."
       properties:
-        showOnAgency: { type: boolean, default: false }
-        featuredOnAgency: { type: boolean, default: false }
-        agencySortOrder: { type: integer, default: 0 }
-        showOnPersonal: { type: boolean, default: false }
-        featuredOnPersonal: { type: boolean, default: false }
-        personalSortOrder: { type: integer, default: 0 }
+        isFeatured: { type: boolean, default: false }
+        sortOrder: { type: integer, default: 0 }
 
     Timestamps:
       type: object
@@ -3582,7 +3302,7 @@ components:
 
     AdminProjectResponse:
       allOf:
-        - $ref: "#/components/schemas/SiteVisibility"
+        - $ref: "#/components/schemas/Featuring"
         - $ref: "#/components/schemas/Timestamps"
         - type: object
           properties:
@@ -3612,7 +3332,7 @@ components:
 
     AdminProductResponse:
       allOf:
-        - $ref: "#/components/schemas/SiteVisibility"
+        - $ref: "#/components/schemas/Featuring"
         - $ref: "#/components/schemas/Timestamps"
         - type: object
           properties:
@@ -3634,7 +3354,7 @@ components:
 
     AdminArticleResponse:
       allOf:
-        - $ref: "#/components/schemas/SiteVisibility"
+        - $ref: "#/components/schemas/Featuring"
         - $ref: "#/components/schemas/Timestamps"
         - type: object
           properties:
@@ -3669,7 +3389,7 @@ components:
 
     AdminServiceResponse:
       allOf:
-        - $ref: "#/components/schemas/SiteVisibility"
+        - $ref: "#/components/schemas/Featuring"
         - $ref: "#/components/schemas/Timestamps"
         - type: object
           properties:
@@ -3716,7 +3436,7 @@ components:
       allOf:
         - $ref: "#/components/schemas/Timestamps"
         - type: object
-          description: Agency-only — no per-site visibility block, unlike projects/articles/services.
+          description: Own featured flag and sort order.
           properties:
             id: { type: string, format: uuid }
             serviceId: { type: [string, "null"], format: uuid }
@@ -3744,13 +3464,13 @@ components:
       allOf:
         - $ref: "#/components/schemas/Timestamps"
         - type: object
-          description: FAQs have visibility flags but no featured flag or per-site sort order.
+          description: FAQs have no featured flag.
           properties:
             id: { type: string, format: uuid }
             serviceId:
               type: [string, "null"]
               format: uuid
-              description: Null means this is a general FAQ shared by both sites.
+              description: Null means this is a general FAQ.
             serviceName:
               type: [string, "null"]
               description: For display next to the scope filter. Null exactly when serviceId is null.
@@ -3760,34 +3480,7 @@ components:
               type: integer
               description: Ordered within its scope (global, or one service) — not across every FAQ.
             isPublished: { type: boolean }
-            showOnAgency: { type: boolean }
-            showOnPersonal: { type: boolean }
-          required: [id, question, answer, sortOrder, isPublished, showOnAgency, showOnPersonal]
-
-    AdminCertificateResponse:
-      allOf:
-        - $ref: "#/components/schemas/Timestamps"
-        - type: object
-          description: Personal-site only — no site-visibility block at all, unlike projects/articles/services.
-          properties:
-            id: { type: string, format: uuid }
-            name: { type: string }
-            issuedBy: { type: string }
-            category: { $ref: "#/components/schemas/CertificateCategory" }
-            issuedDate: { type: string, format: date }
-            marks: { type: [string, "null"] }
-            objectKey: { type: string }
-            url: { type: string }
-            mimeType: { type: string }
-            width: { type: [integer, "null"] }
-            height: { type: [integer, "null"] }
-            altText: { type: string }
-            isPublished: { type: boolean }
-            featured: { type: boolean }
-            sortOrder:
-              type: integer
-              description: Drag-and-drop order — never a typed number on create/update.
-          required: [id, name, issuedBy, issuedDate, objectKey, url, mimeType, altText, isPublished, featured, sortOrder]
+          required: [id, question, answer, sortOrder, isPublished]
 
     AdminReviewResponse:
       type: object
@@ -3826,7 +3519,6 @@ components:
           oneOf:
             - $ref: "#/components/schemas/ContactBudgetRange"
             - type: "null"
-        site: { $ref: "#/components/schemas/Site" }
         status: { $ref: "#/components/schemas/ContactSubmissionStatus" }
         adminNotes: { type: [string, "null"] }
         repliedAt: { type: [string, "null"], format: date-time }
@@ -3834,7 +3526,7 @@ components:
         submitterIp: { type: [string, "null"] }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
-      required: [id, name, email, message, site, status, createdAt, updatedAt]
+      required: [id, name, email, message, status, createdAt, updatedAt]
 
     # ------------------------------------------------------------------- auth contracts
     RegisterRequest:
@@ -3934,17 +3626,16 @@ components:
 
     ReorderRequest:
       type: object
-      description: Bulk `sort_order` update for one site, applied in a single save.
+      description: Bulk `sort_order` update, applied in a single save.
       properties:
-        site: { $ref: "#/components/schemas/Site" }
         items:
           type: array
           items: { $ref: "#/components/schemas/ReorderItem" }
-      required: [site, items]
+      required: [items]
 
     ChildReorderRequest:
       type: object
-      description: "Reordering a parent's children — images or features. No `site`: children aren't site-scoped."
+      description: "Reordering a parent's children — images or features."
       properties:
         items:
           type: array
@@ -3953,16 +3644,7 @@ components:
 
     FaqReorderRequest:
       type: object
-      description: "Bulk `sort_order` update for FAQs. No `site`: FAQs share one order across both sites."
-      properties:
-        items:
-          type: array
-          items: { $ref: "#/components/schemas/ReorderItem" }
-      required: [items]
-
-    CertificateReorderRequest:
-      type: object
-      description: "Bulk `sort_order` update for certificates. No `site`: certificates only ever exist for the personal site."
+      description: "Bulk `sort_order` update for FAQs."
       properties:
         items:
           type: array
@@ -3971,7 +3653,7 @@ components:
 
     PricingReorderRequest:
       type: object
-      description: "Bulk `sort_order` update for pricing plans. No `site`: pricing is agency-only."
+      description: "Bulk `sort_order` update for pricing plans."
       properties:
         items:
           type: array
@@ -4003,10 +3685,7 @@ components:
         isPublished: { type: boolean, default: false }
         seoTitle: { type: string }
         seoDescription: { type: string }
-        showOnAgency: { type: boolean, default: false }
-        featuredOnAgency: { type: boolean, default: false }
-        showOnPersonal: { type: boolean, default: false }
-        featuredOnPersonal: { type: boolean, default: false }
+        isFeatured: { type: boolean, default: false }
         tagIds:
           type: array
           items: { type: string, format: uuid }
@@ -4025,10 +3704,7 @@ components:
         isPublished: { type: boolean, default: false }
         seoTitle: { type: string }
         seoDescription: { type: string }
-        showOnAgency: { type: boolean, default: false }
-        featuredOnAgency: { type: boolean, default: false }
-        showOnPersonal: { type: boolean, default: false }
-        featuredOnPersonal: { type: boolean, default: false }
+        isFeatured: { type: boolean, default: false }
       required: [name, tagline, description]
 
     CreateArticleRequest:
@@ -4043,10 +3719,7 @@ components:
           type: string
           description: Markdown. Embed uploaded media as `media://<objectKey>` tokens, not URLs.
         isPublished: { type: boolean, default: false }
-        showOnAgency: { type: boolean, default: false }
-        featuredOnAgency: { type: boolean, default: false }
-        showOnPersonal: { type: boolean, default: false }
-        featuredOnPersonal: { type: boolean, default: false }
+        isFeatured: { type: boolean, default: false }
         tagIds:
           type: array
           items: { type: string, format: uuid }
@@ -4054,7 +3727,7 @@ components:
 
     CreateServiceRequest:
       allOf:
-        - $ref: "#/components/schemas/SiteVisibility"
+        - $ref: "#/components/schemas/Featuring"
         - type: object
           description: Also used for `PUT` — an update is a full replacement.
           properties:
@@ -4145,32 +3818,11 @@ components:
         serviceId:
           type: [string, "null"]
           format: uuid
-          description: Omit or send null for a general FAQ shared by both sites; otherwise scopes it to that service's page.
+          description: Omit or send null for a general FAQ; otherwise scopes it to that service's page.
         question: { type: string }
         answer: { type: string }
         isPublished: { type: boolean, default: false }
-        showOnAgency: { type: boolean, default: false }
-        showOnPersonal: { type: boolean, default: false }
       required: [question, answer]
-
-    CreateCertificateRequest:
-      type: object
-      description: Also used for `PUT` (full replacement). `issuedDate` can't be in the future; `url` must be absolute http(s); `mimeType` is `application/pdf` or `image/*`. Sort order changes only via `/reorder`.
-      properties:
-        name: { type: string }
-        issuedBy: { type: string }
-        category: { $ref: "#/components/schemas/CertificateCategory", description: "Required. Exam or course; `marks` is optional for both." }
-        issuedDate: { type: string, format: date }
-        marks: { type: string, description: "Free text — a score, grade, or \"Distinction\" style result. Optional." }
-        objectKey: { type: string, description: Neon Object Storage object key. }
-        url: { type: string }
-        mimeType: { type: string, description: "application/pdf or image/*." }
-        width: { type: integer, minimum: 1, description: "Required for images, omitted for PDFs. Set with height." }
-        height: { type: integer, minimum: 1 }
-        altText: { type: string }
-        isPublished: { type: boolean, default: false }
-        featured: { type: boolean, default: false }
-      required: [name, issuedBy, category, issuedDate, objectKey, url, mimeType, altText]
 
     SubmitReviewRequest:
       type: object
@@ -4209,11 +3861,10 @@ components:
           format: uuid
           description: The service the enquiry is about. Omit or null for a general enquiry.
         budgetRange: { $ref: "#/components/schemas/ContactBudgetRange" }
-        site: { $ref: "#/components/schemas/Site" }
         website:
           type: string
           description: Honeypot. Leave empty — a bot that fills it gets filed as spam, silently.
-      required: [name, email, message, site]
+      required: [name, email, message]
 
     ContactSubmissionResponse:
       type: object

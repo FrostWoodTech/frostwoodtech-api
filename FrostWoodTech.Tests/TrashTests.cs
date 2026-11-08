@@ -343,7 +343,6 @@ public class TrashTests(PostgresFixture fixture) : DatabaseTest(fixture)
         Question = $"How much? {Guid.NewGuid():N}",
         Answer = "It depends.",
         IsPublished = true,
-        ShowOnAgency = true
     };
 
     private static CreateProjectRequest NewProject() => new()
@@ -352,7 +351,6 @@ public class TrashTests(PostgresFixture fixture) : DatabaseTest(fixture)
         Year = 2025,
         ShortDescription = "Short.",
         Description = "Long.",
-        ShowOnAgency = true
     };
 
     private static CreateProductRequest NewProduct() => new()
@@ -360,21 +358,18 @@ public class TrashTests(PostgresFixture fixture) : DatabaseTest(fixture)
         Name = $"Product {Guid.NewGuid():N}",
         Tagline = "One thing.",
         Description = "Details.",
-        ShowOnAgency = true
     };
 
     private static CreateArticleRequest NewArticle() => new()
     {
         Title = $"Article {Guid.NewGuid():N}",
         Excerpt = "An excerpt.",
-        ShowOnAgency = true
     };
 
     private static CreateServiceRequest NewService() => new()
     {
         Name = $"Service {Guid.NewGuid():N}",
         ShortDescription = "What it is.",
-        ShowOnAgency = true
     };
 
     private static CreatePricingPlanRequest NewPlan(Guid? serviceId, string currency) => new()

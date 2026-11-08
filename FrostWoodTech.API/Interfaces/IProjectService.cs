@@ -1,15 +1,13 @@
 using FrostWoodTech.API.Common;
 using FrostWoodTech.API.DTOs.Admin;
 using FrostWoodTech.API.DTOs.Public;
-using FrostWoodTech.API.Enums;
 
 namespace FrostWoodTech.API.Interfaces;
 
 public interface IProjectService
 {
-    /// <summary>Always filtered to one site and published, non-deleted rows.</summary>
+    /// <summary>Always filtered to published, non-deleted rows.</summary>
     Task<PagedResult<ProjectResponse>> GetPublicProjectsAsync(
-        Site site,
         string? tagSlug,
         string? categorySlug,
         bool? featured,
@@ -18,15 +16,12 @@ public interface IProjectService
         CancellationToken cancellationToken);
 
     Task<ServiceResult<ProjectResponse>> GetPublicProjectBySlugAsync(
-        Site site,
         string slug,
         CancellationToken cancellationToken);
 
     Task<PagedResult<AdminProjectResponse>> GetAdminProjectsAsync(
-        Site? site,
         bool? isPublished,
         string? search,
-        bool includeHidden,
         int page,
         int pageSize,
         CancellationToken cancellationToken);
@@ -42,7 +37,7 @@ public interface IProjectService
         UpdateProjectRequest request,
         CancellationToken cancellationToken);
 
-    /// <summary>First publish stamps published_at and shows the project on both sites.</summary>
+    /// <summary>First publish stamps published_at; republishing keeps it.</summary>
     Task<ServiceResult<AdminProjectResponse>> SetPublishedAsync(
         Guid id,
         SetPublishedRequest request,

@@ -8,7 +8,6 @@ using FrostWoodTech.API.Data;
 using FrostWoodTech.API.DTOs.Admin;
 using FrostWoodTech.API.DTOs.Public;
 using FrostWoodTech.API.Entities;
-using FrostWoodTech.API.Enums;
 using FrostWoodTech.API.Interfaces;
 
 namespace FrostWoodTech.API.Services;
@@ -27,28 +26,25 @@ public class ProductService : IProductService
     }
 
     public async Task<PagedResult<ProductResponse>> GetPublicProductsAsync(
-        Site site,
         bool? featured,
         int page,
         int pageSize,
         CancellationToken cancellationToken)
     {
-        // is_deleted comes from the global filter; is_published and the site flag are mandatory.
-        var query = ForSite(_db.Products.AsNoTracking().Where(p => p.IsPublished), site);
+        // is_deleted comes from the global filter; is_published is mandatory.
+        var query = _db.Products.AsNoTracking().Where(p => p.IsPublished);
 
         if (featured is not null)
         {
-            query = site == Site.Agency
-                ? query.Where(p => p.FeaturedOnAgency == featured)
-                : query.Where(p => p.FeaturedOnPersonal == featured);
+            query = query.Where(p => p.IsFeatured == featured);
         }
 
         var total = await query.CountAsync(cancellationToken);
 
-        var items = await OrderForSite(query, site)
+        var items = await OrderForPublic(query)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Select(PublicProjection(site))
+            .Select(PublicProjection)
             .ToListAsync(cancellationToken);
 
         return new PagedResult<ProductResponse>
@@ -61,39 +57,29 @@ public class ProductService : IProductService
     }
 
     public async Task<ServiceResult<ProductResponse>> GetPublicProductBySlugAsync(
-        Site site,
         string slug,
         CancellationToken cancellationToken)
     {
-        var product = await ForSite(_db.Products.AsNoTracking().Where(p => p.IsPublished), site)
+        var product = await _db.Products.AsNoTracking().Where(p => p.IsPublished)
             .Where(p => p.Slug == slug)
-            .Select(PublicProjection(site))
+            .Select(PublicProjection)
             .FirstOrDefaultAsync(cancellationToken);
 
         return product is null
             ? ServiceResult<ProductResponse>.NotFound(
                 "not_found",
-                $"No published product with slug '{slug}' on this site.")
+                $"No published product with slug '{slug}'.")
             : ServiceResult<ProductResponse>.Success(product);
     }
 
     public async Task<PagedResult<AdminProductResponse>> GetAdminProductsAsync(
-        Site? site,
         bool? isPublished,
         string? search,
-        bool includeHidden,
         int page,
         int pageSize,
         CancellationToken cancellationToken)
     {
         var query = _db.Products.AsNoTracking();
-
-        // includeHidden: the visibility screen passes site (for sort order) but must see rows not shown yet.
-        if (site is not null && !includeHidden)
-        {
-            query = ForSite(query, site.Value);
-        }
-
         if (isPublished is not null)
         {
             query = query.Where(p => p.IsPublished == isPublished);
@@ -159,10 +145,8 @@ public class ProductService : IProductService
         {
             return SlugTaken(slug);
         }
-
-        // Sort order never comes from the client; new rows go to the end of each site's order.
-        var nextAgencySortOrder = await _db.Products.MaxAsync(p => (int?)p.AgencySortOrder, cancellationToken) + 1 ?? 0;
-        var nextPersonalSortOrder = await _db.Products.MaxAsync(p => (int?)p.PersonalSortOrder, cancellationToken) + 1 ?? 0;
+        // Sort order never comes from the client; new rows go to the end.
+        var nextSortOrder = await _db.Products.MaxAsync(p => (int?)p.SortOrder, cancellationToken) + 1 ?? 0;
 
         var product = new Product
         {
@@ -175,12 +159,8 @@ public class ProductService : IProductService
             ProductUrl = productUrl,
             SeoTitle = Blank(request.SeoTitle),
             SeoDescription = Blank(request.SeoDescription),
-            ShowOnAgency = request.ShowOnAgency,
-            FeaturedOnAgency = request.FeaturedOnAgency,
-            AgencySortOrder = nextAgencySortOrder,
-            ShowOnPersonal = request.ShowOnPersonal,
-            FeaturedOnPersonal = request.FeaturedOnPersonal,
-            PersonalSortOrder = nextPersonalSortOrder
+            IsFeatured = request.IsFeatured,
+            SortOrder = nextSortOrder,
         };
 
         ApplyPublished(product, request.IsPublished);
@@ -232,10 +212,7 @@ public class ProductService : IProductService
         product.ProductUrl = productUrl;
         product.SeoTitle = Blank(request.SeoTitle);
         product.SeoDescription = Blank(request.SeoDescription);
-        product.ShowOnAgency = request.ShowOnAgency;
-        product.FeaturedOnAgency = request.FeaturedOnAgency;
-        product.ShowOnPersonal = request.ShowOnPersonal;
-        product.FeaturedOnPersonal = request.FeaturedOnPersonal;
+        product.IsFeatured = request.IsFeatured;
 
         ApplyPublished(product, request.IsPublished);
 
@@ -254,14 +231,6 @@ public class ProductService : IProductService
         {
             return NotFound(id);
         }
-
-        // First publish only: show on both sites. Republishing keeps the editor's choice.
-        if (request.IsPublished && product.PublishedAt is null)
-        {
-            product.ShowOnAgency = true;
-            product.ShowOnPersonal = true;
-        }
-
         ApplyPublished(product, request.IsPublished);
 
         await _db.SaveChangesAsync(cancellationToken);
@@ -371,11 +340,6 @@ public class ProductService : IProductService
 
     public async Task<ServiceResult<bool>> ReorderAsync(ReorderRequest request, CancellationToken cancellationToken)
     {
-        if (request.Site is null)
-        {
-            return ServiceResult<bool>.Validation("site is required — sort order is kept per site.");
-        }
-
         var items = request.Items;
         if (items is null || items.Count == 0)
         {
@@ -400,16 +364,7 @@ public class ProductService : IProductService
 
         foreach (var item in items)
         {
-            var product = products[item.Id];
-
-            if (request.Site == Site.Agency)
-            {
-                product.AgencySortOrder = item.SortOrder;
-            }
-            else
-            {
-                product.PersonalSortOrder = item.SortOrder;
-            }
+            products[item.Id].SortOrder = item.SortOrder;
         }
 
         await _db.SaveChangesAsync(cancellationToken);
@@ -600,15 +555,8 @@ public class ProductService : IProductService
         return ServiceResult<bool>.Success(true);
     }
 
-    private static IQueryable<Product> ForSite(IQueryable<Product> query, Site site) =>
-        site == Site.Agency
-            ? query.Where(p => p.ShowOnAgency)
-            : query.Where(p => p.ShowOnPersonal);
-
-    private static IOrderedQueryable<Product> OrderForSite(IQueryable<Product> query, Site site) =>
-        site == Site.Agency
-            ? query.OrderBy(p => p.AgencySortOrder).ThenByDescending(p => p.PublishedAt)
-            : query.OrderBy(p => p.PersonalSortOrder).ThenByDescending(p => p.PublishedAt);
+    private static IOrderedQueryable<Product> OrderForPublic(IQueryable<Product> query) =>
+        query.OrderBy(p => p.SortOrder).ThenByDescending(p => p.PublishedAt);
 
     private static string? Validate(
         string? name,
@@ -636,17 +584,6 @@ public class ProductService : IProductService
         {
             return "productUrl must be an absolute http(s) URL.";
         }
-
-        if (request.FeaturedOnAgency && !request.ShowOnAgency)
-        {
-            return "featuredOnAgency requires showOnAgency.";
-        }
-
-        if (request.FeaturedOnPersonal && !request.ShowOnPersonal)
-        {
-            return "featuredOnPersonal requires showOnPersonal.";
-        }
-
         return null;
     }
 
@@ -777,73 +714,36 @@ public class ProductService : IProductService
         SortOrder = image.SortOrder
     };
 
-    private static Expression<Func<Product, ProductResponse>> PublicProjection(Site site)
+    private static readonly Expression<Func<Product, ProductResponse>> PublicProjection = p => new ProductResponse
     {
-        if (site == Site.Agency)
-        {
-            return p => new ProductResponse
+        Id = p.Id,
+        Slug = p.Slug,
+        Name = p.Name,
+        Tagline = p.Tagline,
+        Description = p.Description,
+        PriceDetails = p.PriceDetails,
+        ProductUrl = p.ProductUrl,
+        PublishedAt = p.PublishedAt,
+        SeoTitle = p.SeoTitle,
+        SeoDescription = p.SeoDescription,
+        Featured = p.IsFeatured,
+        SortOrder = p.SortOrder,
+        Images = p.Images
+            .OrderByDescending(i => i.IsPrimary)
+            .ThenBy(i => i.SortOrder)
+            .Select(i => new ProductImageResponse
             {
-                Id = p.Id,
-                Slug = p.Slug,
-                Name = p.Name,
-                Tagline = p.Tagline,
-                Description = p.Description,
-                PriceDetails = p.PriceDetails,
-                ProductUrl = p.ProductUrl,
-                PublishedAt = p.PublishedAt,
-                SeoTitle = p.SeoTitle,
-                SeoDescription = p.SeoDescription,
-                Featured = p.FeaturedOnAgency,
-                SortOrder = p.AgencySortOrder,
-                Images = p.Images
-                    .OrderByDescending(i => i.IsPrimary)
-                    .ThenBy(i => i.SortOrder)
-                    .Select(i => new ProductImageResponse
-                    {
-                        Id = i.Id,
-                        ObjectKey = i.ObjectKey,
-                        Url = i.Url,
-                        AltText = i.AltText,
-                        Width = i.Width,
-                        Height = i.Height,
-                        IsPrimary = i.IsPrimary,
-                        SortOrder = i.SortOrder
-                    })
-                    .ToList()
-            };
-        }
-
-        return p => new ProductResponse
-        {
-            Id = p.Id,
-            Slug = p.Slug,
-            Name = p.Name,
-            Tagline = p.Tagline,
-            Description = p.Description,
-            PriceDetails = p.PriceDetails,
-            ProductUrl = p.ProductUrl,
-            PublishedAt = p.PublishedAt,
-            SeoTitle = p.SeoTitle,
-            SeoDescription = p.SeoDescription,
-            Featured = p.FeaturedOnPersonal,
-            SortOrder = p.PersonalSortOrder,
-            Images = p.Images
-                .OrderByDescending(i => i.IsPrimary)
-                .ThenBy(i => i.SortOrder)
-                .Select(i => new ProductImageResponse
-                {
-                    Id = i.Id,
-                    ObjectKey = i.ObjectKey,
-                    Url = i.Url,
-                    AltText = i.AltText,
-                    Width = i.Width,
-                    Height = i.Height,
-                    IsPrimary = i.IsPrimary,
-                    SortOrder = i.SortOrder
-                })
-                .ToList()
-        };
-    }
+                Id = i.Id,
+                ObjectKey = i.ObjectKey,
+                Url = i.Url,
+                AltText = i.AltText,
+                Width = i.Width,
+                Height = i.Height,
+                IsPrimary = i.IsPrimary,
+                SortOrder = i.SortOrder
+            })
+            .ToList()
+    };
 
     private static readonly Expression<Func<Product, AdminProductResponse>> AdminProjection = p => new AdminProductResponse
     {
@@ -858,12 +758,8 @@ public class ProductService : IProductService
         PublishedAt = p.PublishedAt,
         SeoTitle = p.SeoTitle,
         SeoDescription = p.SeoDescription,
-        ShowOnAgency = p.ShowOnAgency,
-        FeaturedOnAgency = p.FeaturedOnAgency,
-        AgencySortOrder = p.AgencySortOrder,
-        ShowOnPersonal = p.ShowOnPersonal,
-        FeaturedOnPersonal = p.FeaturedOnPersonal,
-        PersonalSortOrder = p.PersonalSortOrder,
+        IsFeatured = p.IsFeatured,
+        SortOrder = p.SortOrder,
         Images = p.Images
             .OrderByDescending(i => i.IsPrimary)
             .ThenBy(i => i.SortOrder)

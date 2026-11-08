@@ -21,17 +21,7 @@ public class GetPublicFaqs
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "public/faqs")] HttpRequest req,
         CancellationToken cancellationToken)
     {
-        if (!QueryParameters.TryReadSite(req, out var site))
-        {
-            return ProblemResults.BadRequest("validation_failed", "Unknown site.");
-        }
-
-        if (site is null)
-        {
-            return ProblemResults.SiteRequired();
-        }
-
-        var result = await _faqService.GetPublicFaqsAsync(site.Value, cancellationToken);
+        var result = await _faqService.GetPublicFaqsAsync(cancellationToken);
 
         return HttpResponses.PublicJson(req, result);
     }

@@ -8,7 +8,6 @@ using FrostWoodTech.API.Data;
 using FrostWoodTech.API.DTOs.Admin;
 using FrostWoodTech.API.DTOs.Public;
 using FrostWoodTech.API.Entities;
-using FrostWoodTech.API.Enums;
 using FrostWoodTech.API.Interfaces;
 
 namespace FrostWoodTech.API.Services;
@@ -35,15 +34,14 @@ public class ArticleService : IArticleService
     }
 
     public async Task<PagedResult<ArticleResponse>> GetPublicArticlesAsync(
-        Site site,
         string? tagSlug,
         bool? featured,
         int page,
         int pageSize,
         CancellationToken cancellationToken)
     {
-        // is_deleted comes from the global filter; is_published and the site flag are mandatory.
-        var query = ForSite(_db.Articles.AsNoTracking().Where(a => a.IsPublished), site);
+        // is_deleted comes from the global filter; is_published is mandatory.
+        var query = _db.Articles.AsNoTracking().Where(a => a.IsPublished);
 
         if (tagSlug is not null)
         {
@@ -52,17 +50,15 @@ public class ArticleService : IArticleService
 
         if (featured is not null)
         {
-            query = site == Site.Agency
-                ? query.Where(a => a.FeaturedOnAgency == featured)
-                : query.Where(a => a.FeaturedOnPersonal == featured);
+            query = query.Where(a => a.IsFeatured == featured);
         }
 
         var total = await query.CountAsync(cancellationToken);
 
-        var items = await OrderForSite(query, site)
+        var items = await OrderForPublic(query)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Select(PublicProjection(site))
+            .Select(PublicProjection)
             .ToListAsync(cancellationToken);
 
         return new PagedResult<ArticleResponse>
@@ -75,19 +71,18 @@ public class ArticleService : IArticleService
     }
 
     public async Task<ServiceResult<ArticleResponse>> GetPublicArticleBySlugAsync(
-        Site site,
         string slug,
         CancellationToken cancellationToken)
     {
-        var article = await ForSite(_db.Articles.AsNoTracking().Where(a => a.IsPublished), site)
+        var article = await _db.Articles.AsNoTracking().Where(a => a.IsPublished)
             .Where(a => a.Slug == slug)
-            .Select(PublicProjection(site))
+            .Select(PublicProjection)
             .FirstOrDefaultAsync(cancellationToken);
 
         return article is null
             ? ServiceResult<ArticleResponse>.NotFound(
                 "not_found",
-                $"No published article with slug '{slug}' on this site.")
+                $"No published article with slug '{slug}'.")
             : ServiceResult<ArticleResponse>.Success(ResolveMedia(article));
     }
 
@@ -103,22 +98,13 @@ public class ArticleService : IArticleService
     };
 
     public async Task<PagedResult<AdminArticleResponse>> GetAdminArticlesAsync(
-        Site? site,
         bool? isPublished,
         string? search,
-        bool includeHidden,
         int page,
         int pageSize,
         CancellationToken cancellationToken)
     {
         var query = _db.Articles.AsNoTracking();
-
-        // includeHidden: the visibility screen passes site (for sort order) but must see rows not shown yet.
-        if (site is not null && !includeHidden)
-        {
-            query = ForSite(query, site.Value);
-        }
-
         if (isPublished is not null)
         {
             query = query.Where(a => a.IsPublished == isPublished);
@@ -190,10 +176,8 @@ public class ArticleService : IArticleService
         {
             return SlugTaken(slug);
         }
-
-        // Sort order never comes from the client; new rows go to the end of each site's order.
-        var nextAgencySortOrder = await _db.Articles.MaxAsync(a => (int?)a.AgencySortOrder, cancellationToken) + 1 ?? 0;
-        var nextPersonalSortOrder = await _db.Articles.MaxAsync(a => (int?)a.PersonalSortOrder, cancellationToken) + 1 ?? 0;
+        // Sort order never comes from the client; new rows go to the end.
+        var nextSortOrder = await _db.Articles.MaxAsync(a => (int?)a.SortOrder, cancellationToken) + 1 ?? 0;
 
         var article = new Article
         {
@@ -203,12 +187,8 @@ public class ArticleService : IArticleService
             Slug = slug,
             ContentMarkdown = Blank(request.ContentMarkdown),
             CoverImageKey = Blank(request.CoverImageKey),
-            ShowOnAgency = request.ShowOnAgency,
-            FeaturedOnAgency = request.FeaturedOnAgency,
-            AgencySortOrder = nextAgencySortOrder,
-            ShowOnPersonal = request.ShowOnPersonal,
-            FeaturedOnPersonal = request.FeaturedOnPersonal,
-            PersonalSortOrder = nextPersonalSortOrder,
+            IsFeatured = request.IsFeatured,
+            SortOrder = nextSortOrder,
             ArticleTags = [.. tagIds.Select(tagId => new ArticleTag { TagId = tagId })]
         };
         ApplyPublished(article, request.IsPublished);
@@ -267,10 +247,7 @@ public class ArticleService : IArticleService
         article.Slug = slug;
         article.ContentMarkdown = Blank(request.ContentMarkdown);
         article.CoverImageKey = Blank(request.CoverImageKey);
-        article.ShowOnAgency = request.ShowOnAgency;
-        article.FeaturedOnAgency = request.FeaturedOnAgency;
-        article.ShowOnPersonal = request.ShowOnPersonal;
-        article.FeaturedOnPersonal = request.FeaturedOnPersonal;
+        article.IsFeatured = request.IsFeatured;
         ApplyPublished(article, request.IsPublished);
 
         SyncTags(article, tagIds);
@@ -290,14 +267,6 @@ public class ArticleService : IArticleService
         {
             return NotFound(id);
         }
-
-        // First publish only: show on both sites. Republishing keeps the editor's choice.
-        if (request.IsPublished && article.PublishedAt is null)
-        {
-            article.ShowOnAgency = true;
-            article.ShowOnPersonal = true;
-        }
-
         ApplyPublished(article, request.IsPublished);
 
         await _db.SaveChangesAsync(cancellationToken);
@@ -419,11 +388,6 @@ public class ArticleService : IArticleService
 
     public async Task<ServiceResult<bool>> ReorderAsync(ReorderRequest request, CancellationToken cancellationToken)
     {
-        if (request.Site is null)
-        {
-            return ServiceResult<bool>.Validation("site is required — sort order is kept per site.");
-        }
-
         var items = request.Items;
         if (items is null || items.Count == 0)
         {
@@ -448,16 +412,7 @@ public class ArticleService : IArticleService
 
         foreach (var item in items)
         {
-            var article = articles[item.Id];
-
-            if (request.Site == Site.Agency)
-            {
-                article.AgencySortOrder = item.SortOrder;
-            }
-            else
-            {
-                article.PersonalSortOrder = item.SortOrder;
-            }
+            articles[item.Id].SortOrder = item.SortOrder;
         }
 
         await _db.SaveChangesAsync(cancellationToken);
@@ -465,15 +420,8 @@ public class ArticleService : IArticleService
         return ServiceResult<bool>.Success(true);
     }
 
-    private static IQueryable<Article> ForSite(IQueryable<Article> query, Site site) =>
-        site == Site.Agency
-            ? query.Where(a => a.ShowOnAgency)
-            : query.Where(a => a.ShowOnPersonal);
-
-    private static IOrderedQueryable<Article> OrderForSite(IQueryable<Article> query, Site site) =>
-        site == Site.Agency
-            ? query.OrderBy(a => a.AgencySortOrder).ThenByDescending(a => a.PublishedAt)
-            : query.OrderBy(a => a.PersonalSortOrder).ThenByDescending(a => a.PublishedAt);
+    private static IOrderedQueryable<Article> OrderForPublic(IQueryable<Article> query) =>
+        query.OrderBy(a => a.SortOrder).ThenByDescending(a => a.PublishedAt);
 
     private static string? Validate(string? title, string? excerpt, CreateArticleRequest request)
     {
@@ -486,17 +434,6 @@ public class ArticleService : IArticleService
         {
             return "Excerpt is required.";
         }
-
-        if (request.FeaturedOnAgency && !request.ShowOnAgency)
-        {
-            return "featuredOnAgency requires showOnAgency.";
-        }
-
-        if (request.FeaturedOnPersonal && !request.ShowOnPersonal)
-        {
-            return "featuredOnPersonal requires showOnPersonal.";
-        }
-
         return null;
     }
 
@@ -559,63 +496,31 @@ public class ArticleService : IArticleService
 
     private static string? Blank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
-    private static Expression<Func<Article, ArticleResponse>> PublicProjection(Site site)
+    private static readonly Expression<Func<Article, ArticleResponse>> PublicProjection = a => new ArticleResponse
     {
-        if (site == Site.Agency)
-        {
-            return a => new ArticleResponse
+        Id = a.Id,
+        Title = a.Title,
+        Excerpt = a.Excerpt,
+        Slug = a.Slug,
+        PublishedAt = a.PublishedAt,
+        UpdatedAt = a.UpdatedAt,
+        CoverImageKey = a.CoverImageKey,
+        ContentMarkdown = a.ContentMarkdown,
+        Featured = a.IsFeatured,
+        SortOrder = a.SortOrder,
+        Tags = a.ArticleTags
+            .Where(at => !at.Tag.IsDeleted)
+            .OrderBy(at => at.Tag.Name)
+            .Select(at => new TagResponse
             {
-                Id = a.Id,
-                Title = a.Title,
-                Excerpt = a.Excerpt,
-                Slug = a.Slug,
-                PublishedAt = a.PublishedAt,
-                UpdatedAt = a.UpdatedAt,
-                CoverImageKey = a.CoverImageKey,
-                ContentMarkdown = a.ContentMarkdown,
-                Featured = a.FeaturedOnAgency,
-                SortOrder = a.AgencySortOrder,
-                Tags = a.ArticleTags
-                    .Where(at => !at.Tag.IsDeleted)
-                    .OrderBy(at => at.Tag.Name)
-                    .Select(at => new TagResponse
-                    {
-                        Id = at.Tag.Id,
-                        Name = at.Tag.Name,
-                        Slug = at.Tag.Slug,
-                        IsTechnology = at.Tag.IsTechnology,
-                        TechnologyCategory = at.Tag.TechnologyCategory
-                    })
-                    .ToList()
-            };
-        }
-
-        return a => new ArticleResponse
-        {
-            Id = a.Id,
-            Title = a.Title,
-            Excerpt = a.Excerpt,
-            Slug = a.Slug,
-            PublishedAt = a.PublishedAt,
-            UpdatedAt = a.UpdatedAt,
-            CoverImageKey = a.CoverImageKey,
-            ContentMarkdown = a.ContentMarkdown,
-            Featured = a.FeaturedOnPersonal,
-            SortOrder = a.PersonalSortOrder,
-            Tags = a.ArticleTags
-                .Where(at => !at.Tag.IsDeleted)
-                .OrderBy(at => at.Tag.Name)
-                .Select(at => new TagResponse
-                {
-                    Id = at.Tag.Id,
-                    Name = at.Tag.Name,
-                    Slug = at.Tag.Slug,
-                    IsTechnology = at.Tag.IsTechnology,
-                    TechnologyCategory = at.Tag.TechnologyCategory
-                })
-                .ToList()
-        };
-    }
+                Id = at.Tag.Id,
+                Name = at.Tag.Name,
+                Slug = at.Tag.Slug,
+                IsTechnology = at.Tag.IsTechnology,
+                TechnologyCategory = at.Tag.TechnologyCategory
+            })
+            .ToList()
+    };
 
     private static readonly Expression<Func<Article, AdminArticleResponse>> AdminProjection = a => new AdminArticleResponse
     {
@@ -627,12 +532,8 @@ public class ArticleService : IArticleService
         CoverImageKey = a.CoverImageKey,
         ContentMarkdown = a.ContentMarkdown,
         IsPublished = a.IsPublished,
-        ShowOnAgency = a.ShowOnAgency,
-        FeaturedOnAgency = a.FeaturedOnAgency,
-        AgencySortOrder = a.AgencySortOrder,
-        ShowOnPersonal = a.ShowOnPersonal,
-        FeaturedOnPersonal = a.FeaturedOnPersonal,
-        PersonalSortOrder = a.PersonalSortOrder,
+        IsFeatured = a.IsFeatured,
+        SortOrder = a.SortOrder,
         Tags = a.ArticleTags
             .Where(at => !at.Tag.IsDeleted)
             .OrderBy(at => at.Tag.Name)

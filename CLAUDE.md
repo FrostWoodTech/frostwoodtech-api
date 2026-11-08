@@ -2,16 +2,12 @@
 
 ## What this is
 
-One headless CMS API + one database, powering **three** frontends:
+One headless CMS API + one database, powering **two** frontends:
 
 | Consumer | Content it reads |
 |---|---|
 | Agency site (React) | Projects, products, articles, services, pricing, FAQs, reviews; posts contact + reviews |
-| Personal site (React) | Projects, products, articles, certificates, FAQs, reviews; posts contact + reviews |
 | Admin SPA (React) | Everything, incl. drafts, contact inbox and user approvals |
-
-No duplicated rows per site — entities carry per-site visibility flags and the frontend asks for
-the site it wants. One row can appear on both sites.
 
 ## Stack
 
@@ -40,8 +36,7 @@ Separate folders, separate DTOs. A public DTO never carries admin fields.
 
 - **Never store file bytes in Postgres.** Store the storage `object_key`, URL, dimensions and alt text.
 - **Never let the client control `is_published` filtering.** Public endpoints filter server-side.
-- **`?site=` is required** on every public endpoint with site visibility. Missing ⇒ `400 site_required`,
-  never "return everything".
+- **No `?site=` parameter.** The personal site was retired; a legacy `?site=` is ignored, never rejected.
 - Timestamps are `timestamptz`, UTC.
 - Every content table has `created_at`, `updated_at`, `is_deleted` (soft delete).
 - `alt_text` is required on every image.
@@ -65,7 +60,7 @@ Separate folders, separate DTOs. A public DTO never carries admin fields.
 ## Tests
 
 `FrostWoodTech.Tests` — unit tests, service integration tests against a real Postgres container,
-and API guard tests (JWT middleware, `?site=` checks, route scan). Every bug fix gets a regression
+and API guard tests (JWT middleware, public endpoints, route scan). Every bug fix gets a regression
 test. Docker must be running.
 
 ## Where the detail lives
@@ -81,14 +76,13 @@ These load automatically when you touch matching files — don't read them preem
 | `.claude/rules/media.md` | Presigned uploads, folders, deletes |
 | `.claude/rules/functions-hosting.md` | DI, Neon pooling, config, CI/CD |
 
-`docs/roadmap.md` lists known gaps, not current state. Don't implement from it unless asked.
+`docs/features.md` summarises what the backend offers. `docs/roadmap.md` lists known gaps, not current state. Don't implement from it unless asked.
 
 ## Glossary
 
 | Term | Meaning |
 |---|---|
-| Site | `agency` or `personal` |
-| Featured | Appears on that site's home page |
+| Featured | Appears on the home page (`is_featured`) |
 | Combo pack | A `pricing_plan` with `service_id = null` |
 | Technology tag | `tags.is_technology = true`; has a `technology_category` |
 | Category tag | `tags.is_technology = false`; e.g. Frontend, Backend |

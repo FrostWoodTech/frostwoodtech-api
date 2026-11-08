@@ -21,16 +21,6 @@ public class GetPublicProjects
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "public/projects")] HttpRequest req,
         CancellationToken cancellationToken)
     {
-        if (!QueryParameters.TryReadSite(req, out var site))
-        {
-            return ProblemResults.BadRequest("validation_failed", "Unknown site.");
-        }
-
-        if (site is null)
-        {
-            return ProblemResults.SiteRequired();
-        }
-
         var tagSlug = QueryParameters.ReadString(req, "tag");
 
         // A category tag slug; technology tags use ?tag=.
@@ -39,7 +29,6 @@ public class GetPublicProjects
         var (page, pageSize) = QueryParameters.ReadPaging(req);
 
         var result = await _projectService.GetPublicProjectsAsync(
-            site.Value,
             tagSlug,
             categorySlug,
             featured,

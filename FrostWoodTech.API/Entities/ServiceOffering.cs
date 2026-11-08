@@ -3,7 +3,7 @@ using FrostWoodTech.API.Entities.Common;
 namespace FrostWoodTech.API.Entities;
 
 /// <summary>The services table; named to avoid clashing with the Services namespace.</summary>
-public class ServiceOffering : SiteVisibleEntity
+public class ServiceOffering : FeaturableEntity
 {
     public required string Slug { get; set; }
 

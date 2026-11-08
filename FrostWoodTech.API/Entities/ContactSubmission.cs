@@ -24,8 +24,6 @@ public class ContactSubmission : AuditableEntity
 
     public ContactBudgetRange? BudgetRange { get; set; }
 
-    public Site Site { get; set; }
-
     public ContactSubmissionStatus Status { get; set; }
 
     public string? AdminNotes { get; set; }

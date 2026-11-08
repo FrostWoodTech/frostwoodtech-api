@@ -36,17 +36,9 @@ public sealed class AdminProjectResponse
 
     public string? SeoDescription { get; init; }
 
-    public required bool ShowOnAgency { get; init; }
+    public required bool IsFeatured { get; init; }
 
-    public required bool FeaturedOnAgency { get; init; }
-
-    public required int AgencySortOrder { get; init; }
-
-    public required bool ShowOnPersonal { get; init; }
-
-    public required bool FeaturedOnPersonal { get; init; }
-
-    public required int PersonalSortOrder { get; init; }
+    public required int SortOrder { get; init; }
 
     public required IReadOnlyList<AdminTagResponse> Tags { get; init; }
 

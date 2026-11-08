@@ -76,15 +76,6 @@ public class CreateServiceRequest
 
     public bool IsPublished { get; set; }
 
-    public bool ShowOnAgency { get; set; }
+    public bool IsFeatured { get; set; }
 
-    public bool FeaturedOnAgency { get; set; }
-
-    public int AgencySortOrder { get; set; }
-
-    public bool ShowOnPersonal { get; set; }
-
-    public bool FeaturedOnPersonal { get; set; }
-
-    public int PersonalSortOrder { get; set; }
-}
+    public int SortOrder { get; set; }}

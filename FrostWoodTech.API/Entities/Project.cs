@@ -2,7 +2,7 @@ using FrostWoodTech.API.Entities.Common;
 
 namespace FrostWoodTech.API.Entities;
 
-public class Project : SiteVisibleEntity
+public class Project : FeaturableEntity
 {
     /// <summary>Stable once published; changing it breaks live links.</summary>
     public required string Slug { get; set; }

@@ -2,7 +2,7 @@ using FrostWoodTech.API.Entities.Common;
 
 namespace FrostWoodTech.API.Entities;
 
-public class Article : SiteVisibleEntity
+public class Article : FeaturableEntity
 {
     public required string Title { get; set; }
 

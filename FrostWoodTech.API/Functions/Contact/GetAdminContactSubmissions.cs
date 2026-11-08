@@ -28,19 +28,12 @@ public class GetAdminContactSubmissions
         {
             return ProblemResults.BadRequest("validation_failed", "Unknown ?status= value.");
         }
-
-        if (!QueryParameters.TryReadSite(req, out var site))
-        {
-            return ProblemResults.BadRequest("validation_failed", "Unknown ?site= value.");
-        }
-
         var serviceId = QueryParameters.ReadGuid(req, "serviceId");
         var search = QueryParameters.ReadString(req, "search");
         var (page, pageSize) = QueryParameters.ReadPaging(req);
 
         var result = await _contactService.GetAdminSubmissionsAsync(
             status,
-            site,
             serviceId,
             search,
             page,

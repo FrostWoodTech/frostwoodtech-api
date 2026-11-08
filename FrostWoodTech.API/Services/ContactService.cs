@@ -60,7 +60,7 @@ public class ContactService : IContactService
         var message = Blank(request.Message);
         var isHoneypot = !string.IsNullOrEmpty(request.Website);
 
-        var validationError = Validate(name, email, message, request.Site);
+        var validationError = Validate(name, email, message);
         if (validationError is not null)
         {
             return ServiceResult<ContactSubmissionResponse>.Validation(validationError);
@@ -109,7 +109,6 @@ public class ContactService : IContactService
             Message = message!,
             ServiceId = serviceId,
             BudgetRange = request.BudgetRange,
-            Site = request.Site!.Value,
             // Honeypot hits are filed as spam but answered normally, so bots don't learn.
             Status = isHoneypot ? ContactSubmissionStatus.Spam : ContactSubmissionStatus.New,
             SubmitterIp = ipAddress
@@ -129,7 +128,6 @@ public class ContactService : IContactService
 
     public async Task<PagedResult<AdminContactSubmissionResponse>> GetAdminSubmissionsAsync(
         ContactSubmissionStatus? status,
-        Site? site,
         Guid? serviceId,
         string? search,
         int page,
@@ -142,12 +140,6 @@ public class ContactService : IContactService
         {
             query = query.Where(c => c.Status == status);
         }
-
-        if (site is not null)
-        {
-            query = query.Where(c => c.Site == site);
-        }
-
         if (serviceId is not null)
         {
             query = query.Where(c => c.ServiceId == serviceId);
@@ -353,7 +345,7 @@ public class ContactService : IContactService
         }
     }
 
-    private static string? Validate(string? name, string? email, string? message, Site? site)
+    private static string? Validate(string? name, string? email, string? message)
     {
         if (name is null)
         {
@@ -369,12 +361,6 @@ public class ContactService : IContactService
         {
             return "Message is required.";
         }
-
-        if (site is null)
-        {
-            return "site is required.";
-        }
-
         return null;
     }
 
@@ -396,7 +382,6 @@ public class ContactService : IContactService
             ServiceId = c.ServiceId,
             ServiceName = c.Service != null ? c.Service.Name : null,
             BudgetRange = c.BudgetRange,
-            Site = c.Site,
             Status = c.Status,
             AdminNotes = c.AdminNotes,
             RepliedAt = c.RepliedAt,
